@@ -3,23 +3,18 @@ package com.ailive.core.messaging
 import com.ailive.core.types.AgentType
 import java.util.UUID
 
-/**
- * Sealed hierarchy for all AILive messages.
- * Exhaustive when expressions ensure all message types are handled.
- */
 sealed class AIMessage {
     abstract val id: String
     abstract val source: AgentType
     abstract val timestamp: Long
     abstract val priority: MessagePriority
-    abstract val ttl: Long // Time to live in milliseconds
+    abstract val ttl: Long
     
     companion object {
         @JvmStatic
         fun now(): Long = java.lang.System.currentTimeMillis()
     }
 
-    // Perception Layer Messages
     sealed class Perception : AIMessage() {
         data class VisualDetection(
             override val id: String = UUID.randomUUID().toString(),
@@ -55,7 +50,6 @@ sealed class AIMessage {
         ) : Perception()
     }
 
-    // Cognition Layer Messages
     sealed class Cognition : AIMessage() {
         data class MemoryStored(
             override val id: String = UUID.randomUUID().toString(),
@@ -64,7 +58,7 @@ sealed class AIMessage {
             override val priority: MessagePriority = MessagePriority.LOW,
             override val ttl: Long = 30000,
             val embeddingId: String,
-            val contentType: ContentType,
+            val contentType: com.ailive.memory.storage.ContentType,
             val metadata: Map<String, String>
         ) : Cognition()
 
@@ -75,7 +69,7 @@ sealed class AIMessage {
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 15000,
             val query: String,
-            val results: List<MemoryResult>,
+            val results: List<com.ailive.memory.storage.MemoryEntry>,
             val topKSimilarity: Float
         ) : Cognition()
 
@@ -85,8 +79,9 @@ sealed class AIMessage {
             override val timestamp: Long = AIMessage.now(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 8000,
-            val scenarios: List<PredictedScenario>,
-            val recommendedAction: String?
+            val action: ActionType,
+            val expectedReward: Float,
+            val cost: Float
         ) : Cognition()
 
         data class RewardUpdate(
@@ -101,7 +96,6 @@ sealed class AIMessage {
         ) : Cognition()
     }
 
-    // Meta AI Control Messages
     sealed class Control : AIMessage() {
         data class GoalSet(
             override val id: String = UUID.randomUUID().toString(),
@@ -158,7 +152,6 @@ sealed class AIMessage {
         ) : Control()
     }
 
-    // Motor Layer Messages
     sealed class Motor : AIMessage() {
         data class ActionExecuted(
             override val id: String = UUID.randomUUID().toString(),
@@ -182,7 +175,6 @@ sealed class AIMessage {
         ) : Motor()
     }
 
-    // System Messages
     sealed class System : AIMessage() {
         data class AgentStarted(
             override val id: String = UUID.randomUUID().toString(),
@@ -217,19 +209,23 @@ sealed class AIMessage {
             override val timestamp: Long = AIMessage.now(),
             override val priority: MessagePriority = MessagePriority.CRITICAL,
             override val ttl: Long = 60000,
-            val violationType: String,
+            val safetyRule: String,
             val attemptedAction: String
         ) : System()
     }
 }
 
-// Supporting data classes
 data class DetectedObject(val label: String, val boundingBox: BoundingBox, val confidence: Float)
 data class BoundingBox(val x: Int, val y: Int, val width: Int, val height: Int)
-data class MemoryResult(val entry: com.ailive.memory.storage.MemoryEntry, val similarity: Float)
-data class PredictedScenario(val description: String, val probability: Float, val expectedValue: Float)
 
-enum class MessagePriority { CRITICAL, HIGH, NORMAL, LOW }
-enum class SensorType { ACCELEROMETER, GYROSCOPE, GPS, LIGHT, PROXIMITY }
-enum class ActionType { CAMERA_CAPTURE, SEND_NOTIFICATION, STORE_MEMORY, UPDATE_UI }
-enum class ContentType { TEXT, IMAGE, AUDIO, VIDEO, ACTION, GOAL }
+enum class SensorType { ACCELEROMETER, GYROSCOPE, GPS, LIGHT, PROXIMITY, BATTERY }
+
+enum class ActionType { 
+    CAMERA_CAPTURE, 
+    SEND_NOTIFICATION, 
+    STORE_MEMORY, 
+    UPDATE_UI,
+    STORE_DATA,
+    QUERY_WEB,
+    PLAY_AUDIO
+}
