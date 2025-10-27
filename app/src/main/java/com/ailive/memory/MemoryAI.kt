@@ -195,7 +195,7 @@ class MemoryAI(
                 .collect { transcript ->
                     store(
                         content = transcript.transcript,
-                        contentType = ContentType.AUDIO_TRANSCRIPT,
+                        contentType = com.ailive.memory.storage.ContentType.AUDIO_TRANSCRIPT,
                         importance = 0.7f,
                         tags = setOf("audio", "perception"),
                         metadata = mapOf("language" to transcript.language)
@@ -208,7 +208,7 @@ class MemoryAI(
                 .collect { goal ->
                     store(
                         content = goal.goal,
-                        contentType = ContentType.GOAL_RECORD,
+                        contentType = com.ailive.memory.storage.ContentType.GOAL_RECORD,
                         importance = 0.9f,
                         tags = setOf("goal", "planning"),
                         metadata = mapOf("deadline" to (goal.deadline?.toString() ?: "none"))
