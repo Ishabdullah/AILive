@@ -69,7 +69,164 @@ sealed class AIMessage {
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 15000,
             val query: String,
-            val results: List<com.ailive.memory.storage.MemoryEntry>,
+            val results: List<MemoryResult>,
             val topKSimilarity: Float
         ) : Cognition()
 
+        data class PredictionGenerated(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.PREDICTIVE_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.NORMAL,
+            override val ttl: Long = 8000,
+            val scenarios: List<PredictedScenario>,
+            val recommendedAction: String?
+        ) : Cognition()
+
+        data class RewardUpdate(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.REWARD_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.LOW,
+            override val ttl: Long = 20000,
+            val actionId: String,
+            val rewardValue: Float,
+            val learningRate: Float
+        ) : Cognition()
+    }
+
+    sealed class Control : AIMessage() {
+        data class GoalSet(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.META_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.CRITICAL,
+            override val ttl: Long = 60000,
+            val goal: String,
+            val subGoals: List<String>,
+            val deadline: Long?
+        ) : Control()
+
+        data class ResourceAllocation(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.META_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.CRITICAL,
+            override val ttl: Long = 5000,
+            val targetAgent: AgentType,
+            val cpuPercent: Int,
+            val memoryMB: Int,
+            val gpuAllowed: Boolean
+        ) : Control()
+
+        data class ActionRequest(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.NORMAL,
+            override val ttl: Long = 10000,
+            val actionType: ActionType,
+            val params: Map<String, Any>,
+            val expectedFeedback: Map<String, Any?>
+        ) : Control()
+
+        data class ActionApproved(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.META_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.HIGH,
+            override val ttl: Long = 3000,
+            val requestId: String,
+            val approvedParams: Map<String, Any>
+        ) : Control()
+
+        data class ActionRejected(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.META_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.HIGH,
+            override val ttl: Long = 3000,
+            val requestId: String,
+            val reason: String
+        ) : Control()
+    }
+
+    sealed class Motor : AIMessage() {
+        data class ActionExecuted(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.MOTOR_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.NORMAL,
+            override val ttl: Long = 15000,
+            val actionId: String,
+            val success: Boolean,
+            val feedback: Map<String, Any>
+        ) : Motor()
+
+        data class SensorUpdate(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.MOTOR_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.LOW,
+            override val ttl: Long = 2000,
+            val sensorType: SensorType,
+            val value: Any
+        ) : Motor()
+    }
+
+    sealed class System : AIMessage() {
+        data class AgentStarted(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.NORMAL,
+            override val ttl: Long = 5000
+        ) : System()
+
+        data class AgentStopped(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.NORMAL,
+            override val ttl: Long = 5000,
+            val reason: String
+        ) : System()
+
+        data class ErrorOccurred(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.CRITICAL,
+            override val ttl: Long = 30000,
+            val error: Throwable,
+            val context: String
+        ) : System()
+
+        data class SafetyViolation(
+            override val id: String = UUID.randomUUID().toString(),
+            override val source: AgentType = AgentType.MOTOR_AI,
+            override val timestamp: Long = AIMessage.now(),
+            override val priority: MessagePriority = MessagePriority.CRITICAL,
+            override val ttl: Long = 60000,
+            val violationType: String,
+            val attemptedAction: String
+        ) : System()
+    }
+}
+
+data class DetectedObject(val label: String, val boundingBox: BoundingBox, val confidence: Float)
+data class BoundingBox(val x: Int, val y: Int, val width: Int, val height: Int)
+data class MemoryResult(val entry: com.ailive.memory.storage.MemoryEntry, val similarity: Float)
+data class PredictedScenario(val description: String, val probability: Float, val expectedValue: Float)
+
+enum class SensorType { ACCELEROMETER, GYROSCOPE, GPS, LIGHT, PROXIMITY, BATTERY }
+
+enum class ActionType { 
+    CAMERA_CAPTURE, 
+    SEND_NOTIFICATION, 
+    STORE_MEMORY, 
+    UPDATE_UI,
+    STORE_DATA,
+    QUERY_WEB,
+    PLAY_AUDIO
+}
