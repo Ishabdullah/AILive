@@ -5,6 +5,7 @@ import android.util.Log
 import com.ailive.core.messaging.*
 import com.ailive.core.state.StateManager
 import com.ailive.core.types.AgentType
+import com.ailive.memory.storage.ContentType
 import com.ailive.memory.embeddings.TextEmbedder
 import com.ailive.memory.storage.*
 import kotlinx.coroutines.*
