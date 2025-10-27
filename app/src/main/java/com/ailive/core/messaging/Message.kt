@@ -20,7 +20,7 @@ sealed class AIMessage {
         data class VisualDetection(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.VISUAL_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.HIGH,
             override val ttl: Long = 5000,
             val objects: List<DetectedObject>,
@@ -31,7 +31,7 @@ sealed class AIMessage {
         data class AudioTranscript(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.LANGUAGE_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 10000,
             val transcript: String,
@@ -42,7 +42,7 @@ sealed class AIMessage {
         data class EmotionVector(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.EMOTION_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 3000,
             val valence: Float, // -1.0 (negative) to 1.0 (positive)
@@ -56,7 +56,7 @@ sealed class AIMessage {
         data class MemoryStored(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.MEMORY_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.LOW,
             override val ttl: Long = 30000,
             val embeddingId: String,
@@ -67,7 +67,7 @@ sealed class AIMessage {
         data class MemoryRecalled(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.MEMORY_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 15000,
             val query: String,
@@ -78,7 +78,7 @@ sealed class AIMessage {
         data class PredictionGenerated(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.PREDICTIVE_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 8000,
             val scenarios: List<PredictedScenario>,
@@ -88,7 +88,7 @@ sealed class AIMessage {
         data class RewardUpdate(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.REWARD_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.LOW,
             override val ttl: Long = 20000,
             val actionId: String,
@@ -102,7 +102,7 @@ sealed class AIMessage {
         data class GoalSet(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.META_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.CRITICAL,
             override val ttl: Long = 60000,
             val goal: String,
@@ -113,7 +113,7 @@ sealed class AIMessage {
         data class ResourceAllocation(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.META_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.CRITICAL,
             override val ttl: Long = 5000,
             val targetAgent: AgentType,
@@ -125,7 +125,7 @@ sealed class AIMessage {
         data class ActionRequest(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 10000,
             val actionType: ActionType,
@@ -136,7 +136,7 @@ sealed class AIMessage {
         data class ActionApproved(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.META_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.HIGH,
             override val ttl: Long = 3000,
             val requestId: String,
@@ -146,7 +146,7 @@ sealed class AIMessage {
         data class ActionRejected(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.META_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.HIGH,
             override val ttl: Long = 3000,
             val requestId: String,
@@ -159,7 +159,7 @@ sealed class AIMessage {
         data class ActionExecuted(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.MOTOR_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 15000,
             val actionId: String,
@@ -170,7 +170,7 @@ sealed class AIMessage {
         data class SensorUpdate(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.MOTOR_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.LOW,
             override val ttl: Long = 2000,
             val sensorType: SensorType,
@@ -183,7 +183,7 @@ sealed class AIMessage {
         data class AgentStarted(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 5000
         ) : System()
@@ -191,7 +191,7 @@ sealed class AIMessage {
         data class AgentStopped(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.NORMAL,
             override val ttl: Long = 5000,
             val reason: String
@@ -200,7 +200,7 @@ sealed class AIMessage {
         data class ErrorOccurred(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.CRITICAL,
             override val ttl: Long = 30000,
             val error: Throwable,
@@ -210,7 +210,7 @@ sealed class AIMessage {
         data class SafetyViolation(
             override val id: String = UUID.randomUUID().toString(),
             override val source: AgentType = AgentType.MOTOR_AI,
-            override val timestamp: Long = System.currentTimeMillis(),
+            override val timestamp: Long = java.lang.System.currentTimeMillis()(),
             override val priority: MessagePriority = MessagePriority.CRITICAL,
             override val ttl: Long = 60000,
             val violationType: String,
