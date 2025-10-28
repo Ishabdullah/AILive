@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import com.ailive.core.AILiveCore
+import com.ailive.testing.TestScenarios
+import kotlinx.coroutines.*
 
 /**
  * AILive - Multi-Agent AI System
@@ -21,27 +23,36 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         Log.i(TAG, "=== Step 2: setContentView complete ===")
         
+        Log.i(TAG, "=== Step 3: Creating AILiveCore instance ===")
+        
         try {
-            Log.i(TAG, "=== Step 3: Creating AILiveCore instance ===")
             aiLiveCore = AILiveCore(applicationContext, this)
             Log.i(TAG, "=== Step 4: AILiveCore instance created ===")
             
-            Log.i(TAG, "=== Step 5: Initializing AILiveCore ===")
             aiLiveCore.initialize()
-            Log.i(TAG, "=== Step 6: AILiveCore initialized ===")
+            Log.i(TAG, "=== Step 5: AILiveCore initialized ===")
             
-            Log.i(TAG, "=== Step 7: Starting AILiveCore ===")
             aiLiveCore.start()
-            Log.i(TAG, "=== Step 8: AILiveCore started successfully ===")
+            Log.i(TAG, "=== Step 6: AILiveCore started ===")
+            
+            // Run Phase 1 tests
+            CoroutineScope(Dispatchers.Main).launch {
+                Log.i(TAG, "=== Step 7: Starting test scenarios ===")
+                delay(1000)
+                val tests = TestScenarios(aiLiveCore)
+                tests.runAllTests()
+                Log.i(TAG, "=== Step 8: Test scenarios complete ===")
+            }
             
         } catch (e: Exception) {
-            Log.e(TAG, "ERROR: Failed to initialize AILive", e)
+            Log.e(TAG, "=== CRASH: ${e.message} ===", e)
             e.printStackTrace()
         }
     }
     
     override fun onDestroy() {
         super.onDestroy()
+        Log.i(TAG, "=== onDestroy called ===")
         if (::aiLiveCore.isInitialized) {
             aiLiveCore.stop()
         }
