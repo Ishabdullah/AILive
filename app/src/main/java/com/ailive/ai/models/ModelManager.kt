@@ -50,7 +50,12 @@ class ModelManager(private val context: Context) {
             // Try to use GPU acceleration
             val compatList = CompatibilityList()
             if (compatList.isDelegateSupportedOnThisDevice) {
-                gpuDelegate = GpuDelegate(compatList.bestOptionsForThisDevice)
+                // Use the correct GpuDelegate constructor
+                val delegateOptions = GpuDelegate.Options().apply {
+                    setPrecisionLossAllowed(true) // Allow FP16 for better performance
+                    setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER)
+                }
+                gpuDelegate = GpuDelegate(delegateOptions)
                 options.addDelegate(gpuDelegate)
                 Log.i(TAG, "✓ GPU acceleration enabled")
             } else {
@@ -66,6 +71,17 @@ class ModelManager(private val context: Context) {
             Log.i(TAG, "  Labels: ${labels.size} classes")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize TensorFlow Lite", e)
+            // Fallback to CPU if GPU fails
+            try {
+                val options = Interpreter.Options().apply {
+                    setNumThreads(4)
+                }
+                val model = loadModelFile()
+                interpreter = Interpreter(model, options)
+                Log.i(TAG, "✓ TensorFlow Lite initialized (CPU fallback)")
+            } catch (fallbackError: Exception) {
+                Log.e(TAG, "CPU fallback also failed", fallbackError)
+            }
         }
     }
     
