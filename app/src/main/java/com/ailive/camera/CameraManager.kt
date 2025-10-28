@@ -1,11 +1,9 @@
 package com.ailive.camera
 
+import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageFormat
-import android.graphics.Rect
-import android.graphics.YuvImage
+import android.graphics.*
+import android.media.Image
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -15,7 +13,7 @@ import androidx.lifecycle.LifecycleOwner
 import com.ailive.ai.models.ModelManager
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.Executors
+import java.nio.ByteBuffer
 
 class CameraManager(
     private val context: Context,
@@ -24,90 +22,84 @@ class CameraManager(
 ) {
     private val TAG = "CameraManager"
     
-    private var cameraProvider: ProcessCameraProvider? = null
-    private val cameraExecutor = Executors.newSingleThreadExecutor()
-    private val analysisScope = CoroutineScope(Dispatchers.Default + Job())
-    
+    private var analysisUseCase: ImageAnalysis? = null
     private var frameCount = 0
+    
     var onClassificationResult: ((String, Float, Long) -> Unit)? = null
     
+    @SuppressLint("RestrictedApi")
     fun startCamera(previewView: PreviewView) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         
         cameraProviderFuture.addListener({
-            try {
-                cameraProvider = cameraProviderFuture.get()
-                bindCamera(previewView)
-                Log.i(TAG, "✓ Camera started successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Camera start failed", e)
+            val cameraProvider = cameraProviderFuture.get()
+            
+            // Preview
+            val preview = Preview.Builder().build()
+            preview.setSurfaceProvider(previewView.surfaceProvider)
+            
+            // Image Analysis - SIMPLE setup
+            analysisUseCase = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+            
+            // THE KEY: Set analyzer on MAIN thread
+            analysisUseCase!!.setAnalyzer(
+                ContextCompat.getMainExecutor(context)
+            ) { image ->
+                frameCount++
+                
+                // Process every frame to verify it works
+                if (frameCount % 30 == 0) {
+                    Log.i(TAG, "========================================")
+                    Log.i(TAG, "FRAME #$frameCount RECEIVED!")
+                    Log.i(TAG, "========================================")
+                    processImageProxy(image)
+                } else {
+                    image.close()
+                }
             }
+            
+            // Bind to lifecycle
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            
+            try {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    preview,
+                    analysisUseCase
+                )
+                
+                Log.i(TAG, "========================================")
+                Log.i(TAG, "CAMERA BOUND! Waiting for frames...")
+                Log.i(TAG, "========================================")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Camera binding failed!", e)
+            }
+            
         }, ContextCompat.getMainExecutor(context))
     }
     
-    private fun bindCamera(previewView: PreviewView) {
-        val cameraProvider = cameraProvider ?: return
-        
-        // Preview use case
-        val preview = Preview.Builder()
-            .build()
-            .apply {
-                setSurfaceProvider(previewView.surfaceProvider)
-            }
-        
-        // Image analysis use case
-        val imageAnalysis = ImageAnalysis.Builder()
-            .setTargetResolution(android.util.Size(640, 480))
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
-            .build()
-        
-        // Set analyzer with explicit logging
-        imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
-            frameCount++
-            Log.d(TAG, ">>> ANALYZER CALLED: Frame #$frameCount")
-            
-            // Process immediately - no skipping frames yet
-            processFrame(imageProxy)
-        }
-        
-        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-        
-        try {
-            cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
-                lifecycleOwner,
-                cameraSelector,
-                preview,
-                imageAnalysis
-            )
-            Log.i(TAG, "✓ Camera bound with preview + analysis")
-        } catch (e: Exception) {
-            Log.e(TAG, "Binding failed", e)
-        }
-    }
-    
-    @OptIn(ExperimentalGetImage::class)
-    private fun processFrame(imageProxy: ImageProxy) {
-        // Only process every 30th frame to avoid overload
-        if (frameCount % 30 != 0) {
-            imageProxy.close()
-            return
-        }
-        
-        analysisScope.launch {
+    @androidx.annotation.OptIn(ExperimentalGetImage::class)
+    private fun processImageProxy(imageProxy: ImageProxy) {
+        CoroutineScope(Dispatchers.Default).launch {
             try {
-                Log.i(TAG, "Processing frame #$frameCount")
-                
-                val bitmap = yuv420ToBitmap(imageProxy)
+                Log.i(TAG, "Converting to bitmap...")
+                val bitmap = imageProxyToBitmap(imageProxy)
                 
                 if (bitmap != null) {
-                    Log.d(TAG, "Bitmap: ${bitmap.width}x${bitmap.height}")
+                    Log.i(TAG, "Bitmap: ${bitmap.width}x${bitmap.height}")
+                    Log.i(TAG, "Calling ModelManager...")
                     
                     val result = modelManager.classifyImage(bitmap)
                     
                     if (result != null) {
-                        Log.i(TAG, "✓ Result: ${result.topLabel} (${(result.confidence * 100).toInt()}%)")
+                        Log.i(TAG, "========================================")
+                        Log.i(TAG, "SUCCESS! ${result.topLabel} (${(result.confidence*100).toInt()}%)")
+                        Log.i(TAG, "========================================")
                         
                         withContext(Dispatchers.Main) {
                             onClassificationResult?.invoke(
@@ -117,56 +109,32 @@ class CameraManager(
                             )
                         }
                     } else {
-                        Log.w(TAG, "Classification returned null")
+                        Log.w(TAG, "Result was null")
                     }
                     
                     bitmap.recycle()
                 } else {
                     Log.e(TAG, "Bitmap conversion failed")
                 }
+                
             } catch (e: Exception) {
-                Log.e(TAG, "Frame processing error", e)
+                Log.e(TAG, "Error: ${e.message}", e)
             } finally {
                 imageProxy.close()
             }
         }
     }
     
-    @OptIn(ExperimentalGetImage::class)
-    private fun yuv420ToBitmap(imageProxy: ImageProxy): Bitmap? {
+    @androidx.annotation.OptIn(ExperimentalGetImage::class)
+    private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
         val image = imageProxy.image ?: return null
-        
-        try {
-            val yBuffer = image.planes[0].buffer
-            val uBuffer = image.planes[1].buffer
-            val vBuffer = image.planes[2].buffer
-
-            val ySize = yBuffer.remaining()
-            val uSize = uBuffer.remaining()
-            val vSize = vBuffer.remaining()
-
-            val nv21 = ByteArray(ySize + uSize + vSize)
-
-            yBuffer.get(nv21, 0, ySize)
-            vBuffer.get(nv21, ySize, vSize)
-            uBuffer.get(nv21, ySize + vSize, uSize)
-
-            val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
-            val out = ByteArrayOutputStream()
-            yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 80, out)
-            val imageBytes = out.toByteArray()
-            
-            return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-        } catch (e: Exception) {
-            Log.e(TAG, "YUV conversion failed", e)
-            return null
-        }
+        val buffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
     
     fun stopCamera() {
-        cameraProvider?.unbindAll()
-        cameraExecutor.shutdown()
-        analysisScope.cancel()
-        Log.i(TAG, "Camera stopped")
+        Log.i(TAG, "Total frames received: $frameCount")
     }
 }
