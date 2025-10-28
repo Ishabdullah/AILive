@@ -45,12 +45,13 @@ class LLMManager(private val context: Context) {
 
             Log.i(TAG, "Model file size: ${modelFile.length() / 1024 / 1024}MB")
 
-            // Configure model parameters
+            // Configure model parameters (path is set in params, not constructor)
             val modelParams = ModelParameters()
-                .setNGpuLayers(0)  // CPU only for now (can enable GPU later)
+                .setModelPath(MODEL_PATH)
+                .setNGpuLayers(0)  // CPU only for now
 
-            // Load model (path is passed to constructor)
-            model = LlamaModel(MODEL_PATH, modelParams)
+            // Load model
+            model = LlamaModel(modelParams)
 
             isInitialized = true
             Log.i(TAG, "✓ SmolLM2 loaded successfully")
