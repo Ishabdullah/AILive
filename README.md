@@ -1,7 +1,7 @@
 # AILive - Brain-Inspired AI System
 
-**Version:** 0.5.0
-**Status:** Phase 2.6 Complete ✅ | Real AI with SmolLM2 🧠
+**Version:** 0.4.0
+**Status:** Phase 2.4 Complete ✅ | Full Voice Conversation System 🗣️
 **Platform:** Android 8.0+ (API 26+)
 **License:** Non-commercial (See LICENSE)
 
