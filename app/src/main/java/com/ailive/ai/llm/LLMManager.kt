@@ -49,9 +49,8 @@ class LLMManager(private val context: Context) {
             val modelParams = ModelParameters()
                 .setNGpuLayers(0)  // CPU only for now (can enable GPU later)
 
-            // Load model
-            model = LlamaModel(modelParams)
-            model!!.load(MODEL_PATH, 4)  // Load with 4 threads
+            // Load model (path is passed to constructor)
+            model = LlamaModel(MODEL_PATH, modelParams)
 
             isInitialized = true
             Log.i(TAG, "✓ SmolLM2 loaded successfully")
