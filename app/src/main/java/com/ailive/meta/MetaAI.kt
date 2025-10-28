@@ -308,7 +308,7 @@ class MetaAI(
      * Handle safety violations.
      */
     private suspend fun handleSafetyViolation(violation: AIMessage.System.SafetyViolation) {
-        Log.e(TAG, "SAFETY VIOLATION: ${violation.attemptedAction} - ${violation.safetyRule}")
+        Log.e(TAG, "SAFETY VIOLATION: ${violation.attemptedAction} - ${violation.violationType}")
         
         // Cancel current goal if unsafe
         currentGoalContext?.let { context ->

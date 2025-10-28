@@ -71,8 +71,6 @@ class PredictiveAI(
                     )
                 },
                 recommendedAction = scenarios.maxByOrNull { it.expectedValue }?.description
-            )
-                },
                 recommendedAction = scenarios.maxByOrNull { it.expectedValue }?.description
             )
         )

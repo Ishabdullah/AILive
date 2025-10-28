@@ -149,17 +149,9 @@ class MemoryAI(
             messageBus.publish(
                 AIMessage.Cognition.MemoryRecalled(
                     query = query,
-                    results = results.map { result ->
-                        com.ailive.core.messaging.MemoryResult(
-                            embeddingId = result.entry.id,
-                            similarity = result.similarity,
-                            content = result.entry.content,
-                            timestamp = result.entry.timestamp
-                        )
-                    },
+                    results = results.map { it.entry },
                     topKSimilarity = results.firstOrNull()?.similarity ?: 0f
                 )
-            )
         }
         
         Log.d(TAG, "Recalled ${results.size} memories for query: $query")

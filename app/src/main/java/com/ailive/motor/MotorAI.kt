@@ -240,7 +240,6 @@ class MotorAI(
     private suspend fun publishSafetyViolation(request: AIMessage.Control.ActionRequest, reason: String) {
         messageBus.publish(
             AIMessage.System.SafetyViolation(
-                violationType = "ACTION_BLOCKED",
                 attemptedAction = request.actionType.name,
                 violationType = reason
             )
