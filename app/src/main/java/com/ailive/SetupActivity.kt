@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.EditText
-import android.widget.TextView
+import android:widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -15,12 +15,7 @@ import androidx.core.content.ContextCompat
 import com.ailive.audio.VoiceRecorder
 import com.ailive.settings.AISettings
 
-/**
- * SetupActivity - Personalize AI name and wake word
- */
 class SetupActivity : AppCompatActivity() {
-    private val TAG = "SetupActivity"
-    
     private lateinit var settings: AISettings
     private lateinit var recorder: VoiceRecorder
     
@@ -38,18 +33,27 @@ class SetupActivity : AppCompatActivity() {
     
     companion object {
         private const val REQUEST_AUDIO_PERMISSION = 200
-        private val PERMISSIONS = arrayOf(Manifest.permission.RECORD_AUDIO)
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_setup)
         
-        settings = AISettings(this)
-        recorder = VoiceRecorder(this)
-        
-        initializeUI()
-        checkPermissions()
+        try {
+            setContentView(R.layout.activity_setup)
+            
+            settings = AISettings(this)
+            recorder = VoiceRecorder(this)
+            
+            initializeUI()
+            checkPermissions()
+            
+        } catch (e: Exception) {
+            Toast.makeText(this, "Setup error: ${e.message}", Toast.LENGTH_LONG).show()
+            // Skip setup on error
+            settings.isSetupComplete = true
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+        }
     }
     
     private fun initializeUI() {
@@ -61,7 +65,6 @@ class SetupActivity : AppCompatActivity() {
         recordWakeButton = findViewById(R.id.recordWakeButton)
         finishButton = findViewById(R.id.finishSetupButton)
         
-        // Hold-to-record for name
         recordNameButton.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> startNameRecording()
@@ -70,7 +73,6 @@ class SetupActivity : AppCompatActivity() {
             true
         }
         
-        // Hold-to-record for wake phrase
         recordWakeButton.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> startWakeRecording()
@@ -79,7 +81,6 @@ class SetupActivity : AppCompatActivity() {
             true
         }
         
-        // Finish setup
         finishButton.setOnClickListener {
             finishSetup()
         }
@@ -88,7 +89,11 @@ class SetupActivity : AppCompatActivity() {
     private fun checkPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, PERMISSIONS, REQUEST_AUDIO_PERMISSION)
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_AUDIO_PERMISSION
+            )
         }
     }
     
@@ -100,16 +105,12 @@ class SetupActivity : AppCompatActivity() {
         }
         
         if (nameSampleCount >= REQUIRED_SAMPLES) {
-            Toast.makeText(this, "Already recorded 3 samples!", Toast.LENGTH_SHORT).show()
             return
         }
         
         val filename = "name_sample_$nameSampleCount.3gp"
-        if (recorder.startRecording(filename)) {
-            recordNameButton.text = "🔴 RECORDING..."
-            recordNameButton.backgroundTintList = 
-                ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-        }
+        recorder.startRecording(filename)
+        recordNameButton.text = "RECORDING..."
     }
     
     private fun stopNameRecording() {
@@ -119,14 +120,11 @@ class SetupActivity : AppCompatActivity() {
         nameSampleCount++
         settings.addNameSample(nameSampleCount - 1)
         
-        recordNameButton.text = "🎤 HOLD TO RECORD NAME"
-        recordNameButton.backgroundTintList = 
-            ContextCompat.getColorStateList(this, android.R.color.holo_red_light)
-        
+        recordNameButton.text = "HOLD TO RECORD NAME"
         nameRecordingStatus.text = "Recorded: $nameSampleCount/$REQUIRED_SAMPLES"
         
         if (nameSampleCount >= REQUIRED_SAMPLES) {
-            Toast.makeText(this, "✓ Name samples complete!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Name complete!", Toast.LENGTH_SHORT).show()
             checkSetupComplete()
         }
     }
@@ -139,16 +137,12 @@ class SetupActivity : AppCompatActivity() {
         }
         
         if (wakeSampleCount >= REQUIRED_SAMPLES) {
-            Toast.makeText(this, "Already recorded 3 samples!", Toast.LENGTH_SHORT).show()
             return
         }
         
         val filename = "wake_sample_$wakeSampleCount.3gp"
-        if (recorder.startRecording(filename)) {
-            recordWakeButton.text = "🔴 RECORDING..."
-            recordWakeButton.backgroundTintList = 
-                ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-        }
+        recorder.startRecording(filename)
+        recordWakeButton.text = "RECORDING..."
     }
     
     private fun stopWakeRecording() {
@@ -158,14 +152,11 @@ class SetupActivity : AppCompatActivity() {
         wakeSampleCount++
         settings.addWakeSample(wakeSampleCount - 1)
         
-        recordWakeButton.text = "🎤 HOLD TO RECORD WAKE PHRASE"
-        recordWakeButton.backgroundTintList = 
-            ContextCompat.getColorStateList(this, android.R.color.holo_red_light)
-        
+        recordWakeButton.text = "HOLD TO RECORD WAKE"
         wakeRecordingStatus.text = "Recorded: $wakeSampleCount/$REQUIRED_SAMPLES"
         
         if (wakeSampleCount >= REQUIRED_SAMPLES) {
-            Toast.makeText(this, "✓ Wake phrase samples complete!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Wake phrase complete!", Toast.LENGTH_SHORT).show()
             checkSetupComplete()
         }
     }
@@ -183,9 +174,8 @@ class SetupActivity : AppCompatActivity() {
         settings.wakePhrase = wakePhraseInput.text.toString().trim()
         settings.isSetupComplete = true
         
-        Toast.makeText(this, "✓ Setup complete! Meet ${settings.aiName}!", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Setup complete!", Toast.LENGTH_SHORT).show()
         
-        // Go to main activity
         startActivity(Intent(this, MainActivity::class.java))
         finish()
     }
@@ -198,7 +188,10 @@ class SetupActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_AUDIO_PERMISSION) {
             if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Audio permission required!", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Audio permission required", Toast.LENGTH_SHORT).show()
+                // Skip setup, use defaults
+                settings.isSetupComplete = true
+                startActivity(Intent(this, MainActivity::class.java))
                 finish()
             }
         }

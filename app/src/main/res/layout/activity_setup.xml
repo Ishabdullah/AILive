@@ -1,143 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
     android:background="#000000"
-    android:padding="24dp">
+    android:gravity="center">
 
-    <LinearLayout
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Personalize Your AI"
+        android:textColor="#FFFFFF"
+        android:textSize="28sp"
+        android:layout_marginBottom="32dp" />
+
+    <EditText
+        android:id="@+id/aiNameInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center">
+        android:hint="AI Name"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#666666"
+        android:padding="16dp"
+        android:layout_marginBottom="16dp" />
 
-        <!-- Title -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Personalize Your AI"
-            android:textColor="#FFFFFF"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="16dp" />
+    <TextView
+        android:id="@+id/nameRecordingStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Record name 3 times"
+        android:textColor="#AAAAAA"
+        android:layout_marginBottom="8dp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Give your AI a unique name and voice"
-            android:textColor="#AAAAAA"
-            android:textSize="16sp"
-            android:layout_marginBottom="32dp" />
+    <Button
+        android:id="@+id/recordNameButton"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="HOLD TO RECORD NAME"
+        android:layout_marginBottom="24dp" />
 
-        <!-- Step 1: Name Input -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Step 1: Name Your AI"
-            android:textColor="#00FF00"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
+    <EditText
+        android:id="@+id/wakePhraseInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Wake Phrase"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#666666"
+        android:padding="16dp"
+        android:layout_marginBottom="16dp" />
 
-        <EditText
-            android:id="@+id/aiNameInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Enter AI name (e.g., Chris, Max, Luna)"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#666666"
-            android:background="#222222"
-            android:padding="16dp"
-            android:layout_marginBottom="24dp" />
+    <TextView
+        android:id="@+id/wakeRecordingStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Record wake phrase 3 times"
+        android:textColor="#AAAAAA"
+        android:layout_marginBottom="8dp" />
 
-        <!-- Step 2: Record Name -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Step 2: Record How You Say It"
-            android:textColor="#00FF00"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
+    <Button
+        android:id="@+id/recordWakeButton"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="HOLD TO RECORD WAKE"
+        android:layout_marginBottom="24dp" />
 
-        <TextView
-            android:id="@+id/nameRecordingStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Record 3 times to train the AI"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:layout_marginBottom="8dp" />
+    <Button
+        android:id="@+id/finishSetupButton"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:text="FINISH SETUP"
+        android:enabled="false" />
 
-        <Button
-            android:id="@+id/recordNameButton"
-            android:layout_width="match_parent"
-            android:layout_height="80dp"
-            android:text="🎤 HOLD TO RECORD NAME"
-            android:textSize="18sp"
-            android:backgroundTint="#FF4444"
-            android:layout_marginBottom="24dp" />
-
-        <!-- Step 3: Wake Phrase Input -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Step 3: Create Wake Phrase"
-            android:textColor="#00FF00"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <EditText
-            android:id="@+id/wakePhraseInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Enter wake phrase (e.g., 'Yo Chris!', 'Hey Max!')"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#666666"
-            android:background="#222222"
-            android:padding="16dp"
-            android:layout_marginBottom="24dp" />
-
-        <!-- Step 4: Record Wake Phrase -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Step 4: Record Your Wake Phrase"
-            android:textColor="#00FF00"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:id="@+id/wakeRecordingStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Record 3 times to train the AI"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:layout_marginBottom="8dp" />
-
-        <Button
-            android:id="@+id/recordWakeButton"
-            android:layout_width="match_parent"
-            android:layout_height="80dp"
-            android:text="🎤 HOLD TO RECORD WAKE PHRASE"
-            android:textSize="18sp"
-            android:backgroundTint="#FF4444"
-            android:layout_marginBottom="32dp" />
-
-        <!-- Finish Button -->
-        <Button
-            android:id="@+id/finishSetupButton"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:text="✓ FINISH SETUP"
-            android:textSize="20sp"
-            android:backgroundTint="#00FF00"
-            android:textColor="#000000"
-            android:enabled="false" />
-
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>
