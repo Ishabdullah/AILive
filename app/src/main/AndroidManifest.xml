@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Permissions -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -11,15 +10,13 @@
         android:allowBackup="true"
         android:label="AILive"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/Theme.AILive"
         tools:targetApi="31">
         
-        <!-- Setup Activity -->
         <activity
             android:name=".SetupActivity"
             android:exported="false" />
         
-        <!-- Main Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
