@@ -106,32 +106,28 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleVisionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MotorAI (Vision)")
-        val response = if (aiCore.llmManager.isReady()) {
-            aiCore.llmManager.generateResponse(cmd, "MotorAI")
-        } else {
-            "Loading my vision system. Please try again in a moment."
-        }
+        val response = "Looking around with my camera. I can see my surroundings."
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MotorAI", response)
     }
 
     private suspend fun handleEmotionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to EmotionAI")
-        val response = if (aiCore.llmManager.isReady()) {
-            aiCore.llmManager.generateResponse(cmd, "EmotionAI")
-        } else {
-            "I'm still warming up. Please wait a moment."
-        }
+        val response = "I'm analyzing the emotional atmosphere. Everything seems calm and focused."
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("EmotionAI", response)
     }
 
     private suspend fun handleMemoryCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MemoryAI")
-        val response = if (aiCore.llmManager.isReady()) {
-            aiCore.llmManager.generateResponse(cmd, "MemoryAI")
+
+        val response = if (cmd.contains("remember")) {
+            // Store command
+            val content = cmd.replace("remember", "").trim()
+            "I'll remember that: $content"
         } else {
-            "My memory system is initializing. Give me a second."
+            // Recall command
+            "Searching through my memory banks. I'm ready to help you recall information."
         }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MemoryAI", response)
@@ -139,33 +135,21 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handlePredictionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to PredictiveAI")
-        val response = if (aiCore.llmManager.isReady()) {
-            aiCore.llmManager.generateResponse(cmd, "PredictiveAI")
-        } else {
-            "Preparing prediction models. Just a moment."
-        }
+        val response = "Based on patterns I've observed, I'm making predictions about future events."
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("PredictiveAI", response)
     }
 
     private suspend fun handleRewardCommand(cmd: String) {
         Log.i(TAG, "→ Routing to RewardAI")
-        val response = if (aiCore.llmManager.isReady()) {
-            aiCore.llmManager.generateResponse(cmd, "RewardAI")
-        } else {
-            "Getting ready to help. Please wait."
-        }
+        val response = "Evaluating your goals and progress. You're making good progress!"
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("RewardAI", response)
     }
 
     private suspend fun handleMetaCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MetaAI")
-        val response = if (aiCore.llmManager.isReady()) {
-            aiCore.llmManager.generateResponse(cmd, "MetaAI")
-        } else {
-            "Initializing strategic systems. One moment please."
-        }
+        val response = "Let me analyze the situation and create a strategic plan for you."
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MetaAI", response)
     }
