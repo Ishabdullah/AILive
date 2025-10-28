@@ -11,16 +11,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ailiveCore: AILiveCore
     
     override fun onCreate(savedInstanceState: Bundle?) {
-setContentView(R.layout.activity_main)
         super.onCreate(savedInstanceState)
-        
+        setContentView(R.layout.activity_main)
+
         Log.i(TAG, "AILive Starting...")
-        
+
         // Initialize AILive
         ailiveCore = AILiveCore(applicationContext, this)
         ailiveCore.initialize()
         ailiveCore.start()
-        
+
         // Run tests
         CoroutineScope(Dispatchers.Main).launch {
             delay(1000)
