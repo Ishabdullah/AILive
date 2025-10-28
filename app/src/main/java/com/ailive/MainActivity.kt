@@ -29,6 +29,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusIndicator: TextView
     
     private var callbackCount = 0
+    private var isInitialized = false
     
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
@@ -37,40 +38,86 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "=== AILive Phase 2.2 Starting ===")
+        Log.i(TAG, "=== AILive onCreate ===")
         
         setContentView(R.layout.activity_main)
         
+        // Initialize UI
         cameraPreview = findViewById(R.id.cameraPreview)
         classificationResult = findViewById(R.id.classificationResult)
         confidenceText = findViewById(R.id.confidenceText)
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
         
+        // Show permission status
+        statusIndicator.text = "● CHECKING PERMISSIONS..."
+        classificationResult.text = "Initializing..."
+        
+        // Check permissions FIRST before anything else
         if (allPermissionsGranted()) {
-            // Delay init slightly to ensure lifecycle is ready
-            cameraPreview.post {
-                initializeAILive()
-            }
+            Log.i(TAG, "✓ Permissions already granted")
+            startAILive()
         } else {
+            Log.i(TAG, "Requesting camera permission...")
+            statusIndicator.text = "● REQUESTING PERMISSION..."
+            classificationResult.text = "Please allow camera access"
+            
             ActivityCompat.requestPermissions(
-                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
+                this,
+                REQUIRED_PERMISSIONS,
+                REQUEST_CODE_PERMISSIONS
             )
         }
     }
     
-    private fun initializeAILive() {
+    /**
+     * Handle permission result
+     */
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i(TAG, "✓ Permission granted by user")
+                startAILive()
+            } else {
+                Log.e(TAG, "✗ Permission denied")
+                statusIndicator.text = "● PERMISSION DENIED"
+                classificationResult.text = "Camera permission required"
+                finish()
+            }
+        }
+    }
+    
+    /**
+     * Start AILive ONLY after permission is granted
+     */
+    private fun startAILive() {
+        if (isInitialized) {
+            Log.w(TAG, "Already initialized, skipping")
+            return
+        }
+        
+        isInitialized = true
+        
         try {
-            Log.i(TAG, "=== Initializing AILive Core ===")
-            statusIndicator.text = "● INIT CORE..."
+            Log.i(TAG, "=== Starting AILive ===")
+            statusIndicator.text = "● INITIALIZING..."
+            classificationResult.text = "Starting AI agents..."
             
+            // Phase 1: Core agents
             aiLiveCore = AILiveCore(applicationContext, this)
             aiLiveCore.initialize()
             aiLiveCore.start()
             
-            Log.i(TAG, "✓ Phase 1 complete")
-            statusIndicator.text = "● INIT TF LITE..."
+            Log.i(TAG, "✓ Phase 1: Agents started")
+            statusIndicator.text = "● LOADING AI MODEL..."
             
+            // Phase 2.1: TensorFlow Lite
             modelManager = ModelManager(applicationContext)
             
             CoroutineScope(Dispatchers.Default).launch {
@@ -78,22 +125,24 @@ class MainActivity : AppCompatActivity() {
                     modelManager.initialize()
                     
                     withContext(Dispatchers.Main) {
-                        Log.i(TAG, "✓ Phase 2.1 complete")
-                        statusIndicator.text = "● INIT CAMERA..."
+                        Log.i(TAG, "✓ Phase 2.1: TensorFlow ready")
+                        statusIndicator.text = "● STARTING CAMERA..."
+                        classificationResult.text = "Initializing camera..."
                         
-                        // Small delay before camera
+                        // Phase 2.2: Camera (with delay to ensure lifecycle ready)
                         delay(500)
                         initializeCamera()
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
                         Log.e(TAG, "TensorFlow init failed", e)
-                        statusIndicator.text = "● TF ERROR"
+                        statusIndicator.text = "● AI MODEL ERROR"
                         classificationResult.text = "Error: ${e.message}"
                     }
                 }
             }
             
+            // Run tests
             CoroutineScope(Dispatchers.Main).launch {
                 delay(1000)
                 val tests = TestScenarios(aiLiveCore)
@@ -102,14 +151,17 @@ class MainActivity : AppCompatActivity() {
             
         } catch (e: Exception) {
             Log.e(TAG, "Init failed", e)
-            statusIndicator.text = "● ERROR"
+            statusIndicator.text = "● INIT ERROR"
             classificationResult.text = "Error: ${e.message}"
         }
     }
     
+    /**
+     * Initialize camera - called AFTER permission granted
+     */
     private fun initializeCamera() {
         try {
-            Log.i(TAG, "=== Initializing Camera ===")
+            Log.i(TAG, "=== Starting Camera ===")
             
             cameraManager = CameraManager(
                 context = applicationContext,
@@ -119,41 +171,44 @@ class MainActivity : AppCompatActivity() {
             
             cameraManager.onClassificationResult = { label, confidence, time ->
                 callbackCount++
-                Log.i(TAG, ">>> CALLBACK #$callbackCount: $label")
+                Log.i(TAG, ">>> Classification #$callbackCount: $label")
                 updateUI(label, confidence, time)
             }
             
             cameraManager.startCamera(cameraPreview)
             
-            Log.i(TAG, "✓ Camera initialized")
-            statusIndicator.text = "● WAITING..."
-            classificationResult.text = "Waiting for analyzer..."
+            Log.i(TAG, "✓ Camera started")
+            statusIndicator.text = "● ANALYZING..."
+            classificationResult.text = "Point at objects"
             
-            // Debug timer
+            // Debug counter
             var seconds = 0
             CoroutineScope(Dispatchers.Main).launch {
                 while (true) {
                     delay(1000)
                     seconds++
                     if (callbackCount == 0) {
-                        statusIndicator.text = "● ${seconds}s | 0 callbacks"
+                        statusIndicator.text = "● WAITING ${seconds}s (0 results)"
                     }
                 }
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "Camera init failed", e)
-            statusIndicator.text = "● CAM ERROR"
+            Log.e(TAG, "Camera failed", e)
+            statusIndicator.text = "● CAMERA ERROR"
             classificationResult.text = "Camera error: ${e.message}"
         }
     }
     
+    /**
+     * Update UI with classification
+     */
     private fun updateUI(label: String, confidence: Float, time: Long) {
         runOnUiThread {
             classificationResult.text = label
             confidenceText.text = "Confidence: ${(confidence * 100).toInt()}%"
             inferenceTime.text = "${time}ms | Frame #$callbackCount"
-            statusIndicator.text = "● LIVE ($callbackCount)"
+            statusIndicator.text = "● LIVE ($callbackCount frames)"
             
             val color = when {
                 confidence > 0.7f -> getColor(android.R.color.holo_green_light)
@@ -164,25 +219,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Check if permissions granted
+     */
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
-    
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (allPermissionsGranted()) {
-                cameraPreview.post {
-                    initializeAILive()
-                }
-            } else {
-                finish()
-            }
-        }
     }
     
     override fun onDestroy() {
