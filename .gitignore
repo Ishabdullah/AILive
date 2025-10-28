@@ -77,3 +77,18 @@ lint/tmp/
 
 # Android Profiling
 *.hprof
+
+# AI Model files (download separately)
+models/**/*.tflite
+models/**/*.onnx
+models/**/*.gguf
+models/**/*.bin
+models/**/*.pt
+models/**/*.h5
+models/**/*.pb
+
+# Keep model configs and READMEs
+!models/**/README.md
+!models/**/config.json
+!models/**/labels.txt
+!models/**/tokenizer.json

@@ -11,6 +11,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ailiveCore: AILiveCore
     
     override fun onCreate(savedInstanceState: Bundle?) {
+setContentView(R.layout.activity_main)
         super.onCreate(savedInstanceState)
         
         Log.i(TAG, "AILive Starting...")
