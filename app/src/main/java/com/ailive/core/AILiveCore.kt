@@ -12,6 +12,11 @@ import com.ailive.meta.MetaAI
 import com.ailive.core.messaging.MessageBus
 import com.ailive.core.state.StateManager
 import com.ailive.audio.TTSManager
+import com.ailive.ai.llm.LLMManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * AILiveCore - Central coordinator for all AI agents
@@ -26,6 +31,7 @@ class AILiveCore(
     lateinit var messageBus: MessageBus  // Public for CommandRouter access
     private lateinit var stateManager: StateManager
     lateinit var ttsManager: TTSManager  // Public for agents and CommandRouter
+    lateinit var llmManager: LLMManager  // Public for generating intelligent responses
 
     private lateinit var motorAI: MotorAI
     private lateinit var emotionAI: EmotionAI
@@ -33,6 +39,8 @@ class AILiveCore(
     private lateinit var predictiveAI: PredictiveAI
     private lateinit var rewardAI: RewardAI
     private lateinit var metaAI: MetaAI
+
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
     private var isInitialized = false
     private var isRunning = false
@@ -53,6 +61,18 @@ class AILiveCore(
             messageBus = MessageBus()
             stateManager = StateManager()
             ttsManager = TTSManager(context)
+            llmManager = LLMManager(context)
+
+            // Initialize LLM asynchronously (takes time to load)
+            scope.launch {
+                Log.i(TAG, "Loading language model (SmolLM2)...")
+                val success = llmManager.initialize()
+                if (success) {
+                    Log.i(TAG, "✓ Language model ready")
+                } else {
+                    Log.e(TAG, "✗ Language model failed to load")
+                }
+            }
 
             // Create all agents
             motorAI = MotorAI(context, activity, messageBus, stateManager)
@@ -63,7 +83,7 @@ class AILiveCore(
             metaAI = MetaAI(messageBus, stateManager)
 
             isInitialized = true
-            Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS)")
+            Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS + LLM)")
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize AILive", e)
@@ -119,6 +139,7 @@ class AILiveCore(
             rewardAI.stop()
             metaAI.stop()
             ttsManager.shutdown()
+            llmManager.close()
 
             isRunning = false
             Log.i(TAG, "✓ AILive stopped")
