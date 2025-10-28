@@ -1,9 +1,11 @@
 package com.ailive.camera
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.*
-import android.media.Image
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -13,8 +15,12 @@ import androidx.lifecycle.LifecycleOwner
 import com.ailive.ai.models.ModelManager
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
+import java.util.concurrent.Executor
 
+/**
+ * CameraManager - Optimized for Samsung S24 Ultra
+ * Phase 2.2: Real-time vision with AI classification
+ */
 class CameraManager(
     private val context: Context,
     private val lifecycleOwner: LifecycleOwner,
@@ -22,84 +28,130 @@ class CameraManager(
 ) {
     private val TAG = "CameraManager"
     
-    private var analysisUseCase: ImageAnalysis? = null
-    private var frameCount = 0
+    private var cameraProvider: ProcessCameraProvider? = null
+    private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
+    private val analysisScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
+    private var frameCount = 0
     var onClassificationResult: ((String, Float, Long) -> Unit)? = null
     
-    @SuppressLint("RestrictedApi")
+    /**
+     * Start camera with S24 Ultra optimizations
+     */
     fun startCamera(previewView: PreviewView) {
+        Log.i(TAG, "=== Initializing Camera for S24 Ultra ===")
+        
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
+            try {
+                cameraProvider = cameraProviderFuture.get()
+                
+                if (cameraProvider == null) {
+                    Log.e(TAG, "❌ CameraProvider is NULL!")
+                    return@addListener
+                }
+                
+                Log.i(TAG, "✓ CameraProvider obtained")
+                bindCameraUseCases(previewView)
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to get CameraProvider", e)
+            }
+        }, mainExecutor)
+    }
+    
+    /**
+     * Bind camera use cases
+     */
+    private fun bindCameraUseCases(previewView: PreviewView) {
+        val provider = cameraProvider ?: run {
+            Log.e(TAG, "❌ Provider null in bindCameraUseCases")
+            return
+        }
+        
+        try {
+            // Unbind first
+            provider.unbindAll()
+            Log.i(TAG, "Unbound all previous use cases")
             
-            // Preview
-            val preview = Preview.Builder().build()
-            preview.setSurfaceProvider(previewView.surfaceProvider)
+            // Create Preview
+            val preview = Preview.Builder()
+                .build()
+                .also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
             
-            // Image Analysis - SIMPLE setup
-            analysisUseCase = ImageAnalysis.Builder()
+            Log.i(TAG, "Preview created")
+            
+            // Create ImageAnalysis
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setTargetResolution(android.util.Size(640, 480))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
             
-            // THE KEY: Set analyzer on MAIN thread
-            analysisUseCase!!.setAnalyzer(
-                ContextCompat.getMainExecutor(context)
-            ) { image ->
+            Log.i(TAG, "ImageAnalysis created")
+            
+            // CRITICAL: Set analyzer with proper executor
+            imageAnalysis.setAnalyzer(mainExecutor) { imageProxy ->
                 frameCount++
                 
-                // Process every frame to verify it works
+                if (frameCount == 1) {
+                    Log.i(TAG, "========================================")
+                    Log.i(TAG, "🎉 FIRST FRAME RECEIVED!")
+                    Log.i(TAG, "========================================")
+                }
+                
                 if (frameCount % 30 == 0) {
-                    Log.i(TAG, "========================================")
-                    Log.i(TAG, "FRAME #$frameCount RECEIVED!")
-                    Log.i(TAG, "========================================")
-                    processImageProxy(image)
+                    Log.i(TAG, "📸 Frame #$frameCount - processing...")
+                    processFrame(imageProxy)
                 } else {
-                    image.close()
+                    imageProxy.close()
                 }
             }
             
-            // Bind to lifecycle
+            Log.i(TAG, "Analyzer set on mainExecutor")
+            
+            // Select back camera
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
             
-            try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    lifecycleOwner,
-                    cameraSelector,
-                    preview,
-                    analysisUseCase
-                )
-                
-                Log.i(TAG, "========================================")
-                Log.i(TAG, "CAMERA BOUND! Waiting for frames...")
-                Log.i(TAG, "========================================")
-                
-            } catch (e: Exception) {
-                Log.e(TAG, "Camera binding failed!", e)
-            }
+            // Bind to lifecycle
+            val camera = provider.bindToLifecycle(
+                lifecycleOwner,
+                cameraSelector,
+                preview,
+                imageAnalysis
+            )
             
-        }, ContextCompat.getMainExecutor(context))
+            Log.i(TAG, "========================================")
+            Log.i(TAG, "✅ CAMERA BOUND SUCCESSFULLY!")
+            Log.i(TAG, "Camera ID: ${camera.cameraInfo}")
+            Log.i(TAG, "Waiting for analyzer callbacks...")
+            Log.i(TAG, "========================================")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ BINDING FAILED!", e)
+            e.printStackTrace()
+        }
     }
     
-    @androidx.annotation.OptIn(ExperimentalGetImage::class)
-    private fun processImageProxy(imageProxy: ImageProxy) {
-        CoroutineScope(Dispatchers.Default).launch {
+    /**
+     * Process frame with TensorFlow Lite
+     */
+    @OptIn(ExperimentalGetImage::class)
+    private fun processFrame(imageProxy: ImageProxy) {
+        analysisScope.launch {
             try {
-                Log.i(TAG, "Converting to bitmap...")
-                val bitmap = imageProxyToBitmap(imageProxy)
+                val bitmap = convertToBitmap(imageProxy)
                 
                 if (bitmap != null) {
-                    Log.i(TAG, "Bitmap: ${bitmap.width}x${bitmap.height}")
-                    Log.i(TAG, "Calling ModelManager...")
+                    Log.d(TAG, "Bitmap: ${bitmap.width}x${bitmap.height}")
                     
                     val result = modelManager.classifyImage(bitmap)
                     
                     if (result != null) {
-                        Log.i(TAG, "========================================")
-                        Log.i(TAG, "SUCCESS! ${result.topLabel} (${(result.confidence*100).toInt()}%)")
-                        Log.i(TAG, "========================================")
+                        Log.i(TAG, "✅ ${result.topLabel} (${(result.confidence*100).toInt()}%)")
                         
                         withContext(Dispatchers.Main) {
                             onClassificationResult?.invoke(
@@ -108,33 +160,48 @@ class CameraManager(
                                 result.inferenceTimeMs
                             )
                         }
-                    } else {
-                        Log.w(TAG, "Result was null")
                     }
                     
                     bitmap.recycle()
-                } else {
-                    Log.e(TAG, "Bitmap conversion failed")
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error: ${e.message}", e)
+                Log.e(TAG, "Processing error", e)
             } finally {
                 imageProxy.close()
             }
         }
     }
     
-    @androidx.annotation.OptIn(ExperimentalGetImage::class)
-    private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
-        val image = imageProxy.image ?: return null
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+    /**
+     * Convert ImageProxy to Bitmap (RGBA format for S24 Ultra)
+     */
+    @OptIn(ExperimentalGetImage::class)
+    private fun convertToBitmap(imageProxy: ImageProxy): Bitmap? {
+        return try {
+            val buffer = imageProxy.planes[0].buffer
+            val bytes = ByteArray(buffer.remaining())
+            buffer.get(bytes)
+            
+            Bitmap.createBitmap(
+                imageProxy.width,
+                imageProxy.height,
+                Bitmap.Config.ARGB_8888
+            ).apply {
+                copyPixelsFromBuffer(buffer.rewind())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Bitmap conversion failed", e)
+            null
+        }
     }
     
+    /**
+     * Stop camera
+     */
     fun stopCamera() {
-        Log.i(TAG, "Total frames received: $frameCount")
+        cameraProvider?.unbindAll()
+        analysisScope.cancel()
+        Log.i(TAG, "Camera stopped. Total frames: $frameCount")
     }
 }
