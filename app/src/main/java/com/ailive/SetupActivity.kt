@@ -7,7 +7,7 @@ import android.os.Bundle
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.EditText
-import android:widget.TextView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -49,7 +49,6 @@ class SetupActivity : AppCompatActivity() {
             
         } catch (e: Exception) {
             Toast.makeText(this, "Setup error: ${e.message}", Toast.LENGTH_LONG).show()
-            // Skip setup on error
             settings.isSetupComplete = true
             startActivity(Intent(this, MainActivity::class.java))
             finish()
@@ -189,7 +188,6 @@ class SetupActivity : AppCompatActivity() {
         if (requestCode == REQUEST_AUDIO_PERMISSION) {
             if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "Audio permission required", Toast.LENGTH_SHORT).show()
-                // Skip setup, use defaults
                 settings.isSetupComplete = true
                 startActivity(Intent(this, MainActivity::class.java))
                 finish()
