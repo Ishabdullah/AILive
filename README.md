@@ -1,7 +1,7 @@
 # AILive - Brain-Inspired AI System
 
-**Version:** 0.3.0
-**Status:** Phase 2.3 Complete ✅ | Vision + Audio AI Operational 🎤
+**Version:** 0.4.0
+**Status:** Phase 2.4 Complete ✅ | Full Voice Conversation System 🗣️
 **Platform:** Android 8.0+ (API 26+)
 **License:** Non-commercial (See LICENSE)
 
