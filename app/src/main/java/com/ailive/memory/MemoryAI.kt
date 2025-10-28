@@ -148,11 +148,11 @@ class MemoryAI(
         if (results.isNotEmpty()) {
             messageBus.publish(
                 AIMessage.Cognition.MemoryRecalled(
-                AIMessage.Cognition.MemoryRecalled(
                     query = query,
                     results = results.map { MemoryResult(entry = it.entry, similarity = it.similarity) },
                     topKSimilarity = results.firstOrNull()?.similarity ?: 0f
                 )
+)
         }
         
         Log.d(TAG, "Recalled ${results.size} memories for query: $query")
