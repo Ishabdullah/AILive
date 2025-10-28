@@ -92,3 +92,11 @@ models/**/*.pb
 !models/**/config.json
 !models/**/labels.txt
 !models/**/tokenizer.json
+
+# Documentation backups
+*.md.bak
+*.md~
+
+# Build artifacts
+*.apk
+*.aab
