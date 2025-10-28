@@ -47,17 +47,13 @@ class ModelManager(private val context: Context) {
         try {
             val options = Interpreter.Options()
             
-            // Try to use GPU acceleration
+            // Try to use GPU acceleration with default settings
             val compatList = CompatibilityList()
             if (compatList.isDelegateSupportedOnThisDevice) {
-                // Use the correct GpuDelegate constructor
-                val delegateOptions = GpuDelegate.Options().apply {
-                    setPrecisionLossAllowed(true) // Allow FP16 for better performance
-                    setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_FAST_SINGLE_ANSWER)
-                }
-                gpuDelegate = GpuDelegate(delegateOptions)
+                // Use default GPU delegate (no custom options to avoid API issues)
+                gpuDelegate = GpuDelegate()
                 options.addDelegate(gpuDelegate)
-                Log.i(TAG, "✓ GPU acceleration enabled")
+                Log.i(TAG, "✓ GPU acceleration enabled (Adreno)")
             } else {
                 options.setNumThreads(4)
                 Log.i(TAG, "Using CPU with 4 threads")
@@ -73,12 +69,13 @@ class ModelManager(private val context: Context) {
             Log.e(TAG, "Failed to initialize TensorFlow Lite", e)
             // Fallback to CPU if GPU fails
             try {
+                Log.w(TAG, "Attempting CPU fallback...")
                 val options = Interpreter.Options().apply {
                     setNumThreads(4)
                 }
                 val model = loadModelFile()
                 interpreter = Interpreter(model, options)
-                Log.i(TAG, "✓ TensorFlow Lite initialized (CPU fallback)")
+                Log.i(TAG, "✓ TensorFlow Lite initialized (CPU mode)")
             } catch (fallbackError: Exception) {
                 Log.e(TAG, "CPU fallback also failed", fallbackError)
             }
@@ -122,7 +119,7 @@ class ModelManager(private val context: Context) {
             val inferenceTime = System.currentTimeMillis() - startTime
             
             Log.d(TAG, "Classification complete in ${inferenceTime}ms")
-            Log.d(TAG, "Top result: ${results[0].first} (${results[0].second * 100}%)")
+            Log.d(TAG, "Top result: ${results[0].first} (${(results[0].second * 100).toInt()}%)")
             
             return ClassificationResult(
                 topLabel = results[0].first,
