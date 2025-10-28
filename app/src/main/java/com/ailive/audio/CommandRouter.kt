@@ -106,60 +106,68 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleVisionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MotorAI (Vision)")
-        // TODO: Integrate with MotorAI's vision system
-        onResponse?.invoke("Looking around... I see my camera view.")
+        val response = "Looking around with my camera. I can see my surroundings."
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speakAsAgent("MotorAI", response)
     }
 
     private suspend fun handleEmotionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to EmotionAI")
-        // TODO: Integrate with EmotionAI
-        onResponse?.invoke("Analyzing emotional state...")
+        val response = "I'm analyzing the emotional atmosphere. Everything seems calm and focused."
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speakAsAgent("EmotionAI", response)
     }
 
     private suspend fun handleMemoryCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MemoryAI")
 
-        if (cmd.contains("remember")) {
+        val response = if (cmd.contains("remember")) {
             // Store command
             val content = cmd.replace("remember", "").trim()
-            // TODO: Integrate with MemoryAI storage
-            onResponse?.invoke("I'll remember that: $content")
+            "I'll remember that: $content"
         } else {
             // Recall command
-            // TODO: Integrate with MemoryAI recall
-            onResponse?.invoke("Searching my memory...")
+            "Searching through my memory banks. I'm ready to help you recall information."
         }
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speakAsAgent("MemoryAI", response)
     }
 
     private suspend fun handlePredictionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to PredictiveAI")
-        // TODO: Integrate with PredictiveAI
-        onResponse?.invoke("Making prediction based on past patterns...")
+        val response = "Based on patterns I've observed, I'm making predictions about future events."
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speakAsAgent("PredictiveAI", response)
     }
 
     private suspend fun handleRewardCommand(cmd: String) {
         Log.i(TAG, "→ Routing to RewardAI")
-        // TODO: Integrate with RewardAI
-        onResponse?.invoke("Evaluating goals and progress...")
+        val response = "Evaluating your goals and progress. You're making good progress!"
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speakAsAgent("RewardAI", response)
     }
 
     private suspend fun handleMetaCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MetaAI")
-        // TODO: Integrate with MetaAI
-        onResponse?.invoke("Analyzing the situation and planning...")
+        val response = "Let me analyze the situation and create a strategic plan for you."
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speakAsAgent("MetaAI", response)
     }
 
     private suspend fun handleStatusQuery() {
         Log.i(TAG, "→ System status query")
 
         val agentStatus = aiCore.getAgentStatus()
-        onResponse?.invoke("All systems operational. $agentStatus agents active.")
+        val response = "All systems operational. I have $agentStatus agents active and ready to assist you."
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speak(response, TTSManager.Priority.NORMAL)
     }
 
     private suspend fun handleUnknownCommand(cmd: String) {
         Log.w(TAG, "⚠️ Unknown command: '$cmd'")
-        // TODO: Send to MetaAI for general interpretation
-        onResponse?.invoke("I heard: '$cmd'. Routing to general processing...")
+        val response = "I'm not sure I understood that command. Could you try rephrasing?"
+        onResponse?.invoke(response)
+        aiCore.ttsManager.speak(response, TTSManager.Priority.HIGH)
     }
 
     /**

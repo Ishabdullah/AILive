@@ -258,7 +258,7 @@ class MainActivity : AppCompatActivity() {
 
             // Create audio components
             speechProcessor = SpeechProcessor(applicationContext)
-            wakeWordDetector = WakeWordDetector(settings.wakePhrase)
+            wakeWordDetector = WakeWordDetector(settings.wakePhrase, aiLiveCore.ttsManager)
             commandRouter = CommandRouter(aiLiveCore)
 
             // Initialize speech processor
@@ -350,7 +350,24 @@ class MainActivity : AppCompatActivity() {
             isListeningForWakeWord = true
             startWakeWordListening()
 
+            // Monitor TTS status
+            CoroutineScope(Dispatchers.Main).launch {
+                aiLiveCore.ttsManager.state.collect { ttsState ->
+                    when (ttsState) {
+                        com.ailive.audio.TTSManager.TTSState.SPEAKING -> {
+                            if (!isListeningForWakeWord) {
+                                audioStatus.text = "🔊 Speaking..."
+                            }
+                        }
+                        else -> {
+                            // Don't update if we're already showing another status
+                        }
+                    }
+                }
+            }
+
             Log.i(TAG, "✓ Phase 2.3: Audio pipeline operational")
+            Log.i(TAG, "✓ Phase 2.4: TTS ready")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Audio init failed", e)

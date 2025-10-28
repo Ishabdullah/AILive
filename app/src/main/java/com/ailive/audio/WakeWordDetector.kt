@@ -5,11 +5,13 @@ import android.util.Log
 /**
  * WakeWordDetector - Simple pattern matching for wake phrase
  * Phase 2.3: Detects wake word in transcribed text
+ * Phase 2.4: Added TTS feedback on detection
  *
  * Future: Can be upgraded to ML-based detection (TensorFlow Lite audio models)
  */
 class WakeWordDetector(
-    private var wakePhrase: String = "hey ailive"
+    private var wakePhrase: String = "hey ailive",
+    private val ttsManager: TTSManager? = null
 ) {
     private val TAG = "WakeWordDetector"
 
@@ -38,7 +40,7 @@ class WakeWordDetector(
         // Check exact match
         if (normalized.contains(wakePhrase.lowercase())) {
             Log.i(TAG, "🎯 Wake word detected (exact): '$text'")
-            onWakeWordDetected?.invoke()
+            triggerWakeWordResponse()
             return true
         }
 
@@ -46,7 +48,7 @@ class WakeWordDetector(
         for (alt in WAKE_ALTERNATIVES) {
             if (normalized.contains(alt)) {
                 Log.i(TAG, "🎯 Wake word detected (alt: '$alt'): '$text'")
-                onWakeWordDetected?.invoke()
+                triggerWakeWordResponse()
                 return true
             }
         }
@@ -54,7 +56,7 @@ class WakeWordDetector(
         // Check fuzzy match (allow some typos)
         if (fuzzyMatch(normalized, wakePhrase.lowercase())) {
             Log.i(TAG, "🎯 Wake word detected (fuzzy): '$text'")
-            onWakeWordDetected?.invoke()
+            triggerWakeWordResponse()
             return true
         }
 
@@ -100,6 +102,17 @@ class WakeWordDetector(
         // TODO: Implement ML-based wake word detection
         // For now, we rely on SpeechRecognizer + text matching
         return false
+    }
+
+    /**
+     * Trigger wake word response (callback + TTS feedback)
+     */
+    private fun triggerWakeWordResponse() {
+        // Play TTS feedback
+        ttsManager?.playFeedback(TTSManager.FeedbackType.WAKE_WORD_DETECTED)
+
+        // Trigger callback
+        onWakeWordDetected?.invoke()
     }
 
     /**

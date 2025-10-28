@@ -11,6 +11,7 @@ import com.ailive.reward.RewardAI
 import com.ailive.meta.MetaAI
 import com.ailive.core.messaging.MessageBus
 import com.ailive.core.state.StateManager
+import com.ailive.audio.TTSManager
 
 /**
  * AILiveCore - Central coordinator for all AI agents
@@ -24,7 +25,8 @@ class AILiveCore(
 
     lateinit var messageBus: MessageBus  // Public for CommandRouter access
     private lateinit var stateManager: StateManager
-    
+    lateinit var ttsManager: TTSManager  // Public for agents and CommandRouter
+
     private lateinit var motorAI: MotorAI
     private lateinit var emotionAI: EmotionAI
     private lateinit var memoryAI: MemoryAI
@@ -46,11 +48,12 @@ class AILiveCore(
         
         try {
             Log.i(TAG, "Initializing AILive system...")
-            
+
             // Core systems
             messageBus = MessageBus()
             stateManager = StateManager()
-            
+            ttsManager = TTSManager(context)
+
             // Create all agents
             motorAI = MotorAI(context, activity, messageBus, stateManager)
             emotionAI = EmotionAI(messageBus, stateManager)
@@ -58,10 +61,10 @@ class AILiveCore(
             predictiveAI = PredictiveAI(messageBus, stateManager)
             rewardAI = RewardAI(messageBus, stateManager)
             metaAI = MetaAI(messageBus, stateManager)
-            
+
             isInitialized = true
-            Log.i(TAG, "✓ AILive initialized successfully (6 agents)")
-            
+            Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS)")
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize AILive", e)
             throw e
@@ -105,9 +108,9 @@ class AILiveCore(
      */
     fun stop() {
         if (!isRunning) return
-        
+
         Log.i(TAG, "Stopping AILive...")
-        
+
         try {
             motorAI.stop()
             emotionAI.stop()
@@ -115,10 +118,11 @@ class AILiveCore(
             predictiveAI.stop()
             rewardAI.stop()
             metaAI.stop()
-            
+            ttsManager.shutdown()
+
             isRunning = false
             Log.i(TAG, "✓ AILive stopped")
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping AILive", e)
         }
