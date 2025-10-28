@@ -84,18 +84,35 @@ class MainActivity : AppCompatActivity() {
 
         // Use custom AI name in UI
         appTitle.text = "${settings.aiName} (Vision + Audio)"
-        
-        statusIndicator.text = "● CHECKING PERMISSIONS..."
+
+        statusIndicator.text = "● INITIALIZING..."
         classificationResult.text = "Initializing ${settings.aiName}..."
-        
+
+        // Initialize AILiveCore EARLY (before permissions) to avoid lifecycle issues
+        try {
+            Log.i(TAG, "=== Initializing ${settings.aiName} Core ===")
+            aiLiveCore = AILiveCore(applicationContext, this)
+            aiLiveCore.initialize()
+            aiLiveCore.start()
+            Log.i(TAG, "✓ Phase 1: Agents operational")
+        } catch (e: Exception) {
+            Log.e(TAG, "AILive Core init failed", e)
+            statusIndicator.text = "● CORE ERROR"
+            classificationResult.text = "Error: ${e.message}"
+            return
+        }
+
+        // Now check permissions
+        statusIndicator.text = "● CHECKING PERMISSIONS..."
+
         if (allPermissionsGranted()) {
             Log.i(TAG, "✓ Permissions granted")
-            startAILive()
+            startModels()
         } else {
-            Log.i(TAG, "Requesting camera permission...")
-            statusIndicator.text = "● REQUESTING PERMISSION..."
-            classificationResult.text = "Please allow camera access"
-            
+            Log.i(TAG, "Requesting permissions...")
+            statusIndicator.text = "● REQUESTING PERMISSIONS..."
+            classificationResult.text = "Please allow camera and microphone access"
+
             ActivityCompat.requestPermissions(
                 this,
                 REQUIRED_PERMISSIONS,
@@ -110,37 +127,28 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
+
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.i(TAG, "✓ Permission granted")
-                startAILive()
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                Log.i(TAG, "✓ All permissions granted")
+                startModels()
             } else {
-                Log.e(TAG, "✗ Permission denied")
+                Log.e(TAG, "✗ Permissions denied")
                 statusIndicator.text = "● PERMISSION DENIED"
-                classificationResult.text = "Camera permission required"
+                classificationResult.text = "Camera and microphone permissions required"
                 finish()
             }
         }
     }
-    
-    private fun startAILive() {
+
+    private fun startModels() {
         if (isInitialized) return
         isInitialized = true
-        
+
         try {
-            Log.i(TAG, "=== Initializing ${settings.aiName} ===")
-            statusIndicator.text = "● INITIALIZING..."
-            classificationResult.text = "Starting AI agents..."
-            
-            // Phase 1: Core agents
-            aiLiveCore = AILiveCore(applicationContext, this)
-            aiLiveCore.initialize()
-            aiLiveCore.start()
-            
-            Log.i(TAG, "✓ Phase 1: Agents operational")
             statusIndicator.text = "● LOADING AI MODEL..."
-            
+            classificationResult.text = "Loading TensorFlow Lite..."
+
             // Phase 2.1: TensorFlow Lite
             modelManager = ModelManager(applicationContext)
             
