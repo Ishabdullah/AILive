@@ -1,6 +1,7 @@
 package com.ailive
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
@@ -12,17 +13,20 @@ import androidx.core.content.ContextCompat
 import com.ailive.ai.models.ModelManager
 import com.ailive.camera.CameraManager
 import com.ailive.core.AILiveCore
+import com.ailive.settings.AISettings
 import com.ailive.testing.TestScenarios
 import kotlinx.coroutines.*
 
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
     
+    private lateinit var settings: AISettings
     private lateinit var aiLiveCore: AILiveCore
     private lateinit var modelManager: ModelManager
     private lateinit var cameraManager: CameraManager
     
     private lateinit var cameraPreview: PreviewView
+    private lateinit var appTitle: TextView
     private lateinit var classificationResult: TextView
     private lateinit var confidenceText: TextView
     private lateinit var inferenceTime: TextView
@@ -38,24 +42,36 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "=== AILive onCreate ===")
+        
+        // Check if setup is complete
+        settings = AISettings(this)
+        if (!settings.isSetupComplete) {
+            Log.i(TAG, "Setup not complete, launching SetupActivity")
+            startActivity(Intent(this, SetupActivity::class.java))
+            finish()
+            return
+        }
+        
+        Log.i(TAG, "=== ${settings.aiName} Starting ===")
         
         setContentView(R.layout.activity_main)
         
         // Initialize UI
         cameraPreview = findViewById(R.id.cameraPreview)
+        appTitle = findViewById(R.id.appTitle)
         classificationResult = findViewById(R.id.classificationResult)
         confidenceText = findViewById(R.id.confidenceText)
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
         
-        // Show permission status
-        statusIndicator.text = "● CHECKING PERMISSIONS..."
-        classificationResult.text = "Initializing..."
+        // Use custom AI name in UI
+        appTitle.text = "${settings.aiName} Vision"
         
-        // Check permissions FIRST before anything else
+        statusIndicator.text = "● CHECKING PERMISSIONS..."
+        classificationResult.text = "Initializing ${settings.aiName}..."
+        
         if (allPermissionsGranted()) {
-            Log.i(TAG, "✓ Permissions already granted")
+            Log.i(TAG, "✓ Permissions granted")
             startAILive()
         } else {
             Log.i(TAG, "Requesting camera permission...")
@@ -70,9 +86,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Handle permission result
-     */
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -82,7 +95,7 @@ class MainActivity : AppCompatActivity() {
         
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.i(TAG, "✓ Permission granted by user")
+                Log.i(TAG, "✓ Permission granted")
                 startAILive()
             } else {
                 Log.e(TAG, "✗ Permission denied")
@@ -93,19 +106,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Start AILive ONLY after permission is granted
-     */
     private fun startAILive() {
-        if (isInitialized) {
-            Log.w(TAG, "Already initialized, skipping")
-            return
-        }
-        
+        if (isInitialized) return
         isInitialized = true
         
         try {
-            Log.i(TAG, "=== Starting AILive ===")
+            Log.i(TAG, "=== Initializing ${settings.aiName} ===")
             statusIndicator.text = "● INITIALIZING..."
             classificationResult.text = "Starting AI agents..."
             
@@ -114,7 +120,7 @@ class MainActivity : AppCompatActivity() {
             aiLiveCore.initialize()
             aiLiveCore.start()
             
-            Log.i(TAG, "✓ Phase 1: Agents started")
+            Log.i(TAG, "✓ Phase 1: Agents operational")
             statusIndicator.text = "● LOADING AI MODEL..."
             
             // Phase 2.1: TensorFlow Lite
@@ -129,7 +135,6 @@ class MainActivity : AppCompatActivity() {
                         statusIndicator.text = "● STARTING CAMERA..."
                         classificationResult.text = "Initializing camera..."
                         
-                        // Phase 2.2: Camera (with delay to ensure lifecycle ready)
                         delay(500)
                         initializeCamera()
                     }
@@ -156,9 +161,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Initialize camera - called AFTER permission granted
-     */
     private fun initializeCamera() {
         try {
             Log.i(TAG, "=== Starting Camera ===")
@@ -200,9 +202,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Update UI with classification
-     */
     private fun updateUI(label: String, confidence: Float, time: Long) {
         runOnUiThread {
             classificationResult.text = label
@@ -219,9 +218,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * Check if permissions granted
-     */
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
