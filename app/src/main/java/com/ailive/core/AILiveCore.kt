@@ -3,7 +3,14 @@ package com.ailive.core
 import android.content.Context
 import android.util.Log
 import androidx.fragment.app.FragmentActivity
-import com.ailive.agents.*
+import com.ailive.motor.MotorAI
+import com.ailive.emotion.EmotionAI
+import com.ailive.memory.MemoryAI
+import com.ailive.predictive.PredictiveAI
+import com.ailive.reward.RewardAI
+import com.ailive.meta.MetaAI
+import com.ailive.core.messaging.MessageBus
+import com.ailive.core.state.StateManager
 
 /**
  * AILiveCore - Central coordinator for all AI agents
