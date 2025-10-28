@@ -48,7 +48,10 @@ class MainActivity : AppCompatActivity() {
         statusIndicator = findViewById(R.id.statusIndicator)
         
         if (allPermissionsGranted()) {
-            initializeAILive()
+            // Delay init slightly to ensure lifecycle is ready
+            cameraPreview.post {
+                initializeAILive()
+            }
         } else {
             ActivityCompat.requestPermissions(
                 this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS
@@ -65,7 +68,7 @@ class MainActivity : AppCompatActivity() {
             aiLiveCore.initialize()
             aiLiveCore.start()
             
-            Log.i(TAG, "✓ Phase 1: All agents operational")
+            Log.i(TAG, "✓ Phase 1 complete")
             statusIndicator.text = "● INIT TF LITE..."
             
             modelManager = ModelManager(applicationContext)
@@ -75,15 +78,18 @@ class MainActivity : AppCompatActivity() {
                     modelManager.initialize()
                     
                     withContext(Dispatchers.Main) {
-                        Log.i(TAG, "✓ Phase 2.1: TensorFlow Lite ready")
+                        Log.i(TAG, "✓ Phase 2.1 complete")
                         statusIndicator.text = "● INIT CAMERA..."
+                        
+                        // Small delay before camera
+                        delay(500)
                         initializeCamera()
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Log.e(TAG, "ModelManager init failed", e)
-                        statusIndicator.text = "● TF ERROR: ${e.message}"
-                        classificationResult.text = "TensorFlow init failed"
+                        Log.e(TAG, "TensorFlow init failed", e)
+                        statusIndicator.text = "● TF ERROR"
+                        classificationResult.text = "Error: ${e.message}"
                     }
                 }
             }
@@ -95,9 +101,9 @@ class MainActivity : AppCompatActivity() {
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize AILive", e)
-            statusIndicator.text = "● ERROR: ${e.message}"
-            classificationResult.text = "Init error: ${e.message}"
+            Log.e(TAG, "Init failed", e)
+            statusIndicator.text = "● ERROR"
+            classificationResult.text = "Error: ${e.message}"
         }
     }
     
@@ -111,34 +117,33 @@ class MainActivity : AppCompatActivity() {
                 modelManager = modelManager
             )
             
-            // Set classification callback with debug counter
             cameraManager.onClassificationResult = { label, confidence, time ->
                 callbackCount++
-                Log.i(TAG, "Callback #$callbackCount: $label ($confidence)")
+                Log.i(TAG, ">>> CALLBACK #$callbackCount: $label")
                 updateUI(label, confidence, time)
             }
             
             cameraManager.startCamera(cameraPreview)
             
-            Log.i(TAG, "✓ Phase 2.2: Camera operational")
-            statusIndicator.text = "● WAITING FOR FRAMES..."
-            classificationResult.text = "Waiting for callback..."
+            Log.i(TAG, "✓ Camera initialized")
+            statusIndicator.text = "● WAITING..."
+            classificationResult.text = "Waiting for analyzer..."
             
-            // Debug timer to show we're alive
+            // Debug timer
             var seconds = 0
             CoroutineScope(Dispatchers.Main).launch {
                 while (true) {
                     delay(1000)
                     seconds++
                     if (callbackCount == 0) {
-                        statusIndicator.text = "● WAITING... (${seconds}s, 0 callbacks)"
+                        statusIndicator.text = "● ${seconds}s | 0 callbacks"
                     }
                 }
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize camera", e)
-            statusIndicator.text = "● CAM ERROR: ${e.message}"
+            Log.e(TAG, "Camera init failed", e)
+            statusIndicator.text = "● CAM ERROR"
             classificationResult.text = "Camera error: ${e.message}"
         }
     }
@@ -147,8 +152,8 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             classificationResult.text = label
             confidenceText.text = "Confidence: ${(confidence * 100).toInt()}%"
-            inferenceTime.text = "Inference: ${time}ms | Callbacks: $callbackCount"
-            statusIndicator.text = "● LIVE (${callbackCount} frames)"
+            inferenceTime.text = "${time}ms | Frame #$callbackCount"
+            statusIndicator.text = "● LIVE ($callbackCount)"
             
             val color = when {
                 confidence > 0.7f -> getColor(android.R.color.holo_green_light)
@@ -171,9 +176,10 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
-                initializeAILive()
+                cameraPreview.post {
+                    initializeAILive()
+                }
             } else {
-                Log.e(TAG, "Camera permission denied")
                 finish()
             }
         }
@@ -181,14 +187,8 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        if (::cameraManager.isInitialized) {
-            cameraManager.stopCamera()
-        }
-        if (::modelManager.isInitialized) {
-            modelManager.close()
-        }
-        if (::aiLiveCore.isInitialized) {
-            aiLiveCore.stop()
-        }
+        if (::cameraManager.isInitialized) cameraManager.stopCamera()
+        if (::modelManager.isInitialized) modelManager.close()
+        if (::aiLiveCore.isInitialized) aiLiveCore.stop()
     }
 }
