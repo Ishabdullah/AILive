@@ -3,24 +3,47 @@ package com.ailive
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import com.ailive.core.AILiveCore
 
+/**
+ * AILive - Multi-Agent AI System
+ * Phase 1.1: Complete agent system ✓
+ * Phase 2.1: TensorFlow Lite integration ✓
+ */
 class MainActivity : AppCompatActivity() {
+    private val TAG = "MainActivity"
+    private lateinit var aiLiveCore: AILiveCore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Ultra-minimal test - just log to EVERY log level
-        Log.wtf("AILIVE_TEST", "========================================")
-        Log.e("AILIVE_TEST", "ERROR: MainActivity onCreate STARTED")
-        Log.w("AILIVE_TEST", "WARN: MainActivity onCreate STARTED")
-        Log.i("AILIVE_TEST", "INFO: MainActivity onCreate STARTED")
-        Log.d("AILIVE_TEST", "DEBUG: MainActivity onCreate STARTED")
-        Log.v("AILIVE_TEST", "VERBOSE: MainActivity onCreate STARTED")
-        System.out.println("AILIVE_TEST: System.out.println test")
-        System.err.println("AILIVE_TEST: System.err.println test")
-        Log.wtf("AILIVE_TEST", "========================================")
+        Log.i(TAG, "=== Step 1: onCreate started ===")
         
         setContentView(R.layout.activity_main)
+        Log.i(TAG, "=== Step 2: setContentView complete ===")
         
-        Log.e("AILIVE_TEST", "UI SET - APP RUNNING")
+        try {
+            Log.i(TAG, "=== Step 3: Creating AILiveCore instance ===")
+            aiLiveCore = AILiveCore(applicationContext, this)
+            Log.i(TAG, "=== Step 4: AILiveCore instance created ===")
+            
+            Log.i(TAG, "=== Step 5: Initializing AILiveCore ===")
+            aiLiveCore.initialize()
+            Log.i(TAG, "=== Step 6: AILiveCore initialized ===")
+            
+            Log.i(TAG, "=== Step 7: Starting AILiveCore ===")
+            aiLiveCore.start()
+            Log.i(TAG, "=== Step 8: AILiveCore started successfully ===")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "ERROR: Failed to initialize AILive", e)
+            e.printStackTrace()
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::aiLiveCore.isInitialized) {
+            aiLiveCore.stop()
+        }
     }
 }
