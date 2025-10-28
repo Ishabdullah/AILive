@@ -133,8 +133,8 @@ class AILiveCore(
 
     /**
      * Get access to specific agents
+     * Note: messageBus is now a public property, no getter needed
      */
-    fun getMessageBus(): MessageBus = messageBus
     fun getStateManager(): StateManager = stateManager
     fun getMotorAI(): MotorAI = motorAI
     fun getEmotionAI(): EmotionAI = emotionAI
