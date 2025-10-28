@@ -233,38 +233,38 @@ class TTSManager(private val context: Context) : TextToSpeech.OnInitListener {
         when (agentName.lowercase()) {
             "motorai" -> {
                 // Slightly lower pitch, faster
-                setPitch(0.9f)
-                setSpeechRate(1.1f)
+                pitch = 0.9f
+                speechRate = 1.1f
             }
             "emotionai" -> {
                 // Higher pitch, warmer
-                setPitch(1.1f)
-                setSpeechRate(0.95f)
+                pitch = 1.1f
+                speechRate = 0.95f
             }
             "memoryai" -> {
                 // Normal pitch, slower (thoughtful)
-                setPitch(1.0f)
-                setSpeechRate(0.9f)
+                pitch = 1.0f
+                speechRate = 0.9f
             }
             "predictiveai" -> {
                 // Slightly higher pitch, normal speed
-                setPitch(1.05f)
-                setSpeechRate(1.0f)
+                pitch = 1.05f
+                speechRate = 1.0f
             }
             "rewardai" -> {
                 // Energetic - higher pitch, faster
-                setPitch(1.1f)
-                setSpeechRate(1.1f)
+                pitch = 1.1f
+                speechRate = 1.1f
             }
             "metaai" -> {
                 // Authoritative - lower pitch, slower
-                setPitch(0.95f)
-                setSpeechRate(0.95f)
+                pitch = 0.95f
+                speechRate = 0.95f
             }
             else -> {
                 // Default
-                setPitch(1.0f)
-                setSpeechRate(1.0f)
+                pitch = 1.0f
+                speechRate = 1.0f
             }
         }
 
@@ -298,20 +298,6 @@ class TTSManager(private val context: Context) : TextToSpeech.OnInitListener {
         LISTENING,
         COMMAND_RECEIVED,
         ERROR
-    }
-
-    /**
-     * Set speech rate (0.5 - 2.0)
-     */
-    fun setSpeechRate(rate: Float) {
-        speechRate = rate
-    }
-
-    /**
-     * Set pitch (0.5 - 2.0)
-     */
-    fun setPitch(pitchValue: Float) {
-        pitch = pitchValue
     }
 
     /**
