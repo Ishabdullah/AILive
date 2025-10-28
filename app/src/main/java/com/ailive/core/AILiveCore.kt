@@ -21,8 +21,8 @@ class AILiveCore(
     private val activity: FragmentActivity
 ) {
     private val TAG = "AILiveCore"
-    
-    private lateinit var messageBus: MessageBus
+
+    lateinit var messageBus: MessageBus  // Public for CommandRouter access
     private lateinit var stateManager: StateManager
     
     private lateinit var motorAI: MotorAI
@@ -124,6 +124,13 @@ class AILiveCore(
         }
     }
     
+    /**
+     * Get agent status count
+     */
+    fun getAgentStatus(): Int {
+        return if (isRunning) 6 else 0
+    }
+
     /**
      * Get access to specific agents
      */

@@ -11,6 +11,10 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.ailive.ai.models.ModelManager
+import com.ailive.audio.AudioManager
+import com.ailive.audio.CommandRouter
+import com.ailive.audio.SpeechProcessor
+import com.ailive.audio.WakeWordDetector
 import com.ailive.camera.CameraManager
 import com.ailive.core.AILiveCore
 import com.ailive.settings.AISettings
@@ -24,20 +28,32 @@ class MainActivity : AppCompatActivity() {
     private lateinit var aiLiveCore: AILiveCore
     private lateinit var modelManager: ModelManager
     private lateinit var cameraManager: CameraManager
-    
+
+    // Phase 2.3: Audio components
+    private lateinit var audioManager: AudioManager
+    private lateinit var speechProcessor: SpeechProcessor
+    private lateinit var wakeWordDetector: WakeWordDetector
+    private lateinit var commandRouter: CommandRouter
+
     private lateinit var cameraPreview: PreviewView
     private lateinit var appTitle: TextView
     private lateinit var classificationResult: TextView
     private lateinit var confidenceText: TextView
     private lateinit var inferenceTime: TextView
     private lateinit var statusIndicator: TextView
-    
+    private lateinit var audioStatus: TextView
+    private lateinit var transcriptionText: TextView
+
     private var callbackCount = 0
     private var isInitialized = false
-    
+    private var isListeningForWakeWord = false
+
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,9 +79,11 @@ class MainActivity : AppCompatActivity() {
         confidenceText = findViewById(R.id.confidenceText)
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
-        
+        audioStatus = findViewById(R.id.audioStatus)
+        transcriptionText = findViewById(R.id.transcriptionText)
+
         // Use custom AI name in UI
-        appTitle.text = "${settings.aiName} Vision"
+        appTitle.text = "${settings.aiName} (Vision + Audio)"
         
         statusIndicator.text = "● CHECKING PERMISSIONS..."
         classificationResult.text = "Initializing ${settings.aiName}..."
@@ -137,6 +155,10 @@ class MainActivity : AppCompatActivity() {
                         
                         delay(500)
                         initializeCamera()
+
+                        // Phase 2.3: Initialize audio after camera
+                        delay(500)
+                        initializeAudio()
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -146,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            
+
             // Run tests
             CoroutineScope(Dispatchers.Main).launch {
                 delay(1000)
@@ -218,12 +240,179 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Phase 2.3: Initialize audio pipeline
+     */
+    private fun initializeAudio() {
+        try {
+            Log.i(TAG, "=== Initializing Audio Pipeline ===")
+            audioStatus.text = "🎤 Initializing..."
+
+            // Create audio components
+            speechProcessor = SpeechProcessor(applicationContext)
+            wakeWordDetector = WakeWordDetector(settings.wakePhrase)
+            commandRouter = CommandRouter(aiLiveCore)
+
+            // Initialize speech processor
+            if (!speechProcessor.initialize()) {
+                Log.e(TAG, "❌ Speech processor failed to initialize")
+                audioStatus.text = "🎤 Not available"
+                return
+            }
+
+            Log.i(TAG, "✓ Speech processor ready")
+
+            // Configure wake word detector
+            wakeWordDetector.onWakeWordDetected = {
+                runOnUiThread {
+                    onWakeWordDetected()
+                }
+            }
+
+            // Configure speech processor callbacks
+            speechProcessor.onPartialResult = { text ->
+                runOnUiThread {
+                    transcriptionText.text = text
+                    // Check for wake word in partial results
+                    if (isListeningForWakeWord) {
+                        wakeWordDetector.processText(text)
+                    }
+                }
+            }
+
+            speechProcessor.onFinalResult = { text ->
+                runOnUiThread {
+                    transcriptionText.text = text
+                    Log.i(TAG, "Final transcription: '$text'")
+
+                    if (isListeningForWakeWord) {
+                        // Check for wake word
+                        if (wakeWordDetector.processText(text)) {
+                            // Wake word detected - handled by detector callback
+                        } else {
+                            // Not wake word, restart listening
+                            restartWakeWordListening()
+                        }
+                    } else {
+                        // Process as command
+                        processVoiceCommand(text)
+                    }
+                }
+            }
+
+            speechProcessor.onReadyForSpeech = {
+                runOnUiThread {
+                    if (isListeningForWakeWord) {
+                        audioStatus.text = "🎤 Say \"${settings.wakePhrase}\""
+                    } else {
+                        audioStatus.text = "🎤 Listening for command..."
+                    }
+                }
+            }
+
+            speechProcessor.onError = { error ->
+                runOnUiThread {
+                    Log.w(TAG, "Speech error: $error")
+                    // Auto-retry on timeout or no match
+                    if (isListeningForWakeWord) {
+                        restartWakeWordListening()
+                    } else {
+                        isListeningForWakeWord = true
+                        restartWakeWordListening()
+                    }
+                }
+            }
+
+            // Configure command router
+            commandRouter.onResponse = { response ->
+                runOnUiThread {
+                    classificationResult.text = response
+                    confidenceText.text = "Voice Command Response"
+
+                    // Return to wake word listening after response
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(3000)
+                        isListeningForWakeWord = true
+                        restartWakeWordListening()
+                    }
+                }
+            }
+
+            // Start listening for wake word
+            isListeningForWakeWord = true
+            startWakeWordListening()
+
+            Log.i(TAG, "✓ Phase 2.3: Audio pipeline operational")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Audio init failed", e)
+            audioStatus.text = "🎤 Error: ${e.message}"
+        }
+    }
+
+    /**
+     * Start listening for wake word
+     */
+    private fun startWakeWordListening() {
+        audioStatus.text = "🎤 Say \"${settings.wakePhrase}\""
+        transcriptionText.text = ""
+        speechProcessor.startListening(continuous = false)
+        Log.i(TAG, "Listening for wake word...")
+    }
+
+    /**
+     * Restart wake word listening after timeout
+     */
+    private fun restartWakeWordListening() {
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(500)
+            if (isListeningForWakeWord) {
+                startWakeWordListening()
+            }
+        }
+    }
+
+    /**
+     * Handle wake word detection
+     */
+    private fun onWakeWordDetected() {
+        Log.i(TAG, "🎯 Wake word detected!")
+        isListeningForWakeWord = false
+
+        audioStatus.text = "🎤 Activated! Listening..."
+        transcriptionText.text = ""
+        statusIndicator.text = "● VOICE ACTIVE"
+
+        // Beep or vibrate (optional)
+        // vibrator.vibrate(100)
+
+        // Start listening for command
+        speechProcessor.stopListening()
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(500)
+            speechProcessor.startListening(continuous = false)
+        }
+    }
+
+    /**
+     * Process voice command
+     */
+    private fun processVoiceCommand(command: String) {
+        Log.i(TAG, "Processing command: '$command'")
+        audioStatus.text = "🎤 Processing..."
+
+        CoroutineScope(Dispatchers.Default).launch {
+            commandRouter.processCommand(command)
+        }
+    }
+
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
+        if (::speechProcessor.isInitialized) speechProcessor.release()
         if (::cameraManager.isInitialized) cameraManager.stopCamera()
         if (::modelManager.isInitialized) modelManager.close()
         if (::aiLiveCore.isInitialized) aiLiveCore.stop()
