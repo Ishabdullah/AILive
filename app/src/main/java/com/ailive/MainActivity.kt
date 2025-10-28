@@ -42,16 +42,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Check if setup is complete
+
+        // Initialize settings (setup wizard temporarily disabled)
         settings = AISettings(this)
+        // TODO: Re-enable setup wizard after fixing resource issues
+        // Bypass setup for now - use default AI name
         if (!settings.isSetupComplete) {
-            Log.i(TAG, "Setup not complete, launching SetupActivity")
-            startActivity(Intent(this, SetupActivity::class.java))
-            finish()
-            return
+            Log.i(TAG, "Setup bypassed - using defaults")
+            settings.isSetupComplete = true  // Mark as complete to prevent redirect
         }
-        
+
         Log.i(TAG, "=== ${settings.aiName} Starting ===")
         
         setContentView(R.layout.activity_main)
