@@ -65,11 +65,13 @@ class PredictiveAI(
             AIMessage.Cognition.PredictionGenerated(
                 scenarios = scenarios.map { outcome ->
                     PredictedScenario(
-                        action = outcome.description,
+                        description = outcome.description,
                         probability = outcome.probability,
-                        expectedReward = outcome.reward,
-                        cost = outcome.cost
+                        expectedValue = outcome.expectedValue
                     )
+                },
+                recommendedAction = scenarios.maxByOrNull { it.expectedValue }?.description
+            )
                 },
                 recommendedAction = scenarios.maxByOrNull { it.expectedValue }?.description
             )

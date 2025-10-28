@@ -101,11 +101,14 @@ class MemoryAI(
         
         if (success) {
             messageBus.publish(
-                AIMessage.Cognition.MemoryStored(
-                    embeddingId = entry.id,
-                    contentType = contentType,
-                    metadata = metadata
+            AIMessage.Cognition.MemoryStored(
+                embeddingId = entry.id,
+                contentType = contentType,
+                metadata = mapOf(
+                    "importance" to importance.toString(),
+                    "timestamp" to entry.timestamp.toString()
                 )
+            )
             )
             
             stateManager.updateCognition { cognition ->

@@ -242,7 +242,7 @@ class MotorAI(
             AIMessage.System.SafetyViolation(
                 violationType = "ACTION_BLOCKED",
                 attemptedAction = request.actionType.name,
-                safetyRule = reason
+                violationType = reason
             )
         )
     }
