@@ -2,6 +2,10 @@ package com.ailive.camera
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageFormat
+import android.graphics.Rect
+import android.graphics.YuvImage
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -10,6 +14,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.ailive.ai.models.ModelManager
 import kotlinx.coroutines.*
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -32,9 +38,7 @@ class CameraManager(
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val analysisScope = CoroutineScope(Dispatchers.Default + Job())
     
-    private var lastClassification = ""
-    private var lastConfidence = 0f
-    private var lastInferenceTime = 0L
+    private var frameCount = 0
     
     var onClassificationResult: ((String, Float, Long) -> Unit)? = null
     
@@ -70,6 +74,7 @@ class CameraManager(
         
         // Image analysis for classification
         imageAnalyzer = ImageAnalysis.Builder()
+            .setTargetResolution(android.util.Size(640, 480))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
             .also {
@@ -105,29 +110,45 @@ class CameraManager(
      */
     @OptIn(ExperimentalGetImage::class)
     private fun processImage(imageProxy: ImageProxy) {
+        frameCount++
+        
+        // Only process every 10th frame to avoid overload
+        if (frameCount % 10 != 0) {
+            imageProxy.close()
+            return
+        }
+        
         analysisScope.launch {
             try {
+                Log.d(TAG, "Processing frame #$frameCount")
+                
                 // Convert ImageProxy to Bitmap
-                val bitmap = imageProxy.toBitmap()
+                val bitmap = imageProxyToBitmap(imageProxy)
                 
                 if (bitmap != null) {
+                    Log.d(TAG, "Bitmap created: ${bitmap.width}x${bitmap.height}")
+                    
                     // Classify image
                     val result = modelManager.classifyImage(bitmap)
                     
                     if (result != null) {
-                        lastClassification = result.topLabel
-                        lastConfidence = result.confidence
-                        lastInferenceTime = result.inferenceTimeMs
+                        Log.i(TAG, "Classification: ${result.topLabel} (${result.confidence})")
                         
                         // Callback to UI
                         withContext(Dispatchers.Main) {
                             onClassificationResult?.invoke(
-                                lastClassification,
-                                lastConfidence,
-                                lastInferenceTime
+                                result.topLabel,
+                                result.confidence,
+                                result.inferenceTimeMs
                             )
                         }
+                    } else {
+                        Log.w(TAG, "Classification returned null")
                     }
+                    
+                    bitmap.recycle()
+                } else {
+                    Log.e(TAG, "Failed to convert ImageProxy to Bitmap")
                 }
                 
             } catch (e: Exception) {
@@ -139,20 +160,32 @@ class CameraManager(
     }
     
     /**
-     * Convert ImageProxy to Bitmap
+     * Convert ImageProxy to Bitmap (proper YUV conversion)
      */
     @OptIn(ExperimentalGetImage::class)
-    private fun ImageProxy.toBitmap(): Bitmap? {
-        val image = this.image ?: return null
+    private fun imageProxyToBitmap(imageProxy: ImageProxy): Bitmap? {
+        val image = imageProxy.image ?: return null
         
-        // Convert YUV to RGB bitmap
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
+        val yBuffer = image.planes[0].buffer
+        val uBuffer = image.planes[1].buffer
+        val vBuffer = image.planes[2].buffer
+
+        val ySize = yBuffer.remaining()
+        val uSize = uBuffer.remaining()
+        val vSize = vBuffer.remaining()
+
+        val nv21 = ByteArray(ySize + uSize + vSize)
+
+        yBuffer.get(nv21, 0, ySize)
+        vBuffer.get(nv21, ySize, vSize)
+        uBuffer.get(nv21, ySize + vSize, uSize)
+
+        val yuvImage = YuvImage(nv21, ImageFormat.NV21, image.width, image.height, null)
+        val out = ByteArrayOutputStream()
+        yuvImage.compressToJpeg(Rect(0, 0, image.width, image.height), 50, out)
+        val imageBytes = out.toByteArray()
         
-        // Simple conversion (you may need more sophisticated YUV->RGB)
-        // For now, we'll use a placeholder
-        return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
     }
     
     /**
@@ -164,9 +197,4 @@ class CameraManager(
         analysisScope.cancel()
         Log.i(TAG, "Camera stopped")
     }
-    
-    /**
-     * Get last classification result
-     */
-    fun getLastResult() = Triple(lastClassification, lastConfidence, lastInferenceTime)
 }
