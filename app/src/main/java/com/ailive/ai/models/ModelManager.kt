@@ -14,6 +14,7 @@ import java.nio.channels.FileChannel
 
 /**
  * Manages TensorFlow Lite models for AILive
+ * Handles image classification using MobileNetV2
  */
 class ModelManager(private val context: Context) {
     private val TAG = "ModelManager"
@@ -51,7 +52,7 @@ class ModelManager(private val context: Context) {
             if (compatList.isDelegateSupportedOnThisDevice) {
                 gpuDelegate = GpuDelegate(compatList.bestOptionsForThisDevice)
                 options.addDelegate(gpuDelegate)
-                Log.i(TAG, "GPU acceleration enabled")
+                Log.i(TAG, "✓ GPU acceleration enabled")
             } else {
                 options.setNumThreads(4)
                 Log.i(TAG, "Using CPU with 4 threads")
@@ -61,6 +62,8 @@ class ModelManager(private val context: Context) {
             interpreter = Interpreter(model, options)
             
             Log.i(TAG, "✓ TensorFlow Lite initialized successfully")
+            Log.i(TAG, "  Model: MobileNetV2")
+            Log.i(TAG, "  Labels: ${labels.size} classes")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize TensorFlow Lite", e)
         }
@@ -88,6 +91,8 @@ class ModelManager(private val context: Context) {
         }
         
         try {
+            val startTime = System.currentTimeMillis()
+            
             val inputBuffer = preprocessImage(bitmap)
             val outputArray = Array(1) { FloatArray(labels.size) }
             
@@ -98,10 +103,16 @@ class ModelManager(private val context: Context) {
                 Pair(label, confidence)
             }.sortedByDescending { it.second }.take(5)
             
+            val inferenceTime = System.currentTimeMillis() - startTime
+            
+            Log.d(TAG, "Classification complete in ${inferenceTime}ms")
+            Log.d(TAG, "Top result: ${results[0].first} (${results[0].second * 100}%)")
+            
             return ClassificationResult(
                 topLabel = results[0].first,
                 confidence = results[0].second,
-                allResults = results
+                allResults = results,
+                inferenceTimeMs = inferenceTime
             )
         } catch (e: Exception) {
             Log.e(TAG, "Classification failed", e)
@@ -127,7 +138,7 @@ class ModelManager(private val context: Context) {
             for (j in 0 until INPUT_SIZE) {
                 val value = intValues[pixel++]
                 
-                // Normalize pixel values
+                // Normalize pixel values to [-1, 1]
                 imgData.putFloat(((value shr 16 and 0xFF) - IMAGE_MEAN) / IMAGE_STD)
                 imgData.putFloat(((value shr 8 and 0xFF) - IMAGE_MEAN) / IMAGE_STD)
                 imgData.putFloat(((value and 0xFF) - IMAGE_MEAN) / IMAGE_STD)
@@ -135,6 +146,18 @@ class ModelManager(private val context: Context) {
         }
         
         return imgData
+    }
+    
+    /**
+     * Get model info
+     */
+    fun getModelInfo(): String {
+        return """
+            Model: MobileNetV2
+            Input size: ${INPUT_SIZE}x${INPUT_SIZE}
+            Classes: ${labels.size}
+            GPU: ${if (gpuDelegate != null) "Enabled" else "Disabled"}
+        """.trimIndent()
     }
     
     /**
@@ -153,5 +176,6 @@ class ModelManager(private val context: Context) {
 data class ClassificationResult(
     val topLabel: String,
     val confidence: Float,
-    val allResults: List<Pair<String, Float>>
+    val allResults: List<Pair<String, Float>>,
+    val inferenceTimeMs: Long
 )
