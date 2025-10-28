@@ -48,10 +48,10 @@ class LLMManager(private val context: Context) {
             // Configure model parameters
             val modelParams = ModelParameters()
                 .setNGpuLayers(0)  // CPU only for now (can enable GPU later)
-                .setNumThreads(4)   // Use 4 CPU threads
 
             // Load model
-            model = LlamaModel(MODEL_PATH, modelParams)
+            model = LlamaModel(modelParams)
+            model!!.load(MODEL_PATH, 4)  // Load with 4 threads
 
             isInitialized = true
             Log.i(TAG, "✓ SmolLM2 loaded successfully")
@@ -87,7 +87,6 @@ class LLMManager(private val context: Context) {
                 .setTemperature(TEMPERATURE)
                 .setTopP(TOP_P)
                 .setNPredict(MAX_TOKENS)
-                .setStopStrings(listOf("\n\n", "User:", "Assistant:", "<|endoftext|>"))
 
             // Generate response
             val response = StringBuilder()
