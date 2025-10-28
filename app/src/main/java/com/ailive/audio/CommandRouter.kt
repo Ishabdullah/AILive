@@ -2,7 +2,6 @@ package com.ailive.audio
 
 import android.util.Log
 import com.ailive.core.AILiveCore
-import com.ailive.core.messaging.Message
 import kotlinx.coroutines.*
 
 /**
@@ -107,32 +106,13 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleVisionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MotorAI (Vision)")
-
-        val message = Message(
-            from = "CommandRouter",
-            to = "MotorAI",
-            type = "COMMAND",
-            payload = mapOf(
-                "action" to "describe_vision",
-                "command" to cmd
-            )
-        )
-
-        aiCore.messageBus.publish(message)
+        // TODO: Integrate with MotorAI's vision system
         onResponse?.invoke("Looking around... I see my camera view.")
     }
 
     private suspend fun handleEmotionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to EmotionAI")
-
-        val message = Message(
-            from = "CommandRouter",
-            to = "EmotionAI",
-            type = "QUERY",
-            payload = mapOf("query" to cmd)
-        )
-
-        aiCore.messageBus.publish(message)
+        // TODO: Integrate with EmotionAI
         onResponse?.invoke("Analyzing emotional state...")
     }
 
@@ -142,67 +122,30 @@ class CommandRouter(private val aiCore: AILiveCore) {
         if (cmd.contains("remember")) {
             // Store command
             val content = cmd.replace("remember", "").trim()
-            val message = Message(
-                from = "CommandRouter",
-                to = "MemoryAI",
-                type = "STORE",
-                payload = mapOf("content" to content)
-            )
-            aiCore.messageBus.publish(message)
+            // TODO: Integrate with MemoryAI storage
             onResponse?.invoke("I'll remember that: $content")
-
         } else {
             // Recall command
-            val message = Message(
-                from = "CommandRouter",
-                to = "MemoryAI",
-                type = "RECALL",
-                payload = mapOf("query" to cmd)
-            )
-            aiCore.messageBus.publish(message)
+            // TODO: Integrate with MemoryAI recall
             onResponse?.invoke("Searching my memory...")
         }
     }
 
     private suspend fun handlePredictionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to PredictiveAI")
-
-        val message = Message(
-            from = "CommandRouter",
-            to = "PredictiveAI",
-            type = "PREDICT",
-            payload = mapOf("query" to cmd)
-        )
-
-        aiCore.messageBus.publish(message)
+        // TODO: Integrate with PredictiveAI
         onResponse?.invoke("Making prediction based on past patterns...")
     }
 
     private suspend fun handleRewardCommand(cmd: String) {
         Log.i(TAG, "→ Routing to RewardAI")
-
-        val message = Message(
-            from = "CommandRouter",
-            to = "RewardAI",
-            type = "EVALUATE",
-            payload = mapOf("query" to cmd)
-        )
-
-        aiCore.messageBus.publish(message)
+        // TODO: Integrate with RewardAI
         onResponse?.invoke("Evaluating goals and progress...")
     }
 
     private suspend fun handleMetaCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MetaAI")
-
-        val message = Message(
-            from = "CommandRouter",
-            to = "MetaAI",
-            type = "PLAN",
-            payload = mapOf("query" to cmd)
-        )
-
-        aiCore.messageBus.publish(message)
+        // TODO: Integrate with MetaAI
         onResponse?.invoke("Analyzing the situation and planning...")
     }
 
@@ -215,16 +158,7 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleUnknownCommand(cmd: String) {
         Log.w(TAG, "⚠️ Unknown command: '$cmd'")
-
-        // Send to MetaAI for general interpretation
-        val message = Message(
-            from = "CommandRouter",
-            to = "MetaAI",
-            type = "GENERAL",
-            payload = mapOf("query" to cmd)
-        )
-
-        aiCore.messageBus.publish(message)
+        // TODO: Send to MetaAI for general interpretation
         onResponse?.invoke("I heard: '$cmd'. Routing to general processing...")
     }
 
