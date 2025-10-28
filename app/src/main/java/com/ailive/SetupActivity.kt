@@ -16,8 +16,9 @@ import com.ailive.audio.VoiceRecorder
 import com.ailive.settings.AISettings
 
 class SetupActivity : AppCompatActivity() {
-    private lateinit var settings: AISettings
-    private lateinit var recorder: VoiceRecorder
+    // Initialize immediately to avoid lateinit crash
+    private var settings: AISettings? = null
+    private var recorder: VoiceRecorder? = null
     
     private lateinit var aiNameInput: EditText
     private lateinit var wakePhraseInput: EditText
@@ -39,17 +40,21 @@ class SetupActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         try {
-            setContentView(R.layout.activity_setup)
-            
+            // Initialize settings FIRST
             settings = AISettings(this)
             recorder = VoiceRecorder(this)
             
+            setContentView(R.layout.activity_setup)
             initializeUI()
             checkPermissions()
             
         } catch (e: Exception) {
             Toast.makeText(this, "Setup error: ${e.message}", Toast.LENGTH_LONG).show()
-            settings.isSetupComplete = true
+            // Skip setup on error
+            if (settings == null) {
+                settings = AISettings(this)
+            }
+            settings?.isSetupComplete = true
             startActivity(Intent(this, MainActivity::class.java))
             finish()
         }
@@ -103,21 +108,19 @@ class SetupActivity : AppCompatActivity() {
             return
         }
         
-        if (nameSampleCount >= REQUIRED_SAMPLES) {
-            return
-        }
+        if (nameSampleCount >= REQUIRED_SAMPLES) return
         
         val filename = "name_sample_$nameSampleCount.3gp"
-        recorder.startRecording(filename)
+        recorder?.startRecording(filename)
         recordNameButton.text = "RECORDING..."
     }
     
     private fun stopNameRecording() {
-        if (!recorder.isRecording()) return
+        if (recorder?.isRecording() != true) return
         
-        recorder.stopRecording()
+        recorder?.stopRecording()
         nameSampleCount++
-        settings.addNameSample(nameSampleCount - 1)
+        settings?.addNameSample(nameSampleCount - 1)
         
         recordNameButton.text = "HOLD TO RECORD NAME"
         nameRecordingStatus.text = "Recorded: $nameSampleCount/$REQUIRED_SAMPLES"
@@ -135,21 +138,19 @@ class SetupActivity : AppCompatActivity() {
             return
         }
         
-        if (wakeSampleCount >= REQUIRED_SAMPLES) {
-            return
-        }
+        if (wakeSampleCount >= REQUIRED_SAMPLES) return
         
         val filename = "wake_sample_$wakeSampleCount.3gp"
-        recorder.startRecording(filename)
+        recorder?.startRecording(filename)
         recordWakeButton.text = "RECORDING..."
     }
     
     private fun stopWakeRecording() {
-        if (!recorder.isRecording()) return
+        if (recorder?.isRecording() != true) return
         
-        recorder.stopRecording()
+        recorder?.stopRecording()
         wakeSampleCount++
-        settings.addWakeSample(wakeSampleCount - 1)
+        settings?.addWakeSample(wakeSampleCount - 1)
         
         recordWakeButton.text = "HOLD TO RECORD WAKE"
         wakeRecordingStatus.text = "Recorded: $wakeSampleCount/$REQUIRED_SAMPLES"
@@ -169,9 +170,9 @@ class SetupActivity : AppCompatActivity() {
     }
     
     private fun finishSetup() {
-        settings.aiName = aiNameInput.text.toString().trim()
-        settings.wakePhrase = wakePhraseInput.text.toString().trim()
-        settings.isSetupComplete = true
+        settings?.aiName = aiNameInput.text.toString().trim()
+        settings?.wakePhrase = wakePhraseInput.text.toString().trim()
+        settings?.isSetupComplete = true
         
         Toast.makeText(this, "Setup complete!", Toast.LENGTH_SHORT).show()
         
@@ -188,7 +189,7 @@ class SetupActivity : AppCompatActivity() {
         if (requestCode == REQUEST_AUDIO_PERMISSION) {
             if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                 Toast.makeText(this, "Audio permission required", Toast.LENGTH_SHORT).show()
-                settings.isSetupComplete = true
+                settings?.isSetupComplete = true
                 startActivity(Intent(this, MainActivity::class.java))
                 finish()
             }
