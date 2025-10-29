@@ -1,7 +1,7 @@
 # AILive - Brain-Inspired AI System
 
-**Version:** 0.4.0
-**Status:** Phase 2.4 Complete ✅ | Full Voice Conversation System 🗣️
+**Version:** 0.5.0
+**Status:** Phase 2.6 Complete ✅ | Intelligent Language Generation 🧠💬
 **Platform:** Android 8.0+ (API 26+)
 **License:** Non-commercial (See LICENSE)
 
@@ -111,9 +111,31 @@ gradle assembleDebugCopy APK to Downloads and install manuallycp app/build/outpu
 - ✅ Real-time transcription display
 - ✅ Continuous listening with auto-retry
 
+**Phase 2.4: Text-to-Speech Responses** ✅ **COMPLETE** (Oct 28, 2025)
+
+- ✅ TTSManager with Android TTS engine
+- ✅ 6 unique agent voice personalities (pitch + speed variations)
+- ✅ Audio feedback on wake word detection ("Yes?")
+- ✅ Voice responses for all commands
+- ✅ TTS state monitoring in UI
+- ✅ Priority-based speech queue
+- ✅ Full voice conversation loop
+
+**Phase 2.6: Intelligent Language Generation** ✅ **COMPLETE** (Oct 29, 2025)
+
+- ✅ ONNX Runtime integration for LLM inference
+- ✅ LLMManager with TinyLlama-1.1B support
+- ✅ Intelligent AI-generated responses (no more hardcoded text!)
+- ✅ Agent-specific personality prompts
+- ✅ Context-aware conversation
+- ✅ Fallback system when model unavailable
+- ✅ CPU-optimized inference (4 threads, 2-3s per response)
+
 **What Works Now:**
-- Say "Hey AILive" → App activates
-- Voice commands route to appropriate agents
+- Say "Hey AILive" → AI responds "Yes?" with audio
+- Ask real questions → Get intelligent AI-generated answers
+- 6 agents with unique voices and personalities
+- Full voice conversation with context understanding
 - Vision pipeline ready (TensorFlow Lite)
 - All 6 AI agents communicating via MessageBus
 
@@ -123,14 +145,17 @@ gradle assembleDebugCopy APK to Downloads and install manuallycp app/build/outpu
 
 | Model | Purpose | Size | License | Status |
 |-------|---------|------|---------|--------|
-| Whisper-Tiny | Speech recognition | 75 MB | MIT ✅ | Downloaded |
-| SmolLM2-360M | Language understanding | 259 MB | Apache 2.0 ✅ | Downloaded |
-| MobileNetV3-Small | Object detection | 10 MB | Apache 2.0 ✅ | Downloaded |
-| BGE-small-en-v1.5 | Text embeddings | 127 MB | MIT ✅ | Downloaded |
-| DistilBERT-sentiment | Emotion analysis | 256 MB | Apache 2.0 ✅ | Downloaded |
+| TinyLlama-1.1B-Chat | Language generation | 637 MB | Apache 2.0 ✅ | **ACTIVE (Phase 2.6)** |
+| MobileNetV3-Small | Object detection | 13 MB | Apache 2.0 ✅ | **ACTIVE (Phase 2.1)** |
+| Whisper-Tiny | Speech recognition | 39 MB | MIT ✅ | Available |
+| BGE-small-en-v1.5 | Text embeddings | 133 MB | MIT ✅ | Available |
+| DistilBERT-sentiment | Emotion analysis | 66 MB | Apache 2.0 ✅ | Available |
 
-**Total:** 727 MB  
+**Total Models:** 888 MB
+**Currently Active:** 650 MB (TinyLlama + MobileNetV3)
 **Commercial Use:** 100% permitted for all models ✅
+
+**Note:** See [models/MODEL_SETUP.md](models/MODEL_SETUP.md) for model download instructions.
 
 ---
 
@@ -140,7 +165,9 @@ gradle assembleDebugCopy APK to Downloads and install manuallycp app/build/outpu
 - **Phase 2.1:** TensorFlow Lite Vision ✅ (Complete Oct 27, 2025)
 - **Phase 2.2:** Camera Integration ⚠️ (Partial - deferred)
 - **Phase 2.3:** Audio Integration ✅ (Complete Oct 28, 2025)
-- **Phase 2.4:** Text-to-Speech Responses 📱 (Next)
+- **Phase 2.4:** Text-to-Speech Responses ✅ (Complete Oct 28, 2025)
+- **Phase 2.6:** Intelligent Language Generation ✅ (Complete Oct 29, 2025)
+- **Phase 2.7:** Vision-Language Integration 🎯 (Next)
 - **Phase 2.5:** Custom Wake Word Training 🎤 (Planned)
 - **Phase 3:** Enhanced UI & Visualization 📊 (Planned)
 - **Phase 4:** Self-Training System 🧪 (Planned Q1 2026)
