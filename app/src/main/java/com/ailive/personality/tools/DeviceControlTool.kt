@@ -278,6 +278,10 @@ private fun com.ailive.motor.ActionError.toException(): Exception {
         is com.ailive.motor.ActionError.Timeout ->
             Exception("Action timed out: ${this.operation} after ${this.duration}ms")
         is com.ailive.motor.ActionError.Unknown ->
-            this.exception
+            if (this.exception is Exception) {
+                this.exception as Exception
+            } else {
+                Exception("Unknown error", this.exception)
+            }
     }
 }

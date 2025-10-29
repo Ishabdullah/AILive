@@ -26,9 +26,14 @@ class CommandRouter(private val aiCore: AILiveCore) {
         Log.i(TAG, "🧠 Processing command: '$command'")
 
         // NEW: Route through PersonalityEngine if enabled
-        if (aiCore.usePersonalityEngine && aiCore::personalityEngine.isInitialized) {
-            handleWithPersonalityEngine(command)
-            return
+        if (aiCore.usePersonalityEngine) {
+            try {
+                handleWithPersonalityEngine(command)
+                return
+            } catch (e: UninitializedPropertyAccessException) {
+                Log.e(TAG, "PersonalityEngine not initialized, falling back to legacy mode", e)
+                // Fall through to legacy mode
+            }
         }
 
         // Legacy routing (old agent-based system)
