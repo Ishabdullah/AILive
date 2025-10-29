@@ -27,13 +27,18 @@ class CameraManager(
     private val modelManager: ModelManager
 ) {
     private val TAG = "CameraManager"
-    
+
     private var cameraProvider: ProcessCameraProvider? = null
     private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
     private val analysisScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    
+
     private var frameCount = 0
     var onClassificationResult: ((String, Float, Long) -> Unit)? = null
+
+    // PHASE 5: Frame buffering for VisionAnalysisTool
+    @Volatile
+    private var latestFrame: Bitmap? = null
+    private val frameLock = Any()
     
     /**
      * Start camera with S24 Ultra optimizations
@@ -144,15 +149,23 @@ class CameraManager(
         analysisScope.launch {
             try {
                 val bitmap = convertToBitmap(imageProxy)
-                
+
                 if (bitmap != null) {
                     Log.d(TAG, "Bitmap: ${bitmap.width}x${bitmap.height}")
-                    
+
+                    // PHASE 5: Store latest frame for VisionAnalysisTool
+                    // Create a copy since we'll recycle the original
+                    val frameCopy = bitmap.copy(bitmap.config, true)
+                    synchronized(frameLock) {
+                        latestFrame?.recycle()  // Recycle old frame
+                        latestFrame = frameCopy
+                    }
+
                     val result = modelManager.classifyImage(bitmap)
-                    
+
                     if (result != null) {
                         Log.i(TAG, "✅ ${result.topLabel} (${(result.confidence*100).toInt()}%)")
-                        
+
                         withContext(Dispatchers.Main) {
                             onClassificationResult?.invoke(
                                 result.topLabel,
@@ -161,10 +174,10 @@ class CameraManager(
                             )
                         }
                     }
-                    
+
                     bitmap.recycle()
                 }
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "Processing error", e)
             } finally {
@@ -202,6 +215,33 @@ class CameraManager(
     fun stopCamera() {
         cameraProvider?.unbindAll()
         analysisScope.cancel()
+
+        // Clean up latest frame
+        synchronized(frameLock) {
+            latestFrame?.recycle()
+            latestFrame = null
+        }
+
         Log.i(TAG, "Camera stopped. Total frames: $frameCount")
+    }
+
+    /**
+     * PHASE 5: Get latest camera frame for VisionAnalysisTool
+     * Returns a copy of the latest frame, or null if no frame available
+     */
+    fun getLatestFrame(): Bitmap? {
+        return synchronized(frameLock) {
+            latestFrame?.let {
+                // Return a copy to prevent recycling issues
+                it.copy(it.config, true)
+            }
+        }
+    }
+
+    /**
+     * PHASE 5: Check if camera is initialized and ready
+     */
+    fun isInitialized(): Boolean {
+        return cameraProvider != null
     }
 }
