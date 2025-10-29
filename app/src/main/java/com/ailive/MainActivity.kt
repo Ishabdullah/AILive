@@ -222,6 +222,14 @@ class MainActivity : AppCompatActivity() {
             
             cameraManager.startCamera(cameraPreview)
 
+            // PHASE 5: Register VisionAnalysisTool now that camera is ready
+            val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
+                modelManager = modelManager,
+                cameraManager = cameraManager
+            )
+            aiLiveCore.personalityEngine.registerTool(visionTool)
+            Log.i(TAG, "✓ VisionAnalysisTool registered")
+
             Log.i(TAG, "✓ Camera started")
             statusIndicator.text = "● ANALYZING..."
             classificationResult.text = "Point at objects"

@@ -224,8 +224,10 @@ class PersonalityEngine(
     private fun selectTools(intent: Intent): List<AITool> {
         return when (intent.primary) {
             IntentType.VISION -> {
+                // PHASE 5: Use VisionAnalysisTool for camera vision
                 listOfNotNull(
-                    toolRegistry.getTool("control_device")  // For camera
+                    toolRegistry.getTool("analyze_vision"),     // Phase 5: Real vision processing
+                    toolRegistry.getTool("control_device")      // Device control
                 )
             }
             IntentType.EMOTION -> {

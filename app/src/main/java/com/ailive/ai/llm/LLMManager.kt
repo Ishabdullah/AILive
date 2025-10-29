@@ -268,28 +268,15 @@ Be warm, helpful, concise, and conversational."""
 
     /**
      * Fallback responses when LLM is not available
+     *
+     * PHASE 4 FIX: This method should NOT do keyword matching as it causes
+     * repetitive responses. Instead, throw exception to let PersonalityEngine's
+     * intent-based fallback system handle it properly.
      */
     private fun getFallbackResponse(prompt: String, agentName: String): String {
-        val promptLower = prompt.lowercase()
-
-        return when {
-            "see" in promptLower || "look" in promptLower || "vision" in promptLower ->
-                "I'm processing visual information from my camera sensors."
-            "feel" in promptLower || "emotion" in promptLower ->
-                "I'm analyzing emotional context and atmosphere around me."
-            "remember" in promptLower || "memory" in promptLower || "recall" in promptLower ->
-                "I'm storing and recalling experiences from my memory banks."
-            "predict" in promptLower || "future" in promptLower || "will" in promptLower ->
-                "Based on patterns, I'm making predictions about what might happen next."
-            "goal" in promptLower || "achieve" in promptLower || "reward" in promptLower ->
-                "I'm optimizing my goals and working towards achieving objectives."
-            "plan" in promptLower || "strategy" in promptLower || "coordinate" in promptLower ->
-                "I'm coordinating between my different cognitive systems to plan effectively."
-            "status" in promptLower || "system" in promptLower ->
-                "All systems operational. My six AI agents are active and coordinating."
-            else ->
-                "I'm processing your request using my $agentName capabilities. How else can I assist?"
-        }
+        // Don't try to be smart here - let PersonalityEngine handle fallbacks
+        // PersonalityEngine has better intent-based fallback responses
+        throw IllegalStateException("LLM not initialized - use PersonalityEngine fallback")
     }
 
     /**
