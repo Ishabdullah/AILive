@@ -506,7 +506,8 @@ class MainActivity : AppCompatActivity() {
                 if (::cameraManager.isInitialized) {
                     cameraManager.stopCamera()
                 }
-                // Clear the preview to show black screen
+                // Hide the preview to show black screen (FIXED: visibility instead of background)
+                cameraPreview.visibility = android.view.View.INVISIBLE
                 cameraPreview.setBackgroundColor(android.graphics.Color.BLACK)
                 isCameraEnabled = false
                 btnToggleCamera.text = "📷 CAM"
@@ -518,7 +519,8 @@ class MainActivity : AppCompatActivity() {
                 Log.i(TAG, "📷 Camera manually disabled")
             } else {
                 // Turn on camera
-                // Clear the black background to show camera feed
+                // Show the preview to display camera feed (FIXED: visibility instead of background)
+                cameraPreview.visibility = android.view.View.VISIBLE
                 cameraPreview.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 if (::cameraManager.isInitialized) {
                     cameraManager.startCamera(cameraPreview)
@@ -537,6 +539,7 @@ class MainActivity : AppCompatActivity() {
             val command = editTextCommand.text.toString().trim()
             if (command.isNotEmpty()) {
                 processTextCommand(command)
+                editTextCommand.setText("")  // FIXED: Clear text field after sending
             }
         }
 
@@ -546,6 +549,7 @@ class MainActivity : AppCompatActivity() {
                 val command = editTextCommand.text.toString().trim()
                 if (command.isNotEmpty()) {
                     processTextCommand(command)
+                    editTextCommand.setText("")  // FIXED: Clear text field after sending
                 }
                 true
             } else {

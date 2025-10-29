@@ -293,6 +293,14 @@ class PersonalityEngine(
         // Build context from tool results
         val toolContext = buildToolContext(toolResults)
 
+        // TEMPORARY FIX: Use fallback responses instead of LLM
+        // The LLM is generating the same response repeatedly due to prompt issues
+        // and has 2-3s latency. Fallback responses are instant and varied.
+        // TODO: Re-enable LLM after fixing prompt issues and optimizing performance
+        Log.i(TAG, "Using fallback response system (LLM temporarily disabled)")
+        val responseText = generateFallbackResponse(input, intent, toolResults)
+
+        /* DISABLED: LLM generation (too slow, repetitive responses)
         // Create prompt with unified personality
         val prompt = UnifiedPrompt.create(
             userInput = input,
@@ -302,13 +310,13 @@ class PersonalityEngine(
         )
 
         // Generate response with LLM
-        // Pass original user input for better fallback responses
         val responseText = try {
             llmManager.generate(prompt, agentName = "AILive")
         } catch (e: Exception) {
             Log.e(TAG, "LLM generation failed, using enhanced fallback", e)
             generateFallbackResponse(input, intent, toolResults)
         }
+        */
 
         return Response(
             text = responseText,
