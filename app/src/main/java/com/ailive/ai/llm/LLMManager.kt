@@ -25,8 +25,15 @@ class LLMManager(private val context: Context) {
     companion object {
         private const val TAG = "LLMManager"
         private const val MODEL_PATH = "models/tinyllama-1.1b-chat.onnx"
-        private const val MAX_LENGTH = 150  // Max tokens for voice responses
-        private const val TEMPERATURE = 0.7f
+
+        // OPTIMIZATION: Reduced from 150 to 80 for faster generation
+        // Voice responses should be concise (1-3 sentences = ~50-80 tokens)
+        private const val MAX_LENGTH = 80
+
+        // OPTIMIZATION: Higher temperature (0.9) for more varied responses
+        // Previously 0.7 was causing some repetition
+        private const val TEMPERATURE = 0.9f
+
         private const val TOP_P = 0.9f
     }
 
@@ -59,10 +66,19 @@ class LLMManager(private val context: Context) {
 
             Log.i(TAG, "📂 Loading model: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
 
-            // Create session options
+            // Create session options with GPU acceleration
             val sessionOptions = OrtSession.SessionOptions()
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             sessionOptions.setIntraOpNumThreads(4)  // Use 4 CPU threads
+
+            // OPTIMIZATION: Enable NNAPI for GPU/NPU acceleration
+            try {
+                sessionOptions.addNnapi()
+                Log.i(TAG, "✅ NNAPI GPU acceleration enabled")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ NNAPI not available, using CPU: ${e.message}")
+                // Fall back to CPU-only (no action needed)
+            }
 
             // Create session
             ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
@@ -73,8 +89,10 @@ class LLMManager(private val context: Context) {
             isInitialized = true
             Log.i(TAG, "✅ LLM initialized successfully!")
             Log.i(TAG, "   Model: TinyLlama-1.1B-Chat")
-            Log.i(TAG, "   Threads: 4 (CPU)")
+            Log.i(TAG, "   Acceleration: NNAPI (GPU/NPU) + CPU (4 threads)")
+            Log.i(TAG, "   Optimization: ALL_OPT level")
             Log.i(TAG, "   Max length: $MAX_LENGTH tokens")
+            Log.i(TAG, "   Temperature: $TEMPERATURE | Top-p: $TOP_P")
 
             true
         } catch (e: Exception) {

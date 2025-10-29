@@ -293,15 +293,15 @@ class PersonalityEngine(
         // Build context from tool results
         val toolContext = buildToolContext(toolResults)
 
-        // TEMPORARY FIX: Use fallback responses instead of LLM
-        // The LLM is generating the same response repeatedly due to prompt issues
-        // and has 2-3s latency. Fallback responses are instant and varied.
-        // TODO: Re-enable LLM after fixing prompt issues and optimizing performance
-        Log.i(TAG, "Using fallback response system (LLM temporarily disabled)")
-        val responseText = generateFallbackResponse(input, intent, toolResults)
+        // PHASE 4 OPTIMIZATION: LLM re-enabled with improvements
+        // - Fixed prompt bias (removed vision keyword issue)
+        // - NNAPI GPU acceleration enabled
+        // - Reduced max tokens (80 vs 150)
+        // - Increased temperature (0.9 vs 0.7)
+        // - Fallback system as safety net
+        Log.d(TAG, "Attempting LLM generation with optimized prompt...")
 
-        /* DISABLED: LLM generation (too slow, repetitive responses)
-        // Create prompt with unified personality
+        // Create optimized prompt (vision keywords removed)
         val prompt = UnifiedPrompt.create(
             userInput = input,
             conversationHistory = conversationHistory.takeLast(10),
@@ -309,14 +309,25 @@ class PersonalityEngine(
             emotionContext = currentEmotion
         )
 
-        // Generate response with LLM
+        // Generate response with LLM (with fallback)
         val responseText = try {
-            llmManager.generate(prompt, agentName = "AILive")
+            val startTime = System.currentTimeMillis()
+            val llmResponse = llmManager.generate(prompt, agentName = "AILive")
+            val duration = System.currentTimeMillis() - startTime
+
+            Log.i(TAG, "✨ LLM generated response in ${duration}ms")
+
+            // If LLM response is too short or seems failed, use fallback
+            if (llmResponse.length < 10 || llmResponse.isBlank()) {
+                Log.w(TAG, "LLM response too short, using fallback")
+                generateFallbackResponse(input, intent, toolResults)
+            } else {
+                llmResponse
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "LLM generation failed, using enhanced fallback", e)
+            Log.w(TAG, "LLM generation failed, using fallback: ${e.message}")
             generateFallbackResponse(input, intent, toolResults)
         }
-        */
 
         return Response(
             text = responseText,
