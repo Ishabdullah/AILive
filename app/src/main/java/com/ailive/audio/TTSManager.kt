@@ -227,46 +227,38 @@ class TTSManager(private val context: Context) : TextToSpeech.OnInitListener {
 
     /**
      * Speak with different voices/styles for different agents
+     *
+     * @deprecated As of PersonalityEngine refactoring, AILive uses ONE unified voice.
+     * Use speak() directly instead. This method is kept for backward compatibility
+     * during transition but will be removed in future versions.
      */
+    @Deprecated(
+        message = "Use speak() with unified voice instead. AILive now has one personality, not separate agent voices.",
+        replaceWith = ReplaceWith("speak(text, Priority.NORMAL, callback)"),
+        level = DeprecationLevel.WARNING
+    )
     fun speakAsAgent(agentName: String, text: String, callback: ((Boolean) -> Unit)? = null) {
-        // Adjust TTS parameters based on agent
-        when (agentName.lowercase()) {
-            "motorai" -> {
-                // Slightly lower pitch, faster
-                pitch = 0.9f
-                speechRate = 1.1f
-            }
-            "emotionai" -> {
-                // Higher pitch, warmer
-                pitch = 1.1f
-                speechRate = 0.95f
-            }
-            "memoryai" -> {
-                // Normal pitch, slower (thoughtful)
-                pitch = 1.0f
-                speechRate = 0.9f
-            }
-            "predictiveai" -> {
-                // Slightly higher pitch, normal speed
-                pitch = 1.05f
-                speechRate = 1.0f
-            }
-            "rewardai" -> {
-                // Energetic - higher pitch, faster
-                pitch = 1.1f
-                speechRate = 1.1f
-            }
-            "metaai" -> {
-                // Authoritative - lower pitch, slower
-                pitch = 0.95f
-                speechRate = 0.95f
-            }
-            else -> {
-                // Default
-                pitch = 1.0f
-                speechRate = 1.0f
-            }
-        }
+        // REFACTORING: Force unified voice regardless of agent name
+        // All responses should sound like ONE character
+        pitch = 1.0f
+        speechRate = 1.0f
+
+        Log.w(TAG, "⚠️ speakAsAgent() is deprecated. Use speak() for unified voice.")
+
+        speak(text, Priority.NORMAL, callback)
+    }
+
+    /**
+     * Speak with unified AILive personality voice
+     *
+     * This is the preferred method for PersonalityEngine.
+     * Uses consistent voice parameters (pitch=1.0, rate=1.0) to maintain
+     * the illusion of a single unified character.
+     */
+    fun speakUnified(text: String, callback: ((Boolean) -> Unit)? = null) {
+        // Ensure unified voice settings
+        pitch = 1.0f
+        speechRate = 1.0f
 
         speak(text, Priority.NORMAL, callback)
     }

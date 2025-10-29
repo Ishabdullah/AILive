@@ -120,18 +120,18 @@ class LLMManager(private val context: Context) {
     }
 
     /**
-     * Create a chat-formatted prompt with agent personality
+     * Create a chat-formatted prompt with UNIFIED personality
+     *
+     * REFACTORING NOTE: This now uses ONE consistent personality (AILive)
+     * instead of six separate agent personalities. The agentName parameter
+     * is kept for backward compatibility but should always be "AILive".
      */
     private fun createChatPrompt(userMessage: String, agentName: String): String {
-        val personality = when (agentName) {
-            "MotorAI" -> "You are MotorAI, a technical AI assistant focused on device control and vision. Be precise and action-oriented."
-            "EmotionAI" -> "You are EmotionAI, an empathetic AI assistant focused on emotions and feelings. Be warm and understanding."
-            "MemoryAI" -> "You are MemoryAI, a thoughtful AI assistant focused on remembering and recalling information. Be detailed and thorough."
-            "PredictiveAI" -> "You are PredictiveAI, an analytical AI assistant focused on predictions and forecasting. Be logical and forward-thinking."
-            "RewardAI" -> "You are RewardAI, an encouraging AI assistant focused on goals and motivation. Be positive and energetic."
-            "MetaAI" -> "You are MetaAI, a strategic AI assistant focused on planning and coordination. Be authoritative and organized."
-            else -> "You are AILive, a helpful AI assistant."
-        }
+        // Unified personality for all interactions
+        val personality = """You are AILive, a unified on-device AI companion.
+You are ONE cohesive intelligence with multiple capabilities (vision, emotion, memory, device control).
+Speak naturally as a single character, never as separate agents or systems.
+Be warm, helpful, concise, and conversational."""
 
         // TinyLlama chat format
         return "<|system|>\n$personality</s>\n<|user|>\n$userMessage</s>\n<|assistant|>\n"
