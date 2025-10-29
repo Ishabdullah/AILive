@@ -26,7 +26,7 @@ class CommandRouter(private val aiCore: AILiveCore) {
         Log.i(TAG, "🧠 Processing command: '$command'")
 
         // NEW: Route through PersonalityEngine if enabled
-        if (aiCore.usePersonalityEngine && ::aiCore.personalityEngine.isInitialized) {
+        if (aiCore.usePersonalityEngine && aiCore::personalityEngine.isInitialized) {
             handleWithPersonalityEngine(command)
             return
         }

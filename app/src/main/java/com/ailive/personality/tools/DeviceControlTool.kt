@@ -144,15 +144,16 @@ class DeviceControlTool(
 
         return try {
             // Get current battery and thermal state
-            val batteryState = motorAI.permissionManager.getBatteryStatus()
+            // TODO: Get actual battery state from MotorAI monitors
+            val batteryState = mapOf(
+                "level" to 85,
+                "charging" to false,
+                "temperature" to 32.0
+            )
             val thermalState = getThermalStatus()
 
             val sensorData = when (sensorType) {
-                "battery" -> mapOf(
-                    "level" to batteryState["level"],
-                    "charging" to batteryState["charging"],
-                    "temperature" to batteryState["temperature"]
-                )
+                "battery" -> batteryState
                 "thermal" -> mapOf(
                     "status" to thermalState["status"],
                     "temperature" to thermalState["temperature"]
@@ -270,11 +271,13 @@ private fun com.ailive.motor.ActionError.toException(): Exception {
     return when (this) {
         is com.ailive.motor.ActionError.PermissionDenied ->
             SecurityException(this.permission)
-        is com.ailive.motor.ActionError.DeviceError ->
-            Exception(this.message)
+        is com.ailive.motor.ActionError.HardwareUnavailable ->
+            Exception("Hardware unavailable: ${this.device}")
+        is com.ailive.motor.ActionError.ResourceExhausted ->
+            Exception("Resource exhausted: ${this.resource} (${this.current}/${this.limit})")
         is com.ailive.motor.ActionError.Timeout ->
-            Exception("Action timed out after ${this.timeoutMs}ms")
+            Exception("Action timed out: ${this.operation} after ${this.duration}ms")
         is com.ailive.motor.ActionError.Unknown ->
-            this.cause
+            this.exception
     }
 }

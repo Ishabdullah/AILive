@@ -243,6 +243,12 @@ class PersonalityEngine(
                     toolRegistry.getTool("control_device")
                 )
             }
+            IntentType.PREDICTION -> {
+                // TODO: Add PatternAnalysisTool when implemented
+                listOfNotNull(
+                    toolRegistry.getTool("analyze_sentiment")  // For now, use sentiment
+                )
+            }
             IntentType.CONVERSATION -> {
                 // May use sentiment for emotional context
                 listOfNotNull(
