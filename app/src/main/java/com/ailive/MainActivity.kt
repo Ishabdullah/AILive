@@ -337,11 +337,18 @@ class MainActivity : AppCompatActivity() {
                     classificationResult.text = response
                     confidenceText.text = "Voice Command Response"
 
-                    // Return to wake word listening after response
+                    // Return to wake word listening AFTER TTS finishes speaking
                     CoroutineScope(Dispatchers.Main).launch {
-                        delay(3000)
-                        isListeningForWakeWord = true
-                        restartWakeWordListening()
+                        // Wait for TTS to actually finish speaking (not just 3 seconds!)
+                        aiLiveCore.ttsManager.state.collect { ttsState ->
+                            if (ttsState == com.ailive.audio.TTSManager.TTSState.READY) {
+                                // TTS is done, safe to restart listening
+                                delay(500) // Small buffer to release audio resources
+                                isListeningForWakeWord = true
+                                restartWakeWordListening()
+                                return@collect // Exit collection after restarting
+                            }
+                        }
                     }
                 }
             }
