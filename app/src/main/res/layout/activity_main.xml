@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout 
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Camera Preview -->
+    <!-- Camera Preview (fullscreen background) -->
     <androidx.camera.view.PreviewView
         android:id="@+id/cameraPreview"
         android:layout_width="match_parent"
@@ -16,189 +16,162 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Overlay Container -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="24dp"
-        android:background="#AA000000"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-
-        <!-- App Title -->
-        <TextView
-            android:id="@+id/appTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="AILive Vision"
-            android:textColor="#FFFFFF"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
-
-        <!-- Classification Result -->
-        <TextView
-            android:id="@+id/classificationResult"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Initializing..."
-            android:textColor="#00FF00"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="4dp" />
-
-        <!-- Confidence -->
-        <TextView
-            android:id="@+id/confidenceText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Confidence: --"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:layout_marginBottom="4dp" />
-
-        <!-- Inference Time -->
-        <TextView
-            android:id="@+id/inferenceTime"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Inference: --ms"
-            android:textColor="#AAAAAA"
-            android:textSize="14sp" />
-
-    </LinearLayout>
-
-    <!-- Audio Status (bottom left) -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        android:background="#AA000000"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        android:layout_margin="16dp">
-
-        <TextView
-            android:id="@+id/audioStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🎤 Listening..."
-            android:textColor="#00FFFF"
-            android:textSize="14sp"
-            android:layout_marginBottom="4dp" />
-
-        <TextView
-            android:id="@+id/transcriptionText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text=""
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:maxLines="2"
-            android:ellipsize="end" />
-
-    </LinearLayout>
-
-    <!-- Status Indicator (bottom right) -->
+    <!-- App Title (top with semi-transparent background) -->
     <TextView
-        android:id="@+id/statusIndicator"
+        android:id="@+id/appTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="● READY"
-        android:textColor="#00FF00"
-        android:textSize="16sp"
-        android:padding="16dp"
-        android:background="#AA000000"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="16dp" />
-
-    <!-- Control Panel (top right) -->
-    <LinearLayout
-        android:id="@+id/controlPanel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:text="AILive Vision"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold"
         android:padding="12dp"
-        android:background="#DD000000"
+        android:background="#AA000000"
         app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_margin="8dp" />
+
+    <!-- AILive Response Text (white, transparent, above text input) -->
+    <TextView
+        android:id="@+id/classificationResult"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:padding="8dp"
+        android:background="#33000000"
+        android:maxLines="3"
+        android:ellipsize="end"
+        app:layout_constraintBottom_toTopOf="@id/editTextCommand"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="8dp">
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="4dp" />
 
-        <!-- Microphone Toggle -->
-        <Button
-            android:id="@+id/btnToggleMic"
-            android:layout_width="120dp"
-            android:layout_height="48dp"
-            android:text="🎤 MIC ON"
-            android:textSize="12sp"
-            android:backgroundTint="#00AA00"
-            android:layout_marginBottom="8dp" />
+    <!-- Text Input Field -->
+    <EditText
+        android:id="@+id/editTextCommand"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="Type or speak..."
+        android:textColorHint="#888888"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:inputType="text"
+        android:imeOptions="actionSend"
+        android:background="#55000000"
+        android:padding="12dp"
+        app:layout_constraintBottom_toTopOf="@id/btnSendCommand"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp" />
 
-        <!-- Camera Toggle -->
-        <Button
-            android:id="@+id/btnToggleCamera"
-            android:layout_width="120dp"
-            android:layout_height="48dp"
-            android:text="📷 CAM ON"
-            android:textSize="12sp"
-            android:backgroundTint="#00AA00"
-            android:layout_marginBottom="8dp" />
+    <!-- Send Button (wide, above mic/camera) -->
+    <Button
+        android:id="@+id/btnSendCommand"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:text="SEND"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:backgroundTint="#FF6600"
+        app:layout_constraintBottom_toTopOf="@id/btnToggleMic"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp" />
 
-        <!-- Test Command Button -->
-        <Button
-            android:id="@+id/btnTestCommand"
-            android:layout_width="120dp"
-            android:layout_height="48dp"
-            android:text="🧪 TEST"
-            android:textSize="12sp"
-            android:backgroundTint="#0088FF" />
+    <!-- Microphone Button (left bottom) -->
+    <Button
+        android:id="@+id/btnToggleMic"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:text="🎤 MIC"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:backgroundTint="#00AA00"
+        app:layout_constraintBottom_toTopOf="@id/statusBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btnToggleCamera"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginBottom="8dp" />
 
-    </LinearLayout>
+    <!-- Camera Button (right bottom) -->
+    <Button
+        android:id="@+id/btnToggleCamera"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:text="📷 CAM"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:backgroundTint="#00AA00"
+        app:layout_constraintBottom_toTopOf="@id/statusBar"
+        app:layout_constraintStart_toEndOf="@id/btnToggleMic"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp" />
 
-    <!-- Manual Command Input (center bottom) -->
+    <!-- Status Bar (horizontal at very bottom) -->
     <LinearLayout
-        android:id="@+id/commandInputPanel"
+        android:id="@+id/statusBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="8dp"
         android:background="#DD000000"
-        app:layout_constraintBottom_toTopOf="@id/audioStatus"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="8dp"
-        android:visibility="visible">
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Text Input -->
-        <EditText
-            android:id="@+id/editTextCommand"
+        <!-- Waiting Status (green, left) -->
+        <TextView
+            android:id="@+id/statusIndicator"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="Type command..."
-            android:textColorHint="#888888"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:inputType="text"
-            android:imeOptions="actionSend"
-            android:background="#33FFFFFF"
-            android:padding="12dp"
-            android:layout_marginEnd="8dp" />
-
-        <!-- Send Button -->
-        <Button
-            android:id="@+id/btnSendCommand"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="SEND"
+            android:text="● READY"
+            android:textColor="#00FF00"
             android:textSize="12sp"
-            android:backgroundTint="#FF6600" />
+            android:gravity="center"
+            android:padding="6dp"
+            android:background="#33FFFFFF"
+            android:layout_marginEnd="4dp" />
+
+        <!-- Confidence (yellow, center) -->
+        <TextView
+            android:id="@+id/confidenceText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Confidence: --"
+            android:textColor="#FFFF00"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:padding="6dp"
+            android:background="#33FFFFFF"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
+
+        <!-- Inference Time (red, right) -->
+        <TextView
+            android:id="@+id/inferenceTime"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Inference: --"
+            android:textColor="#FF0000"
+            android:textSize="12sp"
+            android:gravity="center"
+            android:padding="6dp"
+            android:background="#33FFFFFF"
+            android:layout_marginStart="4dp" />
 
     </LinearLayout>
 

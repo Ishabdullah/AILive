@@ -41,13 +41,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var confidenceText: TextView
     private lateinit var inferenceTime: TextView
     private lateinit var statusIndicator: TextView
-    private lateinit var audioStatus: TextView
-    private lateinit var transcriptionText: TextView
 
     // Manual control UI components
     private lateinit var btnToggleMic: android.widget.Button
     private lateinit var btnToggleCamera: android.widget.Button
-    private lateinit var btnTestCommand: android.widget.Button
     private lateinit var editTextCommand: android.widget.EditText
     private lateinit var btnSendCommand: android.widget.Button
 
@@ -88,13 +85,10 @@ class MainActivity : AppCompatActivity() {
         confidenceText = findViewById(R.id.confidenceText)
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
-        audioStatus = findViewById(R.id.audioStatus)
-        transcriptionText = findViewById(R.id.transcriptionText)
 
         // Initialize manual control buttons
         btnToggleMic = findViewById(R.id.btnToggleMic)
         btnToggleCamera = findViewById(R.id.btnToggleCamera)
-        btnTestCommand = findViewById(R.id.btnTestCommand)
         editTextCommand = findViewById(R.id.editTextCommand)
         btnSendCommand = findViewById(R.id.btnSendCommand)
 
@@ -234,7 +228,7 @@ class MainActivity : AppCompatActivity() {
 
             // Update camera button state
             isCameraEnabled = true
-            btnToggleCamera.text = "📷 CAM ON"
+            btnToggleCamera.text = "📷 CAM"
             btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
             
             // Debug counter
@@ -278,7 +272,6 @@ class MainActivity : AppCompatActivity() {
     private fun initializeAudio() {
         try {
             Log.i(TAG, "=== Initializing Audio Pipeline ===")
-            audioStatus.text = "🎤 Initializing..."
 
             // Create audio components
             speechProcessor = SpeechProcessor(applicationContext)
@@ -288,7 +281,6 @@ class MainActivity : AppCompatActivity() {
             // Initialize speech processor
             if (!speechProcessor.initialize()) {
                 Log.e(TAG, "❌ Speech processor failed to initialize")
-                audioStatus.text = "🎤 Not available"
                 return
             }
 
@@ -304,7 +296,8 @@ class MainActivity : AppCompatActivity() {
             // Configure speech processor callbacks
             speechProcessor.onPartialResult = { text ->
                 runOnUiThread {
-                    transcriptionText.text = text
+                    // Show partial transcription in text field
+                    editTextCommand.setText(text)
                     // Check for wake word in partial results
                     if (isListeningForWakeWord) {
                         wakeWordDetector.processText(text)
@@ -314,7 +307,8 @@ class MainActivity : AppCompatActivity() {
 
             speechProcessor.onFinalResult = { text ->
                 runOnUiThread {
-                    transcriptionText.text = text
+                    // Show final transcription in text field
+                    editTextCommand.setText(text)
                     Log.i(TAG, "Final transcription: '$text'")
 
                     if (isListeningForWakeWord) {
@@ -335,9 +329,9 @@ class MainActivity : AppCompatActivity() {
             speechProcessor.onReadyForSpeech = {
                 runOnUiThread {
                     if (isListeningForWakeWord) {
-                        audioStatus.text = "🎤 Say \"${settings.wakePhrase}\""
+                        statusIndicator.text = "● LISTENING"
                     } else {
-                        audioStatus.text = "🎤 Listening for command..."
+                        statusIndicator.text = "● COMMAND"
                     }
                 }
             }
@@ -345,10 +339,10 @@ class MainActivity : AppCompatActivity() {
             speechProcessor.onError = { error ->
                 runOnUiThread {
                     Log.w(TAG, "Speech error: $error")
-                    // Auto-retry on timeout or no match
-                    if (isListeningForWakeWord) {
+                    // Auto-retry on timeout or no match if mic is enabled
+                    if (isMicEnabled && isListeningForWakeWord) {
                         restartWakeWordListening()
-                    } else {
+                    } else if (isMicEnabled && !isListeningForWakeWord) {
                         isListeningForWakeWord = true
                         restartWakeWordListening()
                     }
@@ -384,7 +378,7 @@ class MainActivity : AppCompatActivity() {
 
             // Update mic button state
             runOnUiThread {
-                btnToggleMic.text = "🎤 MIC ON"
+                btnToggleMic.text = "🎤 MIC"
                 btnToggleMic.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
             }
 
@@ -394,7 +388,7 @@ class MainActivity : AppCompatActivity() {
                     when (ttsState) {
                         com.ailive.audio.TTSManager.TTSState.SPEAKING -> {
                             if (!isListeningForWakeWord) {
-                                audioStatus.text = "🔊 Speaking..."
+                                statusIndicator.text = "● SPEAKING"
                             }
                         }
                         else -> {
@@ -409,7 +403,7 @@ class MainActivity : AppCompatActivity() {
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Audio init failed", e)
-            audioStatus.text = "🎤 Error: ${e.message}"
+            statusIndicator.text = "● ERROR"
         }
     }
 
@@ -417,8 +411,8 @@ class MainActivity : AppCompatActivity() {
      * Start listening for wake word
      */
     private fun startWakeWordListening() {
-        audioStatus.text = "🎤 Say \"${settings.wakePhrase}\""
-        transcriptionText.text = ""
+        editTextCommand.setText("")
+        editTextCommand.hint = "Say \"${settings.wakePhrase}\" or type..."
         speechProcessor.startListening(continuous = false)
         Log.i(TAG, "Listening for wake word...")
     }
@@ -442,12 +436,9 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "🎯 Wake word detected!")
         isListeningForWakeWord = false
 
-        audioStatus.text = "🎤 Activated! Listening..."
-        transcriptionText.text = ""
-        statusIndicator.text = "● VOICE ACTIVE"
-
-        // Beep or vibrate (optional)
-        // vibrator.vibrate(100)
+        editTextCommand.setText("")
+        editTextCommand.hint = "Listening for command..."
+        statusIndicator.text = "● COMMAND"
 
         // Start listening for command
         speechProcessor.stopListening()
@@ -462,7 +453,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun processVoiceCommand(command: String) {
         Log.i(TAG, "Processing command: '$command'")
-        audioStatus.text = "🎤 Processing..."
+        statusIndicator.text = "● PROCESSING"
 
         CoroutineScope(Dispatchers.Default).launch {
             commandRouter.processCommand(command)
@@ -480,24 +471,27 @@ class MainActivity : AppCompatActivity() {
         // Microphone toggle button
         btnToggleMic.setOnClickListener {
             if (isMicEnabled) {
-                // Turn off microphone
+                // Turn off microphone - FIXED: actually stop listening
                 if (::speechProcessor.isInitialized) {
                     speechProcessor.stopListening()
                     isListeningForWakeWord = false
                 }
                 isMicEnabled = false
-                btnToggleMic.text = "🎤 MIC OFF"
+                btnToggleMic.text = "🎤 MIC"
                 btnToggleMic.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
-                audioStatus.text = "🎤 Microphone disabled"
+                statusIndicator.text = "● MIC OFF"
+                editTextCommand.hint = "Type command..."
                 Log.i(TAG, "🎤 Microphone manually disabled")
             } else {
                 // Turn on microphone
                 if (::speechProcessor.isInitialized) {
                     isListeningForWakeWord = true
+                    isMicEnabled = true
                     startWakeWordListening()
+                } else {
+                    isMicEnabled = true
                 }
-                isMicEnabled = true
-                btnToggleMic.text = "🎤 MIC ON"
+                btnToggleMic.text = "🎤 MIC"
                 btnToggleMic.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
                 Log.i(TAG, "🎤 Microphone manually enabled")
             }
@@ -511,9 +505,9 @@ class MainActivity : AppCompatActivity() {
                     cameraManager.stopCamera()
                 }
                 isCameraEnabled = false
-                btnToggleCamera.text = "📷 CAM OFF"
+                btnToggleCamera.text = "📷 CAM"
                 btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
-                statusIndicator.text = "● CAMERA OFF"
+                statusIndicator.text = "● CAM OFF"
                 Log.i(TAG, "📷 Camera manually disabled")
             } else {
                 // Turn on camera
@@ -521,19 +515,11 @@ class MainActivity : AppCompatActivity() {
                     cameraManager.startCamera(cameraPreview)
                 }
                 isCameraEnabled = true
-                btnToggleCamera.text = "📷 CAM ON"
+                btnToggleCamera.text = "📷 CAM"
                 btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
-                statusIndicator.text = "● ANALYZING..."
+                statusIndicator.text = "● ANALYZING"
                 Log.i(TAG, "📷 Camera manually enabled")
             }
-        }
-
-        // Test command button
-        btnTestCommand.setOnClickListener {
-            Log.i(TAG, "🧪 Test button pressed")
-            val testCommand = "what do you see"
-            editTextCommand.setText(testCommand)
-            processTextCommand(testCommand)
         }
 
         // Send command button
@@ -541,7 +527,6 @@ class MainActivity : AppCompatActivity() {
             val command = editTextCommand.text.toString().trim()
             if (command.isNotEmpty()) {
                 processTextCommand(command)
-                editTextCommand.text.clear()
             }
         }
 
@@ -551,7 +536,6 @@ class MainActivity : AppCompatActivity() {
                 val command = editTextCommand.text.toString().trim()
                 if (command.isNotEmpty()) {
                     processTextCommand(command)
-                    editTextCommand.text.clear()
                 }
                 true
             } else {
@@ -566,9 +550,7 @@ class MainActivity : AppCompatActivity() {
     private fun processTextCommand(command: String) {
         Log.i(TAG, "📝 Processing text command: '$command'")
 
-        // Display the command as if it was spoken
-        transcriptionText.text = command
-        audioStatus.text = "📝 Processing text command..."
+        statusIndicator.text = "● PROCESSING"
 
         // Process through command router
         CoroutineScope(Dispatchers.Default).launch {
