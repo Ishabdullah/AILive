@@ -116,4 +116,90 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_margin="16dp" />
 
+    <!-- Control Panel (top right) -->
+    <LinearLayout
+        android:id="@+id/controlPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#DD000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="8dp">
+
+        <!-- Microphone Toggle -->
+        <Button
+            android:id="@+id/btnToggleMic"
+            android:layout_width="120dp"
+            android:layout_height="48dp"
+            android:text="🎤 MIC ON"
+            android:textSize="12sp"
+            android:backgroundTint="#00AA00"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Camera Toggle -->
+        <Button
+            android:id="@+id/btnToggleCamera"
+            android:layout_width="120dp"
+            android:layout_height="48dp"
+            android:text="📷 CAM ON"
+            android:textSize="12sp"
+            android:backgroundTint="#00AA00"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Test Command Button -->
+        <Button
+            android:id="@+id/btnTestCommand"
+            android:layout_width="120dp"
+            android:layout_height="48dp"
+            android:text="🧪 TEST"
+            android:textSize="12sp"
+            android:backgroundTint="#0088FF" />
+
+    </LinearLayout>
+
+    <!-- Manual Command Input (center bottom) -->
+    <LinearLayout
+        android:id="@+id/commandInputPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#DD000000"
+        app:layout_constraintBottom_toTopOf="@id/audioStatus"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="8dp"
+        android:visibility="visible">
+
+        <!-- Text Input -->
+        <EditText
+            android:id="@+id/editTextCommand"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Type command..."
+            android:textColorHint="#888888"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:inputType="text"
+            android:imeOptions="actionSend"
+            android:background="#33FFFFFF"
+            android:padding="12dp"
+            android:layout_marginEnd="8dp" />
+
+        <!-- Send Button -->
+        <Button
+            android:id="@+id/btnSendCommand"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SEND"
+            android:textSize="12sp"
+            android:backgroundTint="#FF6600" />
+
+    </LinearLayout>
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -44,9 +44,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var audioStatus: TextView
     private lateinit var transcriptionText: TextView
 
+    // Manual control UI components
+    private lateinit var btnToggleMic: android.widget.Button
+    private lateinit var btnToggleCamera: android.widget.Button
+    private lateinit var btnTestCommand: android.widget.Button
+    private lateinit var editTextCommand: android.widget.EditText
+    private lateinit var btnSendCommand: android.widget.Button
+
     private var callbackCount = 0
     private var isInitialized = false
     private var isListeningForWakeWord = false
+    private var isMicEnabled = false
+    private var isCameraEnabled = false
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
@@ -81,6 +90,16 @@ class MainActivity : AppCompatActivity() {
         statusIndicator = findViewById(R.id.statusIndicator)
         audioStatus = findViewById(R.id.audioStatus)
         transcriptionText = findViewById(R.id.transcriptionText)
+
+        // Initialize manual control buttons
+        btnToggleMic = findViewById(R.id.btnToggleMic)
+        btnToggleCamera = findViewById(R.id.btnToggleCamera)
+        btnTestCommand = findViewById(R.id.btnTestCommand)
+        editTextCommand = findViewById(R.id.editTextCommand)
+        btnSendCommand = findViewById(R.id.btnSendCommand)
+
+        // Set up button click listeners
+        setupManualControls()
 
         // Use custom AI name in UI
         appTitle.text = "${settings.aiName} (Vision + Audio)"
@@ -208,10 +227,15 @@ class MainActivity : AppCompatActivity() {
             }
             
             cameraManager.startCamera(cameraPreview)
-            
+
             Log.i(TAG, "✓ Camera started")
             statusIndicator.text = "● ANALYZING..."
             classificationResult.text = "Point at objects"
+
+            // Update camera button state
+            isCameraEnabled = true
+            btnToggleCamera.text = "📷 CAM ON"
+            btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
             
             // Debug counter
             var seconds = 0
@@ -355,7 +379,14 @@ class MainActivity : AppCompatActivity() {
 
             // Start listening for wake word
             isListeningForWakeWord = true
+            isMicEnabled = true
             startWakeWordListening()
+
+            // Update mic button state
+            runOnUiThread {
+                btnToggleMic.text = "🎤 MIC ON"
+                btnToggleMic.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
+            }
 
             // Monitor TTS status
             CoroutineScope(Dispatchers.Main).launch {
@@ -440,6 +471,109 @@ class MainActivity : AppCompatActivity() {
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
         ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * Set up manual control buttons for testing and debugging
+     */
+    private fun setupManualControls() {
+        // Microphone toggle button
+        btnToggleMic.setOnClickListener {
+            if (isMicEnabled) {
+                // Turn off microphone
+                if (::speechProcessor.isInitialized) {
+                    speechProcessor.stopListening()
+                    isListeningForWakeWord = false
+                }
+                isMicEnabled = false
+                btnToggleMic.text = "🎤 MIC OFF"
+                btnToggleMic.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+                audioStatus.text = "🎤 Microphone disabled"
+                Log.i(TAG, "🎤 Microphone manually disabled")
+            } else {
+                // Turn on microphone
+                if (::speechProcessor.isInitialized) {
+                    isListeningForWakeWord = true
+                    startWakeWordListening()
+                }
+                isMicEnabled = true
+                btnToggleMic.text = "🎤 MIC ON"
+                btnToggleMic.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
+                Log.i(TAG, "🎤 Microphone manually enabled")
+            }
+        }
+
+        // Camera toggle button
+        btnToggleCamera.setOnClickListener {
+            if (isCameraEnabled) {
+                // Turn off camera
+                if (::cameraManager.isInitialized) {
+                    cameraManager.stopCamera()
+                }
+                isCameraEnabled = false
+                btnToggleCamera.text = "📷 CAM OFF"
+                btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
+                statusIndicator.text = "● CAMERA OFF"
+                Log.i(TAG, "📷 Camera manually disabled")
+            } else {
+                // Turn on camera
+                if (::cameraManager.isInitialized) {
+                    cameraManager.startCamera(cameraPreview)
+                }
+                isCameraEnabled = true
+                btnToggleCamera.text = "📷 CAM ON"
+                btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
+                statusIndicator.text = "● ANALYZING..."
+                Log.i(TAG, "📷 Camera manually enabled")
+            }
+        }
+
+        // Test command button
+        btnTestCommand.setOnClickListener {
+            Log.i(TAG, "🧪 Test button pressed")
+            val testCommand = "what do you see"
+            editTextCommand.setText(testCommand)
+            processTextCommand(testCommand)
+        }
+
+        // Send command button
+        btnSendCommand.setOnClickListener {
+            val command = editTextCommand.text.toString().trim()
+            if (command.isNotEmpty()) {
+                processTextCommand(command)
+                editTextCommand.text.clear()
+            }
+        }
+
+        // Handle enter key in text field
+        editTextCommand.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+                val command = editTextCommand.text.toString().trim()
+                if (command.isNotEmpty()) {
+                    processTextCommand(command)
+                    editTextCommand.text.clear()
+                }
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    /**
+     * Process text command (bypassing voice recognition)
+     */
+    private fun processTextCommand(command: String) {
+        Log.i(TAG, "📝 Processing text command: '$command'")
+
+        // Display the command as if it was spoken
+        transcriptionText.text = command
+        audioStatus.text = "📝 Processing text command..."
+
+        // Process through command router
+        CoroutineScope(Dispatchers.Default).launch {
+            commandRouter.processCommand(command)
+        }
     }
 
     override fun onDestroy() {
