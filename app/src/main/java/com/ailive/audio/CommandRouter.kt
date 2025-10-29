@@ -2,11 +2,15 @@ package com.ailive.audio
 
 import android.util.Log
 import com.ailive.core.AILiveCore
+import com.ailive.personality.InputType
 import kotlinx.coroutines.*
 
 /**
  * CommandRouter - Routes voice commands to appropriate AI agents
  * Phase 2.3: Natural language command parser
+ *
+ * REFACTORING NOTE: Now supports PersonalityEngine for unified responses.
+ * When usePersonalityEngine=true, routes through PersonalityEngine instead of individual agents.
  */
 class CommandRouter(private val aiCore: AILiveCore) {
     private val TAG = "CommandRouter"
@@ -15,12 +19,51 @@ class CommandRouter(private val aiCore: AILiveCore) {
     var onResponse: ((String) -> Unit)? = null
 
     /**
-     * Process user command and route to appropriate agent
+     * Process user command and route to appropriate agent or PersonalityEngine
      */
     suspend fun processCommand(command: String) {
         val normalized = command.lowercase().trim()
         Log.i(TAG, "🧠 Processing command: '$command'")
 
+        // NEW: Route through PersonalityEngine if enabled
+        if (aiCore.usePersonalityEngine && ::aiCore.personalityEngine.isInitialized) {
+            handleWithPersonalityEngine(command)
+            return
+        }
+
+        // Legacy routing (old agent-based system)
+        processCommandLegacy(normalized, command)
+    }
+
+    /**
+     * NEW: Handle command with PersonalityEngine (unified intelligence)
+     */
+    private suspend fun handleWithPersonalityEngine(command: String) {
+        try {
+            Log.i(TAG, "🧠 Routing to PersonalityEngine (unified mode)")
+
+            // Process through PersonalityEngine
+            val response = aiCore.personalityEngine.processInput(
+                input = command,
+                inputType = InputType.VOICE
+            )
+
+            // Response callback
+            onResponse?.invoke(response.text)
+
+            Log.i(TAG, "✓ PersonalityEngine response: ${response.text.take(50)}...")
+            Log.d(TAG, "Used tools: ${response.usedTools.joinToString()}")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "PersonalityEngine error", e)
+            onResponse?.invoke("I'm having trouble processing that. Could you try again?")
+        }
+    }
+
+    /**
+     * Legacy command processing (separate agents)
+     */
+    private suspend fun processCommandLegacy(normalized: String, command: String) {
         try {
             when {
                 // Vision/Camera commands → MotorAI

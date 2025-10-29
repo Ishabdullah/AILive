@@ -13,6 +13,10 @@ import com.ailive.core.messaging.MessageBus
 import com.ailive.core.state.StateManager
 import com.ailive.audio.TTSManager
 import com.ailive.ai.llm.LLMManager
+import com.ailive.personality.PersonalityEngine
+import com.ailive.personality.tools.SentimentAnalysisTool
+import com.ailive.personality.tools.DeviceControlTool
+import com.ailive.personality.tools.MemoryRetrievalTool
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,6 +24,9 @@ import kotlinx.coroutines.launch
 /**
  * AILiveCore - Central coordinator for all AI agents
  * Manages lifecycle and communication between agents
+ *
+ * REFACTORING NOTE: This now includes PersonalityEngine for unified intelligence.
+ * Old agents are kept for backward compatibility during transition.
  */
 class AILiveCore(
     private val context: Context,
@@ -32,15 +39,22 @@ class AILiveCore(
     lateinit var ttsManager: TTSManager  // Public for agents and CommandRouter
     lateinit var llmManager: LLMManager   // Public for CommandRouter - Phase 2.6
 
+    // NEW: PersonalityEngine for unified intelligence
+    lateinit var personalityEngine: PersonalityEngine  // Public for CommandRouter
+
+    // Legacy agents (kept for backward compatibility during transition)
     private lateinit var motorAI: MotorAI
     private lateinit var emotionAI: EmotionAI
     private lateinit var memoryAI: MemoryAI
     private lateinit var predictiveAI: PredictiveAI
     private lateinit var rewardAI: RewardAI
     private lateinit var metaAI: MetaAI
-    
+
     private var isInitialized = false
     private var isRunning = false
+
+    // Feature flag for PersonalityEngine (can be toggled during transition)
+    var usePersonalityEngine = true  // Set to true to enable unified intelligence
     
     /**
      * Initialize all AI components
@@ -70,7 +84,7 @@ class AILiveCore(
                 }
             }
 
-            // Create all agents
+            // Create all agents (kept for backward compatibility)
             motorAI = MotorAI(context, activity, messageBus, stateManager)
             emotionAI = EmotionAI(messageBus, stateManager)
             memoryAI = MemoryAI(context, messageBus, stateManager)
@@ -78,8 +92,27 @@ class AILiveCore(
             rewardAI = RewardAI(messageBus, stateManager)
             metaAI = MetaAI(messageBus, stateManager)
 
+            // NEW: Initialize PersonalityEngine for unified intelligence
+            personalityEngine = PersonalityEngine(
+                context = context,
+                messageBus = messageBus,
+                stateManager = stateManager,
+                llmManager = llmManager,
+                ttsManager = ttsManager
+            )
+
+            // Register tools with PersonalityEngine
+            personalityEngine.registerTool(SentimentAnalysisTool(emotionAI))
+            personalityEngine.registerTool(DeviceControlTool(motorAI))
+            personalityEngine.registerTool(MemoryRetrievalTool(memoryAI))
+
             isInitialized = true
-            Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS + LLM)")
+
+            if (usePersonalityEngine) {
+                Log.i(TAG, "✓ AILive initialized successfully (PersonalityEngine + 3 tools + legacy agents)")
+            } else {
+                Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS + LLM) [Legacy mode]")
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize AILive", e)
@@ -102,17 +135,32 @@ class AILiveCore(
         
         try {
             Log.i(TAG, "Starting AILive agents...")
-            
+
+            // Start MessageBus first
+            messageBus.start()
+
+            // Start legacy agents (still needed as tools use them)
             motorAI.start()
             emotionAI.start()
             memoryAI.start()
             predictiveAI.start()
             rewardAI.start()
             metaAI.start()
-            
+
+            // NEW: Start PersonalityEngine for unified intelligence
+            if (usePersonalityEngine) {
+                personalityEngine.start()
+                Log.i(TAG, "🧠 PersonalityEngine activated")
+            }
+
             isRunning = true
-            Log.i(TAG, "✓ AILive system fully operational (all agents active)")
-            
+
+            if (usePersonalityEngine) {
+                Log.i(TAG, "✓ AILive system fully operational (PersonalityEngine mode)")
+            } else {
+                Log.i(TAG, "✓ AILive system fully operational (all agents active) [Legacy mode]")
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start AILive", e)
             throw e
@@ -128,12 +176,23 @@ class AILiveCore(
         Log.i(TAG, "Stopping AILive...")
 
         try {
+            // Stop PersonalityEngine first
+            if (usePersonalityEngine && ::personalityEngine.isInitialized) {
+                personalityEngine.stop()
+            }
+
+            // Stop legacy agents
             motorAI.stop()
             emotionAI.stop()
             memoryAI.stop()
             predictiveAI.stop()
             rewardAI.stop()
             metaAI.stop()
+
+            // Stop MessageBus
+            messageBus.stop()
+
+            // Shutdown core systems
             ttsManager.shutdown()
             llmManager.close()
 
