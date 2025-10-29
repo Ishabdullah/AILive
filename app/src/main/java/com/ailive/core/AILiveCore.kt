@@ -106,10 +106,14 @@ class AILiveCore(
             personalityEngine.registerTool(DeviceControlTool(motorAI))
             personalityEngine.registerTool(MemoryRetrievalTool(memoryAI, context))  // PHASE 5: Added context for storage
 
+            // PHASE 5 Part 3: Register additional tools
+            personalityEngine.registerTool(com.ailive.personality.tools.PatternAnalysisTool(context, stateManager))
+            personalityEngine.registerTool(com.ailive.personality.tools.FeedbackTrackingTool(context))
+
             isInitialized = true
 
             if (usePersonalityEngine) {
-                Log.i(TAG, "✓ AILive initialized successfully (PersonalityEngine + 3 tools + legacy agents)")
+                Log.i(TAG, "✓ AILive initialized successfully (PersonalityEngine + 5 tools + legacy agents)")
             } else {
                 Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS + LLM) [Legacy mode]")
             }
