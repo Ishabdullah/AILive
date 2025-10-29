@@ -1,22 +1,31 @@
 package com.ailive.personality.tools
 
+import android.content.Context
 import android.util.Log
 import com.ailive.memory.MemoryAI
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 /**
  * MemoryRetrievalTool - Retrieves stored memories and conversation history
  *
  * Converted from MemoryAI agent to a tool for PersonalityEngine.
- * Provides memory storage/retrieval capabilities without separate personality.
+ * Provides memory storage/retrieval capabilities with actual on-device storage.
  *
- * TODO: Integrate with actual vector database (ChromaDB/FAISS) when implemented
+ * Phase 5: Enhanced with JSON-based storage for lightweight on-device memory
  */
 class MemoryRetrievalTool(
-    private val memoryAI: MemoryAI
+    private val memoryAI: MemoryAI,
+    private val context: Context
 ) : BaseTool() {
 
     companion object {
         private const val TAG = "MemoryRetrievalTool"
+        private const val MEMORY_FILE = "memories.json"
+        private const val MAX_MEMORIES = 200  // Keep most recent 200
     }
 
     override val name: String = "retrieve_memory"
@@ -46,68 +55,203 @@ class MemoryRetrievalTool(
     }
 
     override suspend fun executeInternal(params: Map<String, Any>): ToolResult {
-        val query = params["query"] as String
-        val limit = (params["limit"] as? Int) ?: 5
+        return withContext(Dispatchers.IO) {
+            val query = params["query"] as String
+            val limit = (params["limit"] as? Int) ?: 5
+            val action = params["action"] as? String ?: "retrieve"
 
-        Log.d(TAG, "Retrieving memories for query: ${query.take(50)}...")
+            Log.d(TAG, "Memory action: $action, query: ${query.take(50)}...")
 
-        return try {
-            // TODO: Implement actual memory retrieval
-            // For now, return placeholder
-            val memories = retrieveMemoriesPlaceholder(query, limit)
+            try {
+                when (action) {
+                    "store" -> storeMemory(query, params)
+                    "retrieve" -> retrieveMemories(query, limit)
+                    "clear" -> clearMemories()
+                    else -> ToolResult.Failure(
+                        error = IllegalArgumentException("Unknown action"),
+                        reason = "Action must be 'store', 'retrieve', or 'clear'",
+                        recoverable = false
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to process memory: ${e.message}", e)
+                ToolResult.Failure(
+                    error = e,
+                    reason = "Could not access memory storage: ${e.message}",
+                    recoverable = true
+                )
+            }
+        }
+    }
 
-            ToolResult.Success(
+    /**
+     * Retrieve memories matching query
+     * Uses simple keyword matching (for lightweight on-device operation)
+     */
+    private fun retrieveMemories(query: String, limit: Int): ToolResult {
+        val allMemories = loadMemories()
+
+        if (allMemories.isEmpty()) {
+            return ToolResult.Success(
                 data = MemoryResult(
                     query = query,
-                    memories = memories,
-                    count = memories.size
+                    memories = emptyList(),
+                    count = 0
                 ),
                 context = mapOf(
-                    "has_memories" to memories.isNotEmpty(),
-                    "memory_count" to memories.size
+                    "has_memories" to false,
+                    "message" to "No memories stored yet. I'll remember our conversations!"
                 )
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to retrieve memories", e)
-            ToolResult.Failure(
-                error = e,
-                reason = "Could not access memory storage: ${e.message}",
-                recoverable = true
-            )
         }
+
+        // Simple keyword-based search
+        val queryWords = query.lowercase().split("\\s+".toRegex())
+        val matchedMemories = allMemories
+            .map { memory ->
+                val contentLower = memory.content.lowercase()
+                val matchCount = queryWords.count { word -> contentLower.contains(word) }
+                val relevance = matchCount.toFloat() / queryWords.size.toFloat()
+                memory to relevance
+            }
+            .filter { it.second > 0 }  // At least one keyword match
+            .sortedByDescending { it.second }
+            .take(limit)
+            .map { (memory, relevance) ->
+                memory.copy(relevance = relevance)
+            }
+
+        Log.i(TAG, "✓ Retrieved ${matchedMemories.size} memories for '$query'")
+
+        return ToolResult.Success(
+            data = MemoryResult(
+                query = query,
+                memories = matchedMemories,
+                count = matchedMemories.size
+            ),
+            context = mapOf(
+                "has_memories" to matchedMemories.isNotEmpty(),
+                "memory_count" to matchedMemories.size,
+                "total_memories" to allMemories.size
+            )
+        )
     }
 
     /**
-     * Placeholder for memory retrieval
-     * TODO: Replace with actual vector database search
+     * Store new memory
      */
-    private fun retrieveMemoriesPlaceholder(query: String, limit: Int): List<Memory> {
-        Log.w(TAG, "⚠️ Using placeholder memory retrieval. Integrate vector DB for production.")
+    private fun storeMemory(content: String, params: Map<String, Any>): ToolResult {
+        val memories = loadMemories().toMutableList()
 
-        // Return empty for now - memory system needs to be implemented
-        return emptyList()
+        val newMemory = Memory(
+            content = content,
+            timestamp = System.currentTimeMillis(),
+            relevance = 1.0f,
+            metadata = params.filterKeys { it != "query" && it != "action" }
+        )
+
+        memories.add(newMemory)
+
+        // Keep only recent memories
+        while (memories.size > MAX_MEMORIES) {
+            memories.removeAt(0)
+        }
+
+        saveMemories(memories)
+
+        Log.i(TAG, "✓ Stored memory: ${content.take(50)}...")
+
+        return ToolResult.Success(
+            data = mapOf(
+                "stored" to true,
+                "total_memories" to memories.size
+            ),
+            context = mapOf(
+                "memory_count" to memories.size
+            )
+        )
     }
 
     /**
-     * Store a memory (future capability)
+     * Clear all memories
      */
-    suspend fun store(content: String, metadata: Map<String, Any> = emptyMap()): ToolResult {
+    private fun clearMemories(): ToolResult {
+        val file = File(context.filesDir, MEMORY_FILE)
+        if (file.exists()) {
+            file.delete()
+        }
+
+        Log.i(TAG, "✓ Cleared all memories")
+
+        return ToolResult.Success(
+            data = mapOf("cleared" to true),
+            context = mapOf("memory_count" to 0)
+        )
+    }
+
+    /**
+     * Load memories from storage
+     */
+    private fun loadMemories(): List<Memory> {
+        val file = File(context.filesDir, MEMORY_FILE)
+        if (!file.exists()) return emptyList()
+
         return try {
-            // TODO: Implement memory storage
-            Log.d(TAG, "Storing memory: ${content.take(50)}...")
+            val json = file.readText()
+            val jsonArray = JSONArray(json)
 
-            ToolResult.Success(
-                data = "Memory stored",
-                context = mapOf("stored" to true)
-            )
+            (0 until jsonArray.length()).map { i ->
+                val obj = jsonArray.getJSONObject(i)
+                Memory(
+                    content = obj.getString("content"),
+                    timestamp = obj.getLong("timestamp"),
+                    relevance = obj.optDouble("relevance", 1.0).toFloat(),
+                    metadata = parseMetadata(obj.optJSONObject("metadata"))
+                )
+            }
         } catch (e: Exception) {
-            ToolResult.Failure(
-                error = e,
-                reason = "Failed to store memory: ${e.message}",
-                recoverable = true
-            )
+            Log.e(TAG, "Failed to load memories", e)
+            emptyList()
         }
     }
+
+    /**
+     * Save memories to storage
+     */
+    private fun saveMemories(memories: List<Memory>) {
+        val file = File(context.filesDir, MEMORY_FILE)
+
+        try {
+            val jsonArray = JSONArray()
+            memories.forEach { memory ->
+                val obj = JSONObject().apply {
+                    put("content", memory.content)
+                    put("timestamp", memory.timestamp)
+                    put("relevance", memory.relevance.toDouble())
+                    put("metadata", JSONObject(memory.metadata))
+                }
+                jsonArray.put(obj)
+            }
+
+            file.writeText(jsonArray.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save memories", e)
+        }
+    }
+
+    /**
+     * Parse metadata from JSON
+     */
+    private fun parseMetadata(jsonObject: JSONObject?): Map<String, Any> {
+        if (jsonObject == null) return emptyMap()
+
+        val map = mutableMapOf<String, Any>()
+        jsonObject.keys().forEach { key ->
+            map[key] = jsonObject.get(key)
+        }
+        return map
+    }
+
 
     /**
      * Result of memory retrieval

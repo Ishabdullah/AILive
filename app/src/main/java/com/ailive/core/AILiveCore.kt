@@ -104,7 +104,7 @@ class AILiveCore(
             // Register tools with PersonalityEngine
             personalityEngine.registerTool(SentimentAnalysisTool(emotionAI))
             personalityEngine.registerTool(DeviceControlTool(motorAI))
-            personalityEngine.registerTool(MemoryRetrievalTool(memoryAI))
+            personalityEngine.registerTool(MemoryRetrievalTool(memoryAI, context))  // PHASE 5: Added context for storage
 
             isInitialized = true
 

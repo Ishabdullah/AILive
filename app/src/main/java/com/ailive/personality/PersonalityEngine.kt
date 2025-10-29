@@ -208,6 +208,16 @@ class PersonalityEngine(
                 )
             }
 
+            // Prediction-related (PHASE 5 Part 3)
+            "predict" in inputLower || "what will" in inputLower ||
+            "pattern" in inputLower || "suggest" in inputLower ||
+            "recommend" in inputLower || "next" in inputLower -> {
+                Intent(
+                    primary = IntentType.PREDICTION,
+                    parameters = mapOf("action" to "predict", "text" to input)
+                )
+            }
+
             // General conversation
             else -> {
                 Intent(
@@ -246,9 +256,10 @@ class PersonalityEngine(
                 )
             }
             IntentType.PREDICTION -> {
-                // TODO: Add PatternAnalysisTool when implemented
+                // PHASE 5 Part 3: Use PatternAnalysisTool for predictions
                 listOfNotNull(
-                    toolRegistry.getTool("analyze_sentiment")  // For now, use sentiment
+                    toolRegistry.getTool("analyze_patterns"),    // Pattern-based predictions
+                    toolRegistry.getTool("track_feedback")       // Learn from feedback
                 )
             }
             IntentType.CONVERSATION -> {

@@ -230,6 +230,20 @@ class MainActivity : AppCompatActivity() {
             aiLiveCore.personalityEngine.registerTool(visionTool)
             Log.i(TAG, "✓ VisionAnalysisTool registered")
 
+            // PHASE 5 Part 3: Register additional tools
+            val patternTool = com.ailive.personality.tools.PatternAnalysisTool(
+                context = this,
+                stateManager = stateManager
+            )
+            aiLiveCore.personalityEngine.registerTool(patternTool)
+            Log.i(TAG, "✓ PatternAnalysisTool registered")
+
+            val feedbackTool = com.ailive.personality.tools.FeedbackTrackingTool(
+                context = this
+            )
+            aiLiveCore.personalityEngine.registerTool(feedbackTool)
+            Log.i(TAG, "✓ FeedbackTrackingTool registered")
+
             Log.i(TAG, "✓ Camera started")
             statusIndicator.text = "● ANALYZING..."
             classificationResult.text = "Point at objects"
