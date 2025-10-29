@@ -12,6 +12,10 @@ import com.ailive.meta.MetaAI
 import com.ailive.core.messaging.MessageBus
 import com.ailive.core.state.StateManager
 import com.ailive.audio.TTSManager
+import com.ailive.ai.llm.LLMManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * AILiveCore - Central coordinator for all AI agents
@@ -26,6 +30,7 @@ class AILiveCore(
     lateinit var messageBus: MessageBus  // Public for CommandRouter access
     private lateinit var stateManager: StateManager
     lateinit var ttsManager: TTSManager  // Public for agents and CommandRouter
+    lateinit var llmManager: LLMManager   // Public for CommandRouter - Phase 2.6
 
     private lateinit var motorAI: MotorAI
     private lateinit var emotionAI: EmotionAI
@@ -53,6 +58,17 @@ class AILiveCore(
             messageBus = MessageBus()
             stateManager = StateManager()
             ttsManager = TTSManager(context)
+            llmManager = LLMManager(context)
+
+            // Initialize LLM in background (takes ~5-10 seconds)
+            CoroutineScope(Dispatchers.IO).launch {
+                val success = llmManager.initialize()
+                if (success) {
+                    Log.i(TAG, "✓ LLM ready for intelligent responses")
+                } else {
+                    Log.w(TAG, "⚠️ LLM not available, using fallback responses")
+                }
+            }
 
             // Create all agents
             motorAI = MotorAI(context, activity, messageBus, stateManager)
@@ -63,7 +79,7 @@ class AILiveCore(
             metaAI = MetaAI(messageBus, stateManager)
 
             isInitialized = true
-            Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS)")
+            Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS + LLM)")
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize AILive", e)
@@ -119,6 +135,7 @@ class AILiveCore(
             rewardAI.stop()
             metaAI.stop()
             ttsManager.shutdown()
+            llmManager.close()
 
             isRunning = false
             Log.i(TAG, "✓ AILive stopped")
