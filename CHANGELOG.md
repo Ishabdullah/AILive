@@ -5,6 +5,32 @@ All notable changes to AILive will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2025-10-29
+
+### Added - Manual Control UI for Testing & Debugging 🎛️
+- Control panel with 3 buttons (top right):
+  - 🎤 MIC ON/OFF - Toggle microphone manually
+  - 📷 CAM ON/OFF - Toggle camera manually
+  - 🧪 TEST - Quick test with "what do you see" command
+- Command input panel (bottom center):
+  - Text field to type commands directly
+  - SEND button to submit typed commands
+  - Enter key support for quick command sending
+- Text-based command processing bypassing voice recognition
+- Real-time button state updates with color indicators (green=on, red=off)
+- Comprehensive logging for all manual control actions
+
+### Changed
+- MainActivity now supports dual input: voice commands AND text commands
+- Audio and camera can be independently controlled by user
+- Test commands can be sent without voice recognition
+- UI provides more control for debugging intermittent voice issues
+
+### Fixed
+- Improved TTS synchronization (now properly waits for TTS to finish)
+- Better audio resource management between TTS and speech recognition
+- Reduced likelihood of command freeze by allowing manual mic restart
+
 ## [0.5.0] - 2025-10-29
 
 ### Added - Phase 2.6: Intelligent Language Generation 🧠

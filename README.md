@@ -1,7 +1,7 @@
 # AILive - Brain-Inspired AI System
 
-**Version:** 0.5.0
-**Status:** Phase 2.6 Complete ✅ | Intelligent Language Generation 🧠💬
+**Version:** 0.5.1
+**Status:** Phase 2.6+ ✅ | Manual Control UI Added 🎛️
 **Platform:** Android 8.0+ (API 26+)
 **License:** Non-commercial (See LICENSE)
 
@@ -134,10 +134,19 @@ gradle assembleDebugCopy APK to Downloads and install manuallycp app/build/outpu
 **What Works Now:**
 - Say "Hey AILive" → AI responds "Yes?" with audio
 - Ask real questions → Get intelligent AI-generated answers
+- **NEW:** Manual control panel with toggle buttons (mic, camera, test)
+- **NEW:** Text input field to send commands without voice
 - 6 agents with unique voices and personalities
 - Full voice conversation with context understanding
 - Vision pipeline ready (TensorFlow Lite)
 - All 6 AI agents communicating via MessageBus
+
+**Manual Controls (NEW in v0.5.1):**
+- 🎤 **MIC ON/OFF** - Toggle microphone to control voice input
+- 📷 **CAM ON/OFF** - Toggle camera to control vision pipeline
+- 🧪 **TEST** - Quick test button (sends "what do you see")
+- 📝 **Text Input** - Type commands directly without voice recognition
+- All controls accessible in top-right and bottom-center of UI
 
 ---
 
@@ -167,6 +176,7 @@ gradle assembleDebugCopy APK to Downloads and install manuallycp app/build/outpu
 - **Phase 2.3:** Audio Integration ✅ (Complete Oct 28, 2025)
 - **Phase 2.4:** Text-to-Speech Responses ✅ (Complete Oct 28, 2025)
 - **Phase 2.6:** Intelligent Language Generation ✅ (Complete Oct 29, 2025)
+- **Phase 2.6+:** Manual Control UI ✅ (Complete Oct 29, 2025)
 - **Phase 2.7:** Vision-Language Integration 🎯 (Next)
 - **Phase 2.5:** Custom Wake Word Training 🎤 (Planned)
 - **Phase 3:** Enhanced UI & Visualization 📊 (Planned)

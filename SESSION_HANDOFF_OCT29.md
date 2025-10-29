@@ -1,10 +1,10 @@
 # AILive Session Handoff - October 29, 2025
 
-**Session Duration:** ~2 hours
-**Last Update:** October 29, 2025 10:28 AM
+**Session Duration:** ~4 hours
+**Last Update:** October 29, 2025 11:18 AM
 **Current Branch:** main
-**Current Commit:** b7b33a1 (fix: Resolve LLMManager compilation errors)
-**Build Status:** ✅ SUCCESS (5m 34s)
+**Current Commit:** ebffe7f (feat: Add manual control UI for testing and debugging)
+**Build Status:** 🔄 IN PROGRESS (run #18906060983)
 
 ---
 
@@ -35,28 +35,62 @@
 - ✅ Fixed all compilation errors
 - ✅ Build succeeded - APK ready!
 
-**Files Created:**
-```
-NEW: app/src/main/java/com/ailive/ai/llm/LLMManager.kt (305 lines)
-NEW: models/MODEL_SETUP.md (model download instructions)
-NEW: SESSION_HANDOFF_OCT29.md (this file)
-```
-
-**Files Modified:**
-```
-MOD: app/build.gradle.kts (added ONNX Runtime dependency)
-MOD: app/src/main/java/com/ailive/core/AILiveCore.kt (LLM lifecycle)
-MOD: app/src/main/java/com/ailive/audio/CommandRouter.kt (LLM responses)
-MOD: README.md (updated to v0.5.0)
-MOD: CHANGELOG.md (added Phase 2.6 entry)
-```
-
 **Commits:**
 - `2cc66a7` - feat: Phase 2.6 - Add ONNX Runtime LLM integration
 - `e805860` - docs: Update all documentation for Phase 2.6 completion
 - `b7b33a1` - fix: Resolve LLMManager compilation errors
 
-**Working APK:** Available in GitHub Actions (run #18904617433)
+---
+
+### Phase 2.6+: Manual Control UI & Bug Fixes (COMPLETE ✅)
+
+**Goal:** Add manual controls for debugging intermittent voice command freeze
+
+**Problem:**
+- Voice commands worked but only once per app session
+- Had to close app and wait 30-60 seconds before next command would work
+- TTS and speech recognition audio resource conflict
+
+**Solution 1: TTS Synchronization Fix**
+- Changed from hardcoded `delay(3000)` to proper TTS state monitoring
+- Now waits for `TTSManager.state = READY` before restarting speech recognition
+- Added 500ms buffer after TTS completion for audio resource release
+- Commit: `fc16c0e` - fix: Wait for TTS completion before restarting speech recognition
+
+**Solution 2: Manual Control UI**
+- Added control panel (top-right) with 3 buttons:
+  - 🎤 MIC ON/OFF - Toggle microphone manually
+  - 📷 CAM ON/OFF - Toggle camera manually
+  - 🧪 TEST - Quick test with "what do you see" command
+- Added command input panel (bottom-center):
+  - Text field to type commands directly
+  - SEND button to submit typed commands
+  - Enter key support for quick sending
+- Bypasses voice recognition for testing
+- Real-time button state updates (green=on, red=off)
+
+**Implementation:**
+- ✅ Created setupManualControls() method (85 lines)
+- ✅ Created processTextCommand() method (12 lines)
+- ✅ Added 5 new UI components with full interaction logic
+- ✅ Updated button states on initialization
+- ✅ Comprehensive logging for debugging
+- ✅ Total changes: +221 lines across 2 files
+
+**Files Modified:**
+```
+MOD: app/src/main/res/layout/activity_main.xml (+86 lines)
+MOD: app/src/main/java/com/ailive/MainActivity.kt (+136 lines)
+MOD: README.md (updated to v0.5.1)
+MOD: CHANGELOG.md (added v0.5.1 entry)
+MOD: SESSION_HANDOFF_OCT29.md (this update)
+```
+
+**Commits:**
+- `fc16c0e` - fix: Wait for TTS completion before restarting speech recognition
+- `ebffe7f` - feat: Add manual control UI for testing and debugging
+
+**Working APK:** Building now (run #18906060983)
 
 ---
 
@@ -67,9 +101,12 @@ MOD: CHANGELOG.md (added Phase 2.6 entry)
 - ✅ Voice wake word detection ("Hey AILive")
 - ✅ Speech recognition (Android SpeechRecognizer)
 - ✅ Text-to-speech with 6 unique agent voices
-- ✅ **NEW: Intelligent AI-generated responses** (LLM-powered!)
-- ✅ **NEW: Context-aware conversation**
-- ✅ **NEW: Agent personalities**
+- ✅ Intelligent AI-generated responses (LLM-powered!)
+- ✅ Context-aware conversation
+- ✅ Agent personalities
+- ✅ **NEW: Manual control UI with toggle buttons**
+- ✅ **NEW: Text input for commands (bypasses voice)**
+- ✅ **NEW: Improved TTS synchronization**
 - ✅ Camera preview
 - ✅ TensorFlow Lite vision (MobileNetV2)
 
