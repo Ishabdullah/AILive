@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.LongBuffer
+import java.nio.FloatBuffer
 import kotlin.math.exp
 
 /**
@@ -156,7 +157,7 @@ class LLMManager(private val context: Context) {
     private fun decode(ids: LongArray): String {
         // Reverse vocabulary lookup
         val reverseVocab = vocabulary.entries.associate { it.value to it.key }
-        return ids.mapNotNull { reverseVocab[it] }.joinToString(" ")
+        return ids.map { reverseVocab[it] }.filterNotNull().joinToString(" ")
     }
 
     /**
@@ -204,7 +205,7 @@ class LLMManager(private val context: Context) {
         // Apply temperature
         val probs = FloatArray(vocabSize)
         for (i in 0 until vocabSize) {
-            probs[i] = exp(logits[i] / TEMPERATURE)
+            probs[i] = exp((logits[i] / TEMPERATURE).toDouble()).toFloat()
         }
 
         // Normalize to probabilities
