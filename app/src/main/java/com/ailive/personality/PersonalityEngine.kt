@@ -302,7 +302,13 @@ class PersonalityEngine(
         )
 
         // Generate response with LLM
-        val responseText = llmManager.generate(prompt, agentName = "AILive")
+        // Pass original user input for better fallback responses
+        val responseText = try {
+            llmManager.generate(prompt, agentName = "AILive")
+        } catch (e: Exception) {
+            Log.e(TAG, "LLM generation failed, using enhanced fallback", e)
+            generateFallbackResponse(input, intent, toolResults)
+        }
 
         return Response(
             text = responseText,
@@ -419,6 +425,64 @@ class PersonalityEngine(
 
         val successCount = toolResults.count { it.result is ToolResult.Success }
         return successCount.toFloat() / toolResults.size
+    }
+
+    /**
+     * Generate fallback response when LLM is unavailable
+     * Analyzes user input and tool results to provide contextual response
+     */
+    private fun generateFallbackResponse(
+        input: String,
+        intent: Intent,
+        toolResults: List<ToolExecutionResult>
+    ): String {
+        val inputLower = input.lowercase()
+
+        // Check if we have tool results to incorporate
+        val hasToolResults = toolResults.any { it.result is ToolResult.Success }
+
+        return when (intent.primary) {
+            IntentType.VISION -> {
+                if (hasToolResults) {
+                    "I can see your surroundings through my camera. What would you like to know about what I'm seeing?"
+                } else {
+                    "I'm ready to look around. What would you like me to see?"
+                }
+            }
+            IntentType.EMOTION -> {
+                "I can sense the emotional context. How can I help you understand the mood?"
+            }
+            IntentType.MEMORY -> {
+                "I'm checking my memory for relevant information about your request."
+            }
+            IntentType.DEVICE_CONTROL -> {
+                if ("flashlight" in inputLower) {
+                    if ("on" in inputLower) "Turning on the flashlight" else "Turning off the flashlight"
+                } else if ("camera" in inputLower) {
+                    "Ready to control the camera"
+                } else {
+                    "What would you like me to control?"
+                }
+            }
+            IntentType.PREDICTION -> {
+                "Let me analyze the patterns to help predict what might happen."
+            }
+            IntentType.CONVERSATION -> {
+                // Provide varied conversational responses
+                when {
+                    "hello" in inputLower || "hi" in inputLower ->
+                        "Hello! I'm AILive, your on-device AI companion. How can I help you today?"
+                    "how are you" in inputLower || "what's up" in inputLower ->
+                        "I'm functioning well and ready to assist! All my systems are operational."
+                    "help" in inputLower ->
+                        "I can help you with vision, understanding emotions, remembering things, controlling your device, and much more. What do you need?"
+                    "thank" in inputLower ->
+                        "You're welcome! Happy to help."
+                    else ->
+                        "I'm here to help. I can see through your camera, understand emotions, remember conversations, and control device functions. What would you like me to do?"
+                }
+            }
+        }
     }
 }
 

@@ -355,15 +355,17 @@ class MainActivity : AppCompatActivity() {
                     classificationResult.text = response
                     confidenceText.text = "Voice Command Response"
 
-                    // Return to wake word listening AFTER TTS finishes speaking
+                    // Return to wake word listening AFTER TTS finishes speaking (only if mic is still enabled)
                     CoroutineScope(Dispatchers.Main).launch {
                         // Wait for TTS to actually finish speaking (not just 3 seconds!)
                         aiLiveCore.ttsManager.state.collect { ttsState ->
                             if (ttsState == com.ailive.audio.TTSManager.TTSState.READY) {
-                                // TTS is done, safe to restart listening
+                                // TTS is done, safe to restart listening (but only if mic is enabled)
                                 delay(500) // Small buffer to release audio resources
-                                isListeningForWakeWord = true
-                                restartWakeWordListening()
+                                if (isMicEnabled) {
+                                    isListeningForWakeWord = true
+                                    restartWakeWordListening()
+                                }
                                 return@collect // Exit collection after restarting
                             }
                         }
@@ -418,12 +420,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Restart wake word listening after timeout
+     * Restart wake word listening after timeout (only if mic is enabled)
      */
     private fun restartWakeWordListening() {
         CoroutineScope(Dispatchers.Main).launch {
             delay(500)
-            if (isListeningForWakeWord) {
+            if (isListeningForWakeWord && isMicEnabled) {
                 startWakeWordListening()
             }
         }
@@ -504,13 +506,20 @@ class MainActivity : AppCompatActivity() {
                 if (::cameraManager.isInitialized) {
                     cameraManager.stopCamera()
                 }
+                // Clear the preview to show black screen
+                cameraPreview.setBackgroundColor(android.graphics.Color.BLACK)
                 isCameraEnabled = false
                 btnToggleCamera.text = "📷 CAM"
                 btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_red_dark)
                 statusIndicator.text = "● CAM OFF"
+                classificationResult.text = "Camera off"
+                confidenceText.text = ""
+                inferenceTime.text = ""
                 Log.i(TAG, "📷 Camera manually disabled")
             } else {
                 // Turn on camera
+                // Clear the black background to show camera feed
+                cameraPreview.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 if (::cameraManager.isInitialized) {
                     cameraManager.startCamera(cameraPreview)
                 }
@@ -518,6 +527,7 @@ class MainActivity : AppCompatActivity() {
                 btnToggleCamera.text = "📷 CAM"
                 btnToggleCamera.backgroundTintList = getColorStateList(android.R.color.holo_green_dark)
                 statusIndicator.text = "● ANALYZING"
+                classificationResult.text = "Point at objects"
                 Log.i(TAG, "📷 Camera manually enabled")
             }
         }
