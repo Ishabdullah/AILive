@@ -50,8 +50,7 @@ class VisionAnalysisTool(
 
             if (latestFrame == null) {
                 return ToolResult.Unavailable(
-                    reason = "No camera frame available. Camera may be off or not capturing.",
-                    suggestion = "Enable camera to use vision capabilities"
+                    reason = "No camera frame available. Camera may be off or not capturing. Enable camera to use vision capabilities."
                 )
             }
 
