@@ -14,7 +14,9 @@ import com.ailive.personality.ToolExecutionListener
 import com.ailive.personality.tools.AITool
 import com.ailive.ui.visualizations.FeedbackChartView
 import com.ailive.ui.visualizations.PatternGraphView
+import com.ailive.utils.TestDataGenerator
 import kotlinx.coroutines.*
+import java.io.File
 
 /**
  * Dashboard fragment displaying real-time tool status
@@ -74,6 +76,9 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
         patternGraphView = view.findViewById(R.id.patternGraphView)
         feedbackChartView = view.findViewById(R.id.feedbackChartView)
 
+        // Generate test data if needed (for Phase 6.2 testing)
+        generateTestDataIfNeeded()
+
         // Initialize dashboard
         initializeDashboard()
 
@@ -84,6 +89,21 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
         startUpdates()
 
         Log.i(TAG, "Dashboard initialized")
+    }
+
+    /**
+     * Generate test data if visualization data files don't exist
+     * Phase 6.2: For testing visualizations
+     */
+    private fun generateTestDataIfNeeded() {
+        val context = requireContext()
+        val patternFile = File(context.filesDir, "user_patterns.json")
+        val feedbackFile = File(context.filesDir, "user_feedback.json")
+
+        if (!patternFile.exists() || !feedbackFile.exists()) {
+            Log.i(TAG, "Generating test data for visualizations...")
+            TestDataGenerator.generateAll(context)
+        }
     }
 
     /**

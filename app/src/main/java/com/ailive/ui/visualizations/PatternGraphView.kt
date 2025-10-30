@@ -77,19 +77,27 @@ class PatternGraphView @JvmOverloads constructor(
                 return PatternData() // Empty default
             }
 
-            val json = JSONObject(file.readText())
-            val patternsArray = json.optJSONArray("patterns") ?: return PatternData()
+            // Read as JSONArray (PatternAnalysisTool saves as plain array)
+            val patternsArray = JSONArray(file.readText())
 
             val timePatterns = mutableMapOf<String, Int>()
             val requestCounts = mutableMapOf<String, Int>()
 
             for (i in 0 until patternsArray.length()) {
                 val pattern = patternsArray.getJSONObject(i)
-                val time = pattern.optString("timeOfDay", "unknown")
+                val hour = pattern.optInt("hour", 12)
                 val intent = pattern.optString("intent", "unknown")
 
+                // Map hour to time of day
+                val timeOfDay = when (hour) {
+                    in 5..11 -> "morning"
+                    in 12..17 -> "afternoon"
+                    in 18..21 -> "evening"
+                    else -> "night"
+                }
+
                 // Count by time of day
-                timePatterns[time] = timePatterns.getOrDefault(time, 0) + 1
+                timePatterns[timeOfDay] = timePatterns.getOrDefault(timeOfDay, 0) + 1
 
                 // Count by intent
                 requestCounts[intent] = requestCounts.getOrDefault(intent, 0) + 1

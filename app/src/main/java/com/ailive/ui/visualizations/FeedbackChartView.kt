@@ -78,8 +78,8 @@ class FeedbackChartView @JvmOverloads constructor(
                 return FeedbackData()
             }
 
-            val json = JSONObject(file.readText())
-            val feedbackArray = json.optJSONArray("feedback") ?: return FeedbackData()
+            // Read as JSONArray (FeedbackTrackingTool saves as plain array)
+            val feedbackArray = JSONArray(file.readText())
 
             var positiveCount = 0
             var negativeCount = 0
@@ -92,13 +92,17 @@ class FeedbackChartView @JvmOverloads constructor(
 
                 val isPositive = type == "positive" || type == "correction"
 
-                if (isPositive) positiveCount++ else negativeCount++
-
-                // Track by intent
-                if (!intentScores.containsKey(intent)) {
-                    intentScores[intent] = mutableListOf()
+                if (type == "positive" || type == "negative") {
+                    if (isPositive) positiveCount++ else negativeCount++
                 }
-                intentScores[intent]?.add(isPositive)
+
+                // Track by intent (only if intent is present)
+                if (intent != "unknown" && intent.isNotEmpty()) {
+                    if (!intentScores.containsKey(intent)) {
+                        intentScores[intent] = mutableListOf()
+                    }
+                    intentScores[intent]?.add(isPositive)
+                }
             }
 
             val total = positiveCount + negativeCount
