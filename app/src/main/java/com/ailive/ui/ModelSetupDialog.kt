@@ -32,16 +32,17 @@ import kotlinx.coroutines.launch
  *
  * @author AILive Team
  * @since Phase 7.2
+ * @updated Phase 7.5 - Fixed lifecycle registration issues
  */
 class ModelSetupDialog(
     private val activity: Activity,
-    private val modelDownloadManager: ModelDownloadManager
+    private val modelDownloadManager: ModelDownloadManager,
+    private val filePickerLauncher: ActivityResultLauncher<Intent>
 ) {
     companion object {
         private const val TAG = "ModelSetupDialog"
         private const val PREF_NAME = "AILivePrefs"
         private const val KEY_MODEL_SETUP_DONE = "model_setup_done"
-        private const val FILE_PICKER_REQUEST = 1001
     }
 
     private val prefs = activity.getSharedPreferences(PREF_NAME, Activity.MODE_PRIVATE)
@@ -94,9 +95,9 @@ class ModelSetupDialog(
             "SmolLM2-135M (135MB) - Smaller/Faster"
         )
 
+        // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
         AlertDialog.Builder(activity)
-            .setTitle("Select AI Model")
-            .setMessage("Which model would you like to download?")
+            .setTitle("Select AI Model to Download")
             .setItems(models) { _, which ->
                 when (which) {
                     0 -> downloadModel(
@@ -204,6 +205,7 @@ class ModelSetupDialog(
 
     /**
      * Show file picker to import model from device
+     * BUGFIX Phase 7.5: Use ActivityResultLauncher instead of deprecated startActivityForResult
      */
     private fun showFilePickerDialog(onComplete: () -> Unit) {
         Toast.makeText(
@@ -221,10 +223,9 @@ class ModelSetupDialog(
             ))
         }
 
-        // Note: This requires activity result launcher to be set up in the calling activity
-        // We'll add that in MainActivity
         try {
-            activity.startActivityForResult(intent, FILE_PICKER_REQUEST)
+            // Use modern ActivityResultLauncher (no lifecycle registration issues)
+            filePickerLauncher.launch(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to open file picker", e)
             Toast.makeText(
