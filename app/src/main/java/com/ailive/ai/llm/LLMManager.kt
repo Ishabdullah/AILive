@@ -12,19 +12,21 @@ import kotlin.math.exp
 
 /**
  * LLMManager - Language model inference using ONNX Runtime
- * Phase 2.6: Provides intelligent text generation for AI agents
+ * Phase 2.6 & Phase 7: Provides intelligent text generation for AI agents
  *
- * Uses: TinyLlama-1.1B (637MB ONNX) or SmolLM2-360M if available
- * Inference: CPU-optimized with quantization
+ * Uses: SmolLM2-360M-int8 (348MB ONNX, quantized to int8)
+ * Inference: NNAPI GPU acceleration + CPU optimization
  *
  * @author AILive Team
  * @since Phase 2.6
+ * @updated Phase 7 - SmolLM2 integration
  */
 class LLMManager(private val context: Context) {
 
     companion object {
         private const val TAG = "LLMManager"
-        private const val MODEL_PATH = "models/tinyllama-1.1b-chat.onnx"
+        // Updated to use SmolLM2-360M-int8 (348MB ONNX in assets)
+        private const val MODEL_PATH = "models/smollm2-360m-int8.onnx"
 
         // OPTIMIZATION: Reduced from 150 to 80 for faster generation
         // Voice responses should be concise (1-3 sentences = ~50-80 tokens)
@@ -60,11 +62,11 @@ class LLMManager(private val context: Context) {
             val modelFile = getModelFile()
             if (!modelFile.exists()) {
                 Log.e(TAG, "❌ Model file not found: ${modelFile.absolutePath}")
-                Log.i(TAG, "📥 Download model from: https://huggingface.co/TinyLlama/TinyLlama-1.1B-Chat-v1.0-ONNX")
+                Log.i(TAG, "📥 Download SmolLM2 from: https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-ONNX")
                 return@withContext false
             }
 
-            Log.i(TAG, "📂 Loading model: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
+            Log.i(TAG, "📂 Loading SmolLM2-360M model: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
 
             // Create session options with GPU acceleration
             val sessionOptions = OrtSession.SessionOptions()
@@ -88,7 +90,8 @@ class LLMManager(private val context: Context) {
 
             isInitialized = true
             Log.i(TAG, "✅ LLM initialized successfully!")
-            Log.i(TAG, "   Model: TinyLlama-1.1B-Chat")
+            Log.i(TAG, "   Model: SmolLM2-360M-int8 (quantized)")
+            Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
             Log.i(TAG, "   Acceleration: NNAPI (GPU/NPU) + CPU (4 threads)")
             Log.i(TAG, "   Optimization: ALL_OPT level")
             Log.i(TAG, "   Max length: $MAX_LENGTH tokens")
