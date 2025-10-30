@@ -720,22 +720,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Handle file picker result for model import
-     */
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == REQUEST_CODE_FILE_PICKER && resultCode == RESULT_OK) {
-            data?.data?.let { uri ->
-                Log.i(TAG, "File picker selected: $uri")
-                modelSetupDialog.handleFilePickerResult(uri) {
-                    // Model imported successfully, continue initialization
-                    continueInitialization()
-                }
-            }
-        }
-    }
 
     override fun onDestroy() {
         super.onDestroy()
