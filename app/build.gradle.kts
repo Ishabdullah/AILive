@@ -26,7 +26,23 @@ android {
             )
         }
     }
-    
+
+    // CRITICAL: Allow large ONNX model files (348MB) in assets
+    // Without this, files >100MB are excluded from APK
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    // Don't compress ONNX files (they're already compressed)
+    androidResources {
+        noCompress += "onnx"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
