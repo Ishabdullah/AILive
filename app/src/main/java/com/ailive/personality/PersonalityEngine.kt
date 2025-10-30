@@ -604,10 +604,3 @@ data class ToolExecutionResult(
     val result: ToolResult,
     val durationMs: Long
 )
-
-/**
- * Listener interface for tool execution events (Phase 6.1: Dashboard)
- */
-interface ToolExecutionListener {
-    fun onToolExecuted(toolName: String, success: Boolean, executionTime: Long)
-}
