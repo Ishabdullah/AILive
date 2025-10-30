@@ -263,10 +263,53 @@ Be warm, helpful, concise, and conversational."""
     }
 
     /**
-     * Get model file from app's files directory
+     * Get model file from assets, copying to filesDir if needed
+     * Large models (348MB) need to be copied from assets to internal storage first
      */
     private fun getModelFile(): File {
-        return File(context.filesDir, MODEL_PATH)
+        val modelFile = File(context.filesDir, MODEL_PATH)
+
+        // If model already exists in filesDir, use it
+        if (modelFile.exists()) {
+            Log.d(TAG, "📂 Model found in cache: ${modelFile.absolutePath}")
+            return modelFile
+        }
+
+        // Copy from assets to filesDir (first time only)
+        Log.i(TAG, "📥 Copying model from assets to internal storage...")
+        Log.i(TAG, "   This is a one-time operation (348MB)")
+
+        try {
+            // Ensure parent directory exists
+            modelFile.parentFile?.mkdirs()
+
+            // Copy from assets
+            context.assets.open(MODEL_PATH).use { input ->
+                modelFile.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalBytes = 0L
+
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalBytes += bytesRead
+
+                        // Log progress every 50MB
+                        if (totalBytes % (50 * 1024 * 1024) == 0L) {
+                            Log.d(TAG, "   Copied: ${totalBytes / 1024 / 1024}MB...")
+                        }
+                    }
+
+                    Log.i(TAG, "✅ Model copied successfully: ${totalBytes / 1024 / 1024}MB")
+                }
+            }
+
+            return modelFile
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to copy model from assets", e)
+            throw e
+        }
     }
 
     /**
