@@ -100,3 +100,4 @@ models/**/*.pb
 # Build artifacts
 *.apk
 *.aab
+app/src/main/assets/models/smollm2-360m-int8.onnx
