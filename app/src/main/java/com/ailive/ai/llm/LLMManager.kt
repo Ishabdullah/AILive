@@ -25,8 +25,6 @@ class LLMManager(private val context: Context) {
 
     companion object {
         private const val TAG = "LLMManager"
-        // Updated to use SmolLM2-360M-int8 (348MB ONNX in assets)
-        private const val MODEL_PATH = "models/smollm2-360m-int8.onnx"
 
         // OPTIMIZATION: Reduced from 150 to 80 for faster generation
         // Voice responses should be concise (1-3 sentences = ~50-80 tokens)
@@ -43,9 +41,15 @@ class LLMManager(private val context: Context) {
     private var ortEnv: OrtEnvironment? = null
     private var isInitialized = false
 
+    // Model download manager
+    private val modelDownloadManager = ModelDownloadManager(context)
+
     // Simple tokenizer (will use byte-pair encoding approximation)
     private val vocabulary = mutableMapOf<String, Long>()
     private var vocabSize = 32000  // TinyLlama vocab size
+
+    // Current model path
+    private var currentModelPath: String? = null
 
     /**
      * Initialize the LLM model
@@ -58,13 +62,16 @@ class LLMManager(private val context: Context) {
             // Create ONNX Runtime environment
             ortEnv = OrtEnvironment.getEnvironment()
 
-            // Load model file
-            val modelFile = getModelFile()
-            if (!modelFile.exists()) {
-                Log.e(TAG, "❌ Model file not found: ${modelFile.absolutePath}")
-                Log.i(TAG, "📥 Download SmolLM2 from: https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-ONNX")
+            // Check if model is available
+            if (!modelDownloadManager.isModelAvailable()) {
+                Log.e(TAG, "❌ No model file found")
+                Log.i(TAG, "📥 Please download a model first from the app settings")
                 return@withContext false
             }
+
+            // Get model file path
+            currentModelPath = modelDownloadManager.getModelPath()
+            val modelFile = File(currentModelPath!!)
 
             Log.i(TAG, "📂 Loading SmolLM2-360M model: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
 
@@ -263,54 +270,14 @@ Be warm, helpful, concise, and conversational."""
     }
 
     /**
-     * Get model file from assets, copying to filesDir if needed
-     * Large models (348MB) need to be copied from assets to internal storage first
+     * Check if a model is available
      */
-    private fun getModelFile(): File {
-        val modelFile = File(context.filesDir, MODEL_PATH)
+    fun isModelAvailable(): Boolean = modelDownloadManager.isModelAvailable()
 
-        // If model already exists in filesDir, use it
-        if (modelFile.exists()) {
-            Log.d(TAG, "📂 Model found in cache: ${modelFile.absolutePath}")
-            return modelFile
-        }
-
-        // Copy from assets to filesDir (first time only)
-        Log.i(TAG, "📥 Copying model from assets to internal storage...")
-        Log.i(TAG, "   This is a one-time operation (348MB)")
-
-        try {
-            // Ensure parent directory exists
-            modelFile.parentFile?.mkdirs()
-
-            // Copy from assets
-            context.assets.open(MODEL_PATH).use { input ->
-                modelFile.outputStream().use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalBytes = 0L
-
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytes += bytesRead
-
-                        // Log progress every 50MB
-                        if (totalBytes % (50 * 1024 * 1024) == 0L) {
-                            Log.d(TAG, "   Copied: ${totalBytes / 1024 / 1024}MB...")
-                        }
-                    }
-
-                    Log.i(TAG, "✅ Model copied successfully: ${totalBytes / 1024 / 1024}MB")
-                }
-            }
-
-            return modelFile
-
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to copy model from assets", e)
-            throw e
-        }
-    }
+    /**
+     * Get the ModelDownloadManager for access from UI
+     */
+    fun getDownloadManager(): ModelDownloadManager = modelDownloadManager
 
     /**
      * Fallback responses when LLM is not available
