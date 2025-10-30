@@ -1,9 +1,10 @@
 # AILive - Unified AI Intelligence System
 
-**Version:** 0.7.0-beta
-**Status:** ✅ 70% Complete - Active Development
+**Version:** 0.7.5-beta
+**Status:** ⚠️ 75% Complete - Phase 7 In Progress (2 Critical Bugs)
 **Platform:** Android 8.0+ (API 26+)
 **License:** Non-commercial (See LICENSE)
+**Latest Build:** [Download APK](https://github.com/Ishabdullah/AILive/actions/runs/18956424882)
 
 ---
 
@@ -72,18 +73,28 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ## 🚀 Quick Start
 
+### ⚠️ Important: Known Issues
+
+**Before installing, be aware:**
+- ❌ Model downloads currently fail (missing storage permission)
+- ❌ Model import causes crash (GGUF vs ONNX format issue)
+- ✅ Dashboard and visualization features work perfectly
+
+**Recommendation:** Wait for next release with fixes, or see [PHASE-7-HANDOFF.md](PHASE-7-HANDOFF.md) to implement fixes yourself.
+
 ### Download Pre-built APK
 
-1. Go to [GitHub Actions](https://github.com/Ishabdullah/AILive/actions)
-2. Click latest successful build (green checkmark ✅)
-3. Download `ailive-debug` artifact
-4. Extract `app-debug.apk`
-5. Install on your Android phone:
+1. **Latest Build:** [Download APK here](https://github.com/Ishabdullah/AILive/actions/runs/18956424882)
+2. Or go to [GitHub Actions](https://github.com/Ishabdullah/AILive/actions)
+3. Click latest successful build (green checkmark ✅)
+4. Download `ailive-debug` artifact
+5. Extract `app-debug.apk`
+6. Install on your Android phone:
    ```bash
    adb install app-debug.apk
    ```
-6. Grant required permissions (camera, microphone, storage)
-7. Tap the orange FAB (top right) to open dashboard
+7. Grant required permissions (camera, microphone)
+8. **Note:** Model functionality not working yet - see [KNOWN-ISSUES.md](KNOWN-ISSUES.md)
 
 ### Build from Source
 
@@ -169,7 +180,7 @@ adb logcat | grep "AILive"
 
 ## 📈 Development Progress
 
-**Current Completion**: ~70%
+**Current Completion**: ~75%
 
 | Phase | Status | Description |
 |-------|--------|-------------|
@@ -180,9 +191,20 @@ adb logcat | grep "AILive"
 | Phase 6.1 | ✅ Complete | Real-time dashboard |
 | Phase 6.2 | ✅ Complete | Data visualization with charts |
 | Phase 6.3-6.4 | 🔄 Planned | Interactive features & polish |
-| Phase 7 | 📋 Planned | ML model integration |
+| Phase 7 | ⚠️ 75% Complete | Model download system (2 critical bugs) |
 
-**For detailed history**: See [DEVELOPMENT_HISTORY.md](DEVELOPMENT_HISTORY.md)
+**Phase 7 Status:**
+- ✅ Model download infrastructure (ModelDownloadManager)
+- ✅ Model setup UI dialogs (ModelSetupDialog)
+- ✅ MainActivity integration with ActivityResultLauncher
+- ✅ HuggingFace download URLs configured
+- ✅ File picker for model import
+- ❌ **CRITICAL BUG #1:** App crashes after importing model (GGUF vs ONNX format mismatch)
+- ❌ **CRITICAL BUG #2:** Downloads fail (missing runtime storage permission)
+
+**Next Developer:**  Start with [PHASE-7-HANDOFF.md](PHASE-7-HANDOFF.md)
+
+**For detailed history**: See [SESSION-6-SUMMARY.md](SESSION-6-SUMMARY.md) and [KNOWN-ISSUES.md](KNOWN-ISSUES.md)
 
 ---
 
