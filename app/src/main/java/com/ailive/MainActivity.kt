@@ -22,6 +22,8 @@ import com.ailive.core.AILiveCore
 import com.ailive.settings.AISettings
 import com.ailive.testing.TestScenarios
 import com.ailive.ui.dashboard.DashboardFragment
+import com.ailive.ui.ModelSetupDialog
+import com.ailive.ai.llm.ModelDownloadManager
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
 
@@ -58,6 +60,10 @@ class MainActivity : AppCompatActivity() {
     private var dashboardFragment: DashboardFragment? = null
     private var isDashboardVisible = false
 
+    // Model Setup Dialog (Phase 7.3)
+    private lateinit var modelSetupDialog: ModelSetupDialog
+    private lateinit var modelDownloadManager: ModelDownloadManager
+
     private var callbackCount = 0
     private var isInitialized = false
     private var isListeningForWakeWord = false
@@ -66,6 +72,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
+        private const val REQUEST_CODE_FILE_PICKER = 1001
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO
@@ -114,6 +121,23 @@ class MainActivity : AppCompatActivity() {
         statusIndicator.text = "● INITIALIZING..."
         classificationResult.text = "Initializing ${settings.aiName}..."
 
+        // Phase 7.3: Initialize model download system
+        modelDownloadManager = ModelDownloadManager(this)
+        modelSetupDialog = ModelSetupDialog(this, modelDownloadManager)
+
+        // Check if model setup is needed and show dialog
+        if (modelSetupDialog.isSetupNeeded()) {
+            Log.i(TAG, "Model setup needed - showing dialog")
+            statusIndicator.text = "● MODEL SETUP REQUIRED"
+            classificationResult.text = "Please download or import an AI model"
+            modelSetupDialog.showFirstRunDialog {
+                Log.i(TAG, "Model setup complete, continuing initialization")
+                continueInitialization()
+            }
+            // Don't proceed with initialization until model is ready
+            return
+        }
+
         // Initialize AILiveCore EARLY (before permissions) to avoid lifecycle issues
         try {
             Log.i(TAG, "=== Initializing ${settings.aiName} Core ===")
@@ -146,7 +170,45 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
-    
+
+    /**
+     * Continue initialization after model setup is complete
+     * This runs the same code that was in onCreate() after model check
+     */
+    private fun continueInitialization() {
+        // Initialize AILiveCore EARLY (before permissions) to avoid lifecycle issues
+        try {
+            Log.i(TAG, "=== Initializing ${settings.aiName} Core ===")
+            aiLiveCore = AILiveCore(applicationContext, this)
+            aiLiveCore.initialize()
+            aiLiveCore.start()
+            Log.i(TAG, "✓ Phase 1: Agents operational")
+        } catch (e: Exception) {
+            Log.e(TAG, "AILive Core init failed", e)
+            statusIndicator.text = "● CORE ERROR"
+            classificationResult.text = "Error: ${e.message}"
+            return
+        }
+
+        // Now check permissions
+        statusIndicator.text = "● CHECKING PERMISSIONS..."
+
+        if (allPermissionsGranted()) {
+            Log.i(TAG, "✓ Permissions granted")
+            startModels()
+        } else {
+            Log.i(TAG, "Requesting permissions...")
+            statusIndicator.text = "● REQUESTING PERMISSIONS..."
+            classificationResult.text = "Please allow camera and microphone access"
+
+            ActivityCompat.requestPermissions(
+                this,
+                REQUIRED_PERMISSIONS,
+                REQUEST_CODE_PERMISSIONS
+            )
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -633,11 +695,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Handle file picker result for model import
+     */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == REQUEST_CODE_FILE_PICKER && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                Log.i(TAG, "File picker selected: $uri")
+                modelSetupDialog.handleFilePickerResult(uri) {
+                    // Model imported successfully, continue initialization
+                    continueInitialization()
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (::speechProcessor.isInitialized) speechProcessor.release()
         if (::cameraManager.isInitialized) cameraManager.stopCamera()
         if (::modelManager.isInitialized) modelManager.close()
         if (::aiLiveCore.isInitialized) aiLiveCore.stop()
+        if (::modelSetupDialog.isInitialized) modelSetupDialog.cleanup()
     }
 }
