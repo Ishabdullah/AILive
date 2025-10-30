@@ -101,3 +101,10 @@ models/**/*.pb
 *.apk
 *.aab
 app/src/main/assets/models/smollm2-360m-int8.onnx
+
+# Temporary files
+compile.log
+screenshot.jpg
+t *
+correct *
+ailive-v*.apk
