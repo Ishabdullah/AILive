@@ -12,6 +12,8 @@ import com.ailive.R
 import com.ailive.core.AILiveCore
 import com.ailive.personality.ToolExecutionListener
 import com.ailive.personality.tools.AITool
+import com.ailive.ui.visualizations.FeedbackChartView
+import com.ailive.ui.visualizations.PatternGraphView
 import kotlinx.coroutines.*
 
 /**
@@ -21,6 +23,10 @@ import kotlinx.coroutines.*
  * - Displays all 6 AI tools with status cards
  * - Shows execution statistics
  * - Real-time updates via tool execution listeners
+ *
+ * Phase 6.2: Data Visualizations
+ * - Pattern analysis graphs (time-based, frequency)
+ * - Feedback charts (satisfaction, intent performance)
  */
 class DashboardFragment : Fragment(), ToolExecutionListener {
 
@@ -33,6 +39,10 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
     private lateinit var executionsValue: TextView
     private lateinit var successRateValue: TextView
     private lateinit var toolStatusContainer: LinearLayout
+
+    // Phase 6.2: Visualization views
+    private lateinit var patternGraphView: PatternGraphView
+    private lateinit var feedbackChartView: FeedbackChartView
 
     // Tool status tracking
     private val toolStatusMap = mutableMapOf<String, ToolStatus>()
@@ -59,6 +69,10 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
         executionsValue = view.findViewById(R.id.executionsValue)
         successRateValue = view.findViewById(R.id.successRateValue)
         toolStatusContainer = view.findViewById(R.id.toolStatusContainer)
+
+        // Initialize visualization views (Phase 6.2)
+        patternGraphView = view.findViewById(R.id.patternGraphView)
+        feedbackChartView = view.findViewById(R.id.feedbackChartView)
 
         // Initialize dashboard
         initializeDashboard()
@@ -190,6 +204,10 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
 
         // Refresh statistics
         updateStatistics()
+
+        // Update visualizations (Phase 6.2)
+        patternGraphView.updateCharts()
+        feedbackChartView.updateCharts()
     }
 
     /**
