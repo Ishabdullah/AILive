@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardBackgroundColor="#2A2A2A"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="2dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <!-- Tool Icon -->
+        <TextView
+            android:id="@+id/toolIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔧"
+            android:textSize="24sp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <!-- Tool Name -->
+        <TextView
+            android:id="@+id/toolName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Tool Name"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginStart="12dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toEndOf="@id/toolIcon"
+            app:layout_constraintEnd_toStartOf="@id/statusBadge" />
+
+        <!-- Tool ID (small text) -->
+        <TextView
+            android:id="@+id/toolId"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="tool_name"
+            android:textColor="#888888"
+            android:textSize="12sp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="2dp"
+            app:layout_constraintTop_toBottomOf="@id/toolName"
+            app:layout_constraintStart_toEndOf="@id/toolIcon"
+            app:layout_constraintEnd_toStartOf="@id/statusBadge" />
+
+        <!-- Status Badge -->
+        <TextView
+            android:id="@+id/statusBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="● Ready"
+            android:textColor="#4CAF50"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:background="@android:color/transparent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <!-- Execution Stats (below tool name) -->
+        <TextView
+            android:id="@+id/executionStats"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="0 executions • Last: never"
+            android:textColor="#666666"
+            android:textSize="11sp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="4dp"
+            app:layout_constraintTop_toBottomOf="@id/toolId"
+            app:layout_constraintStart_toEndOf="@id/toolIcon"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.cardview.widget.CardView>

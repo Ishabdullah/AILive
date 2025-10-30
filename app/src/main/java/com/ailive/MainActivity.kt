@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
@@ -19,6 +21,8 @@ import com.ailive.camera.CameraManager
 import com.ailive.core.AILiveCore
 import com.ailive.settings.AISettings
 import com.ailive.testing.TestScenarios
+import com.ailive.ui.dashboard.DashboardFragment
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
 
 class MainActivity : AppCompatActivity() {
@@ -47,6 +51,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnToggleCamera: android.widget.Button
     private lateinit var editTextCommand: android.widget.EditText
     private lateinit var btnSendCommand: android.widget.Button
+    private lateinit var btnToggleDashboard: FloatingActionButton
+    private lateinit var dashboardContainer: FrameLayout
+
+    // Dashboard
+    private var dashboardFragment: DashboardFragment? = null
+    private var isDashboardVisible = false
 
     private var callbackCount = 0
     private var isInitialized = false
@@ -91,9 +101,12 @@ class MainActivity : AppCompatActivity() {
         btnToggleCamera = findViewById(R.id.btnToggleCamera)
         editTextCommand = findViewById(R.id.editTextCommand)
         btnSendCommand = findViewById(R.id.btnSendCommand)
+        btnToggleDashboard = findViewById(R.id.btnToggleDashboard)
+        dashboardContainer = findViewById(R.id.dashboardContainer)
 
         // Set up button click listeners
         setupManualControls()
+        setupDashboard()
 
         // Use custom AI name in UI
         appTitle.text = "${settings.aiName} (Vision + Audio)"
@@ -579,6 +592,44 @@ class MainActivity : AppCompatActivity() {
         // Process through command router
         CoroutineScope(Dispatchers.Default).launch {
             commandRouter.processCommand(command)
+        }
+    }
+
+    /**
+     * Set up dashboard toggle
+     */
+    private fun setupDashboard() {
+        btnToggleDashboard.setOnClickListener {
+            toggleDashboard()
+        }
+    }
+
+    /**
+     * Toggle dashboard visibility
+     */
+    private fun toggleDashboard() {
+        isDashboardVisible = !isDashboardVisible
+
+        if (isDashboardVisible) {
+            // Show dashboard
+            dashboardContainer.visibility = View.VISIBLE
+
+            // Create dashboard fragment if not exists
+            if (dashboardFragment == null) {
+                dashboardFragment = DashboardFragment().apply {
+                    aiLiveCore = this@MainActivity.aiLiveCore
+                }
+
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.dashboardContainer, dashboardFragment!!)
+                    .commit()
+            }
+
+            Log.i(TAG, "📊 Dashboard opened")
+        } else {
+            // Hide dashboard
+            dashboardContainer.visibility = View.GONE
+            Log.i(TAG, "📊 Dashboard closed")
         }
     }
 

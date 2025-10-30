@@ -57,6 +57,9 @@ class PersonalityEngine(
     private var isRunning = false
     private var currentEmotion: EmotionContext = EmotionContext()
 
+    // Tool execution listeners
+    private val toolExecutionListeners = mutableListOf<ToolExecutionListener>()
+
     /**
      * Start the PersonalityEngine
      */
@@ -99,6 +102,27 @@ class PersonalityEngine(
     fun registerTool(tool: AITool) {
         toolRegistry.register(tool)
         Log.i(TAG, "Registered tool: ${tool.name}")
+    }
+
+    /**
+     * Register a tool execution listener
+     */
+    fun addToolExecutionListener(listener: ToolExecutionListener) {
+        toolExecutionListeners.add(listener)
+    }
+
+    /**
+     * Remove a tool execution listener
+     */
+    fun removeToolExecutionListener(listener: ToolExecutionListener) {
+        toolExecutionListeners.remove(listener)
+    }
+
+    /**
+     * Get all registered tools (for dashboard)
+     */
+    fun getAllTools(): List<AITool> {
+        return toolRegistry.getAllTools()
     }
 
     /**
@@ -285,11 +309,21 @@ class PersonalityEngine(
                     val result = tool.execute(parameters)
                     val duration = System.currentTimeMillis() - startTime
 
-                    ToolExecutionResult(
+                    val executionResult = ToolExecutionResult(
                         tool = tool,
                         result = result,
                         durationMs = duration
                     )
+
+                    // Notify listeners
+                    val success = result is ToolResult.Success
+                    withContext(Dispatchers.Main) {
+                        toolExecutionListeners.forEach { listener ->
+                            listener.onToolExecuted(tool.name, success, duration)
+                        }
+                    }
+
+                    executionResult
                 }
             }.awaitAll()
         }
@@ -570,3 +604,10 @@ data class ToolExecutionResult(
     val result: ToolResult,
     val durationMs: Long
 )
+
+/**
+ * Listener interface for tool execution events (Phase 6.1: Dashboard)
+ */
+interface ToolExecutionListener {
+    fun onToolExecuted(toolName: String, success: Boolean, executionTime: Long)
+}
