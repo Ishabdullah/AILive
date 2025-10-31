@@ -48,6 +48,8 @@ class ModelSetupDialog(
     private val prefs = activity.getSharedPreferences(PREF_NAME, Activity.MODE_PRIVATE)
     private var downloadDialog: AlertDialog? = null
     private var progressHandler: Handler? = null
+    private var isProcessingDownload = false  // Track if we're in file-move phase
+    private var pendingImportCallback: ((Boolean, String) -> Unit)? = null  // Store import callback
 
     /**
      * Check if model setup is needed (first run without model)
@@ -132,8 +134,15 @@ class ModelSetupDialog(
         Log.i(TAG, "Starting download: $modelName")
         Toast.makeText(activity, "Downloading $modelName...", Toast.LENGTH_SHORT).show()
 
+        isProcessingDownload = false  // Reset state
+
         modelDownloadManager.downloadModel(url, modelName) { success, errorMessage ->
             activity.runOnUiThread {
+                // Dismiss progress dialog when callback is invoked
+                downloadDialog?.dismiss()
+                progressHandler?.removeCallbacksAndMessages(null)
+                isProcessingDownload = false
+
                 if (success) {
                     Log.i(TAG, "Download complete: $modelName")
                     Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
@@ -201,18 +210,37 @@ class ModelSetupDialog(
 
             downloadDialog?.setMessage(message)
 
+            // Check if we hit 100% - next update will be processing phase
+            if (percent >= 100) {
+                isProcessingDownload = true
+            }
+
             // Continue updating
             progressHandler?.postDelayed({ updateDownloadProgress() }, 1000)
         } else {
-            // Download complete or cancelled
-            downloadDialog?.dismiss()
-            progressHandler?.removeCallbacksAndMessages(null)
+            // Download finished downloading, but may still be processing (moving file)
+            if (isProcessingDownload) {
+                // Show processing message and keep dialog open
+                val message = "Processing...\n\n" +
+                        "Moving model to app storage.\n\n" +
+                        "This may take a moment for large models."
+
+                downloadDialog?.setMessage(message)
+
+                // Continue checking (dialog will be dismissed by completion callback)
+                progressHandler?.postDelayed({ updateDownloadProgress() }, 1000)
+            } else {
+                // Download was cancelled by user
+                downloadDialog?.dismiss()
+                progressHandler?.removeCallbacksAndMessages(null)
+            }
         }
     }
 
     /**
      * Show file picker to import model from device
      * BUGFIX Phase 7.5: Use ActivityResultLauncher instead of deprecated startActivityForResult
+     * BUGFIX Phase 7.6: Store onComplete callback so it can be invoked after import
      */
     private fun showFilePickerDialog(onComplete: () -> Unit) {
         Toast.makeText(
@@ -220,6 +248,19 @@ class ModelSetupDialog(
             "Select a .gguf model file (or .onnx for legacy support)",
             Toast.LENGTH_SHORT
         ).show()
+
+        // Store the completion callback for use after import
+        pendingImportCallback = { success, message ->
+            if (success) {
+                Log.i(TAG, "Import successful: $message")
+                markSetupComplete()
+                onComplete()
+            } else {
+                Log.e(TAG, "Import failed: $message")
+                // Allow retry
+                showFirstRunDialog(onComplete)
+            }
+        }
 
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -240,37 +281,45 @@ class ModelSetupDialog(
                 "File picker not available. Please download a model instead.",
                 Toast.LENGTH_LONG
             ).show()
+            pendingImportCallback = null
             showModelSelectionDialog(onComplete)
         }
     }
 
     /**
      * Handle file picker result (called from activity's onActivityResult)
+     * BUGFIX Phase 7.6: Use stored callback instead of requiring onComplete parameter
      */
     fun handleFilePickerResult(uri: Uri, onComplete: () -> Unit) {
         Log.i(TAG, "Importing model from: $uri")
         Toast.makeText(activity, "Importing model...", Toast.LENGTH_SHORT).show()
 
+        // Use stored callback if available, otherwise fall back to parameter
+        val callback = pendingImportCallback ?: { success, result ->
+            if (success) {
+                Log.i(TAG, "Import complete: $result")
+                Toast.makeText(
+                    activity,
+                    "Model imported successfully: $result",
+                    Toast.LENGTH_SHORT
+                ).show()
+                markSetupComplete()
+                onComplete()
+            } else {
+                Log.e(TAG, "Import failed: $result")
+                Toast.makeText(
+                    activity,
+                    "Import failed: $result",
+                    Toast.LENGTH_LONG
+                ).show()
+                showFirstRunDialog(onComplete)
+            }
+        }
+
         CoroutineScope(Dispatchers.Main).launch {
             modelDownloadManager.importModelFromStorage(uri) { success, result ->
-                if (success) {
-                    Log.i(TAG, "Import complete: $result")
-                    Toast.makeText(
-                        activity,
-                        "Model imported successfully: $result",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    markSetupComplete()
-                    onComplete()
-                } else {
-                    Log.e(TAG, "Import failed: $result")
-                    Toast.makeText(
-                        activity,
-                        "Import failed: $result",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    showFirstRunDialog(onComplete)
-                }
+                callback(success, result)
+                pendingImportCallback = null  // Clear after use
             }
         }
     }
