@@ -103,6 +103,7 @@ class ModelDownloadManager(private val context: Context) {
         )
 
         try {
+            // Use app's external files directory - no storage permission required on Android 10+
             val request = DownloadManager.Request(modelUrl.toUri())
                 .setTitle("Downloading AI Model")
                 .setDescription("Downloading $modelName for AILive...")
@@ -111,7 +112,7 @@ class ModelDownloadManager(private val context: Context) {
                     DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
                 )
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, modelName)
+                .setDestinationInExternalFilesDir(context, null, "models/$modelName")
 
             downloadId = downloadManager.enqueue(request)
             Log.i(TAG, "✅ Download queued with ID: $downloadId")
