@@ -84,8 +84,11 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
-    // ONNX Runtime for LLM inference (Phase 2.6)
+    // ONNX Runtime for LLM inference (Phase 2.6 - legacy support)
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.0")
+
+    // llama.cpp for GGUF model support (Phase 7.8 - primary LLM engine)
+    implementation("io.github.ljcamargo:llamacpp-kotlin:0.1.0")
 
     // CameraX dependencies for Phase 2.2
     implementation("androidx.camera:camera-camera2:1.3.1")

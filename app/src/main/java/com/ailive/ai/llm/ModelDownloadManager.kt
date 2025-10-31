@@ -32,13 +32,17 @@ class ModelDownloadManager(private val context: Context) {
     companion object {
         private const val TAG = "ModelDownloadManager"
 
-        // Default model configuration
-        const val DEFAULT_MODEL_NAME = "smollm2-360m-int8.onnx"
-        const val DEFAULT_MODEL_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-ONNX/resolve/main/smollm2-360m-instruct-int8.onnx"
+        // GGUF models (recommended - smaller and faster)
+        // Using bartowski's repo for better quantization options
+        const val DEFAULT_MODEL_NAME = "SmolLM2-360M-Instruct-Q4_K_M.gguf"
+        const val DEFAULT_MODEL_URL = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf"
 
-        // Alternative smaller model for testing
-        const val ALT_MODEL_NAME = "smollm2-135m-int8.onnx"
-        const val ALT_MODEL_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct-ONNX/resolve/main/smollm2-135m-instruct-int8.onnx"
+        const val ALT_MODEL_NAME = "SmolLM2-135M-Instruct-Q4_K_M.gguf"
+        const val ALT_MODEL_URL = "https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+
+        // ONNX models (legacy support)
+        const val ONNX_360M_NAME = "smollm2-360m-int8.onnx"
+        const val ONNX_360M_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-ONNX/resolve/main/smollm2-360m-instruct-int8.onnx"
 
         private const val MODELS_DIR = "models"
     }
@@ -254,22 +258,20 @@ class ModelDownloadManager(private val context: Context) {
 
             Log.i(TAG, "📥 Importing model from storage: $fileName")
 
-            // Phase 7.6: Validate model format - ONNX Runtime only supports .onnx files
-            if (fileName.endsWith(".gguf", ignoreCase = true)) {
-                Log.e(TAG, "❌ GGUF format not supported - ONNX Runtime requires .onnx files")
+            // Validate model format - support both GGUF (llama.cpp) and ONNX formats
+            val isValidFormat = fileName.endsWith(".gguf", ignoreCase = true) ||
+                               fileName.endsWith(".onnx", ignoreCase = true)
+
+            if (!isValidFormat) {
+                Log.e(TAG, "❌ Invalid model format: $fileName")
                 withContext(Dispatchers.Main) {
-                    onComplete(false, "GGUF format not supported.\n\nAILive uses ONNX Runtime which only supports .onnx model files.\n\nPlease download an ONNX model from HuggingFace or convert your GGUF model to ONNX format.")
+                    onComplete(false, "Invalid model format.\n\nSupported formats: .gguf (recommended) or .onnx\n\nPlease select a valid model file.")
                 }
                 return@withContext
             }
 
-            if (!fileName.endsWith(".onnx", ignoreCase = true)) {
-                Log.w(TAG, "⚠️ Warning: File does not have .onnx extension: $fileName")
-                withContext(Dispatchers.Main) {
-                    onComplete(false, "Invalid model format.\n\nOnly .onnx model files are supported.\n\nPlease select a valid ONNX model file.")
-                }
-                return@withContext
-            }
+            val modelType = if (fileName.endsWith(".gguf", ignoreCase = true)) "GGUF" else "ONNX"
+            Log.i(TAG, "✓ Valid $modelType model detected")
 
             // Ensure models directory exists
             val modelsDir = File(context.filesDir, MODELS_DIR)
