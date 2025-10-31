@@ -1,10 +1,13 @@
 package com.ailive
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
@@ -111,10 +114,27 @@ class MainActivity : AppCompatActivity() {
                 startModels()
             } else {
                 Log.e(TAG, "✗ One or more permissions denied: $results")
-                statusIndicator?.text = "● PERMISSION DENIED"
-                classificationResult?.text = "Camera and microphone permissions required"
-                // Friendly UX: show explanation, then finish
-                finish()
+                runOnUiThread {
+                    statusIndicator?.text = "● PERMISSION DENIED"
+                    classificationResult?.text = "Camera and microphone permissions required"
+
+                    // Show explanation dialog with option to open settings
+                    AlertDialog.Builder(this)
+                        .setTitle("Permissions Required")
+                        .setMessage("AILive requires camera and microphone permissions to function.\n\nPlease grant these permissions in Settings to continue.")
+                        .setPositiveButton("Open Settings") { _, _ ->
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            }
+                            startActivity(intent)
+                            finish()
+                        }
+                        .setNegativeButton("Exit") { _, _ ->
+                            finish()
+                        }
+                        .setCancelable(false)
+                        .show()
+                }
             }
         }
 
@@ -201,15 +221,21 @@ class MainActivity : AppCompatActivity() {
         permissionsToRequest.add(Manifest.permission.CAMERA)
         permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
 
-        // If your ModelDownloadManager or import flow uses legacy storage APIs on SDK < Q, request read/write
+        // Storage permissions:
+        // - Android 9 and below (API 28-): Need READ + WRITE for external storage access
+        // - Android 10-12 (API 29-32): Only READ if accessing shared storage (SAF preferred)
+        // - Android 13+ (API 33+): No storage permissions needed (SAF + app-specific directories)
+        //
+        // Since we use getExternalFilesDir() and SAF, we technically don't need storage permissions
+        // on Android 10+, but we request READ on 10-12 for compatibility with some file picker flows
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            // Android 9 and below - need both READ and WRITE
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
             permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            // Android 10/11/12: READ_EXTERNAL_STORAGE often still helpful for imports from file system
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
-        // On Android 13+ apps should use the SAF or media permissions; many import flows don't need storage permission.
+        // Note: Android 10+ doesn't need storage permissions when using:
+        // - getExternalFilesDir() for app-specific storage (no permission needed)
+        // - Storage Access Framework (SAF) for user-selected files (no permission needed)
 
         // Check current permission status
         val missing = permissionsToRequest.filter {
