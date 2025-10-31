@@ -155,7 +155,7 @@ class CameraManager(
 
                     // PHASE 5: Store latest frame for VisionAnalysisTool
                     // Create a copy since we'll recycle the original
-                    val frameCopy = bitmap.copy(bitmap.config, true)
+                    val frameCopy = bitmap.copy(bitmap.config ?: android.graphics.Bitmap.Config.ARGB_8888, true)
                     synchronized(frameLock) {
                         latestFrame?.recycle()  // Recycle old frame
                         latestFrame = frameCopy
@@ -233,7 +233,7 @@ class CameraManager(
         return synchronized(frameLock) {
             latestFrame?.let {
                 // Return a copy to prevent recycling issues
-                it.copy(it.config, true)
+                it.copy(it.config ?: android.graphics.Bitmap.Config.ARGB_8888, true)
             }
         }
     }
