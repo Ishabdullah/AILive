@@ -79,7 +79,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private const val REQUEST_CODE_STORAGE = 11
         private val REQUIRED_PERMISSIONS = arrayOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO
@@ -147,22 +146,10 @@ class MainActivity : AppCompatActivity() {
         modelDownloadManager = ModelDownloadManager(this)
         modelSetupDialog = ModelSetupDialog(this, modelDownloadManager, filePickerLauncher)
 
-        // Phase 7.6: Request storage permission for model downloads (Android 6.0+)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-                Log.i(TAG, "Requesting storage permission for model downloads")
-                statusIndicator.text = "● REQUESTING STORAGE PERMISSION..."
-                classificationResult.text = "Storage access needed for downloading AI models"
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
-                    REQUEST_CODE_STORAGE
-                )
-                // Permission result will be handled in onRequestPermissionsResult
-                return
-            }
-        }
+        // Phase 7.7: Storage permission not needed on Android 10+ (API 29+)
+        // DownloadManager can write to public Downloads folder without WRITE_EXTERNAL_STORAGE
+        // This permission is deprecated on modern Android versions
+        Log.i(TAG, "Storage permission not required - using DownloadManager for downloads")
 
         // Check if model setup is needed and show dialog
         if (modelSetupDialog.isSetupNeeded()) {
@@ -259,47 +246,15 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        when (requestCode) {
-            REQUEST_CODE_STORAGE -> {
-                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Log.i(TAG, "✓ Storage permission granted")
-                    statusIndicator.text = "● INITIALIZING..."
-
-                    // Check if model setup is needed and show dialog
-                    if (modelSetupDialog.isSetupNeeded()) {
-                        Log.i(TAG, "Model setup needed - showing dialog")
-                        statusIndicator.text = "● MODEL SETUP REQUIRED"
-                        classificationResult.text = "Please download or import an AI model"
-                        filePickerOnComplete = {
-                            Log.i(TAG, "Model setup complete, continuing initialization")
-                            continueInitialization()
-                        }
-                        modelSetupDialog.showFirstRunDialog {
-                            Log.i(TAG, "Model setup complete, continuing initialization")
-                            continueInitialization()
-                        }
-                    } else {
-                        // Model already exists, continue with initialization
-                        continueInitialization()
-                    }
-                } else {
-                    Log.e(TAG, "✗ Storage permission denied")
-                    statusIndicator.text = "● STORAGE PERMISSION DENIED"
-                    classificationResult.text = "Storage permission required for downloading AI models"
-                    // App can still function with pre-imported models, so don't finish()
-                }
-            }
-
-            REQUEST_CODE_PERMISSIONS -> {
-                if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                    Log.i(TAG, "✓ All permissions granted")
-                    startModels()
-                } else {
-                    Log.e(TAG, "✗ Permissions denied")
-                    statusIndicator.text = "● PERMISSION DENIED"
-                    classificationResult.text = "Camera and microphone permissions required"
-                    finish()
-                }
+        if (requestCode == REQUEST_CODE_PERMISSIONS) {
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                Log.i(TAG, "✓ All permissions granted")
+                startModels()
+            } else {
+                Log.e(TAG, "✗ Permissions denied")
+                statusIndicator.text = "● PERMISSION DENIED"
+                classificationResult.text = "Camera and microphone permissions required"
+                finish()
             }
         }
     }
