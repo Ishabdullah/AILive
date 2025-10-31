@@ -51,19 +51,38 @@ class ModelDownloadManager(private val context: Context) {
     private var downloadId: Long = -1
     private var downloadCompleteCallback: ((Boolean, String) -> Unit)? = null
     private var downloadReceiver: BroadcastReceiver? = null  // Keep reference to unregister later
+    private var currentModelName: String? = null  // Track current download model name
+    private var completionCheckScheduled = false  // Prevent multiple manual checks
 
     /**
      * Check if a model file exists in app storage
+     * If modelName is not specified, checks if ANY model exists
      */
-    fun isModelAvailable(modelName: String = DEFAULT_MODEL_NAME): Boolean {
-        val modelFile = File(context.filesDir, "$MODELS_DIR/$modelName")
-        val exists = modelFile.exists()
-        if (exists) {
-            Log.i(TAG, "✅ Model found: ${modelFile.absolutePath} (${modelFile.length() / 1024 / 1024}MB)")
-        } else {
-            Log.i(TAG, "❌ Model not found: ${modelFile.absolutePath}")
+    fun isModelAvailable(modelName: String? = null): Boolean {
+        // If specific model requested, check for it
+        if (modelName != null) {
+            val modelFile = File(context.filesDir, "$MODELS_DIR/$modelName")
+            val exists = modelFile.exists()
+            if (exists) {
+                Log.i(TAG, "✅ Model found: ${modelFile.absolutePath} (${modelFile.length() / 1024 / 1024}MB)")
+            } else {
+                Log.i(TAG, "❌ Model not found: ${modelFile.absolutePath}")
+            }
+            return exists
         }
-        return exists
+
+        // Otherwise, check if ANY model exists
+        val availableModels = getAvailableModels()
+        if (availableModels.isNotEmpty()) {
+            Log.i(TAG, "✅ Found ${availableModels.size} model(s):")
+            availableModels.forEach { model ->
+                Log.i(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
+            }
+            return true
+        } else {
+            Log.i(TAG, "❌ No models found in ${context.filesDir}/$MODELS_DIR")
+            return false
+        }
     }
 
     /**
@@ -99,6 +118,8 @@ class ModelDownloadManager(private val context: Context) {
         }
 
         downloadCompleteCallback = onComplete
+        currentModelName = modelName
+        completionCheckScheduled = false
 
         // Register broadcast receiver for download completion
         downloadReceiver = object : BroadcastReceiver() {
@@ -383,12 +404,80 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * Manually check if download is complete (fallback for when BroadcastReceiver doesn't fire)
+     * Call this when progress reaches 100% as a backup
+     */
+    fun manualCheckDownloadComplete() {
+        if (downloadId == -1L || currentModelName == null) {
+            Log.w(TAG, "⚠️ manualCheckDownloadComplete called but no active download")
+            return
+        }
+
+        if (completionCheckScheduled) {
+            Log.w(TAG, "⚠️ Completion check already scheduled, skipping")
+            return
+        }
+
+        completionCheckScheduled = true
+        Log.i(TAG, "🔍 Manually checking download completion for ID: $downloadId")
+
+        try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            downloadManager.query(query)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(
+                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
+                    )
+                    Log.i(TAG, "   Status: $status (${getStatusString(status)})")
+
+                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                        Log.i(TAG, "   ✅ Download complete! Triggering handleDownloadComplete")
+                        // Unregister receiver since we're handling manually
+                        downloadReceiver?.let {
+                            try {
+                                context.unregisterReceiver(it)
+                                Log.i(TAG, "   Unregistered receiver (manual)")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "   Could not unregister: ${e.message}")
+                            }
+                        }
+                        downloadReceiver = null
+                        handleDownloadComplete(currentModelName!!)
+                    } else if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING) {
+                        Log.i(TAG, "   ⏳ Still downloading, will check again")
+                        completionCheckScheduled = false
+                    } else {
+                        Log.e(TAG, "   ❌ Download failed with status: $status")
+                        downloadCompleteCallback?.invoke(false, "Download failed")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error in manual completion check", e)
+            completionCheckScheduled = false
+        }
+    }
+
+    private fun getStatusString(status: Int): String {
+        return when (status) {
+            DownloadManager.STATUS_PENDING -> "PENDING"
+            DownloadManager.STATUS_RUNNING -> "RUNNING"
+            DownloadManager.STATUS_PAUSED -> "PAUSED"
+            DownloadManager.STATUS_SUCCESSFUL -> "SUCCESSFUL"
+            DownloadManager.STATUS_FAILED -> "FAILED"
+            else -> "UNKNOWN($status)"
+        }
+    }
+
+    /**
      * Cancel ongoing download
      */
     fun cancelDownload() {
         if (downloadId != -1L) {
             downloadManager.remove(downloadId)
             downloadId = -1
+            currentModelName = null
+            completionCheckScheduled = false
             Log.i(TAG, "🛑 Download cancelled")
         }
     }

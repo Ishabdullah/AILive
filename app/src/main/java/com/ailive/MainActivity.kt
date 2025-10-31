@@ -200,14 +200,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun continueInitialization() {
-        // Verify model is actually available before continuing
-        if (!modelDownloadManager.isModelAvailable()) {
-            Log.e(TAG, "❌ Model not available after setup dialog!")
+        // Verify at least one model is available before continuing
+        if (!modelDownloadManager.isModelAvailable(modelName = null)) {
+            Log.e(TAG, "❌ No models available after setup dialog!")
             runOnUiThread {
                 statusIndicator.text = "● MODEL MISSING"
-                classificationResult.text = "Model download may not have completed. Please restart the app."
+                classificationResult.text = "No models found. Please download or import a model and restart the app."
             }
             return
+        }
+
+        // Log which models are available
+        val models = modelDownloadManager.getAvailableModels()
+        Log.i(TAG, "✅ Found ${models.size} model(s) available:")
+        models.forEach { model ->
+            Log.i(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
         }
 
         // Initialize core early (keeps your previous design)

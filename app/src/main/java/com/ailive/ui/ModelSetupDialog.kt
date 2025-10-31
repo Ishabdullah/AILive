@@ -53,11 +53,19 @@ class ModelSetupDialog(
 
     /**
      * Check if model setup is needed (first run without model)
+     * Returns true if no models are available (checks for ANY model, not just default)
      */
     fun isSetupNeeded(): Boolean {
         val setupDone = prefs.getBoolean(KEY_MODEL_SETUP_DONE, false)
-        val modelAvailable = modelDownloadManager.isModelAvailable()
-        return !setupDone || !modelAvailable
+        val modelAvailable = modelDownloadManager.isModelAvailable(modelName = null)  // Check for ANY model
+
+        if (modelAvailable && !setupDone) {
+            // Models exist but setup wasn't marked done - fix that
+            Log.i(TAG, "Models found but setup not marked complete - fixing")
+            markSetupComplete()
+        }
+
+        return !modelAvailable  // Only need setup if NO models at all
     }
 
     /**
@@ -211,8 +219,14 @@ class ModelSetupDialog(
             downloadDialog?.setMessage(message)
 
             // Check if we hit 100% - next update will be processing phase
-            if (percent >= 100) {
+            if (percent >= 100 && !isProcessingDownload) {
+                Log.i(TAG, "📥 Download reached 100% - triggering manual completion check")
                 isProcessingDownload = true
+                // Manually trigger completion check after short delay
+                progressHandler?.postDelayed({
+                    Log.i(TAG, "📥 Manual completion check - calling manualCheckDownloadComplete")
+                    modelDownloadManager.manualCheckDownloadComplete()
+                }, 2000)  // Wait 2 seconds for file to finish writing
             }
 
             // Continue updating
