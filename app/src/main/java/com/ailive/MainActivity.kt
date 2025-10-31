@@ -200,6 +200,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun continueInitialization() {
+        // Verify model is actually available before continuing
+        if (!modelDownloadManager.isModelAvailable()) {
+            Log.e(TAG, "❌ Model not available after setup dialog!")
+            runOnUiThread {
+                statusIndicator.text = "● MODEL MISSING"
+                classificationResult.text = "Model download may not have completed. Please restart the app."
+            }
+            return
+        }
+
         // Initialize core early (keeps your previous design)
         try {
             Log.i(TAG, "=== Initializing ${settings.aiName} Core ===")

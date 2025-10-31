@@ -50,6 +50,7 @@ class ModelDownloadManager(private val context: Context) {
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     private var downloadId: Long = -1
     private var downloadCompleteCallback: ((Boolean, String) -> Unit)? = null
+    private var downloadReceiver: BroadcastReceiver? = null  // Keep reference to unregister later
 
     /**
      * Check if a model file exists in app storage
@@ -87,24 +88,52 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "📥 Starting download: $modelName")
         Log.i(TAG, "   URL: $modelUrl")
 
+        // Unregister any existing receiver
+        downloadReceiver?.let {
+            try {
+                context.unregisterReceiver(it)
+                Log.i(TAG, "   Unregistered previous receiver")
+            } catch (e: Exception) {
+                Log.w(TAG, "   Could not unregister previous receiver: ${e.message}")
+            }
+        }
+
         downloadCompleteCallback = onComplete
 
         // Register broadcast receiver for download completion
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
+        downloadReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                Log.i(TAG, "🔔 BroadcastReceiver triggered! Download ID: $id, Expected: $downloadId")
+
                 if (id == downloadId) {
-                    context.unregisterReceiver(this)
+                    Log.i(TAG, "   ✅ ID matches! Processing completion...")
+                    try {
+                        ctx.unregisterReceiver(this)
+                        Log.i(TAG, "   Unregistered receiver")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "   Could not unregister receiver: ${e.message}")
+                    }
+                    downloadReceiver = null
                     handleDownloadComplete(modelName)
+                } else {
+                    Log.w(TAG, "   ⚠️ ID mismatch - ignoring")
                 }
             }
         }
 
-        context.registerReceiver(
-            receiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            Context.RECEIVER_NOT_EXPORTED
-        )
+        try {
+            context.registerReceiver(
+                downloadReceiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                Context.RECEIVER_NOT_EXPORTED
+            )
+            Log.i(TAG, "✅ BroadcastReceiver registered")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to register receiver", e)
+            onComplete(false, "Failed to register download listener: ${e.message}")
+            return
+        }
 
         try {
             // Use app's external files directory - no storage permission required on Android 10+
@@ -123,6 +152,13 @@ class ModelDownloadManager(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to start download", e)
+            // Unregister receiver on failure
+            downloadReceiver?.let {
+                try {
+                    context.unregisterReceiver(it)
+                } catch (ex: Exception) {}
+            }
+            downloadReceiver = null
             onComplete(false, "Failed to start download: ${e.message}")
         }
     }
@@ -153,36 +189,52 @@ class ModelDownloadManager(private val context: Context) {
      * Handle download completion - move file to app storage
      */
     private fun handleDownloadComplete(modelName: String) {
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        downloadManager.query(query)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val status = cursor.getInt(
-                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
-                )
+        Log.i(TAG, "📥 handleDownloadComplete called for: $modelName")
 
-                when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> {
-                        val uri = cursor.getString(
-                            cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI)
-                        )
-                        Log.i(TAG, "✅ Download complete: $uri")
+        try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            downloadManager.query(query)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(
+                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
+                    )
+                    Log.i(TAG, "   Download status: $status")
 
-                        // Move file from Downloads to app storage
-                        moveDownloadedFile(Uri.parse(uri), modelName)
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            val uriString = cursor.getString(
+                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI)
+                            )
+                            Log.i(TAG, "✅ Download complete: $uriString")
+
+                            if (uriString != null) {
+                                // Move file from Downloads to app storage
+                                moveDownloadedFile(Uri.parse(uriString), modelName)
+                            } else {
+                                Log.e(TAG, "❌ URI is null!")
+                                downloadCompleteCallback?.invoke(false, "Download URI is null")
+                            }
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            val reason = cursor.getInt(
+                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
+                            )
+                            Log.e(TAG, "❌ Download failed with reason: $reason")
+                            downloadCompleteCallback?.invoke(false, "Download failed (code: $reason)")
+                        }
+                        else -> {
+                            Log.w(TAG, "⚠️ Download status: $status")
+                            downloadCompleteCallback?.invoke(false, "Unexpected download status: $status")
+                        }
                     }
-                    DownloadManager.STATUS_FAILED -> {
-                        val reason = cursor.getInt(
-                            cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
-                        )
-                        Log.e(TAG, "❌ Download failed with reason: $reason")
-                        downloadCompleteCallback?.invoke(false, "Download failed (code: $reason)")
-                    }
-                    else -> {
-                        Log.w(TAG, "⚠️ Download status: $status")
-                        downloadCompleteCallback?.invoke(false, "Unexpected download status: $status")
-                    }
+                } else {
+                    Log.e(TAG, "❌ Cursor is empty!")
+                    downloadCompleteCallback?.invoke(false, "Could not query download status")
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error handling download completion", e)
+            downloadCompleteCallback?.invoke(false, "Error: ${e.message}")
         }
     }
 
@@ -190,17 +242,28 @@ class ModelDownloadManager(private val context: Context) {
      * Move downloaded file from Downloads to app's private storage
      */
     private fun moveDownloadedFile(sourceUri: Uri, modelName: String) {
+        Log.i(TAG, "📂 moveDownloadedFile called")
+        Log.i(TAG, "   Source URI: $sourceUri")
+        Log.i(TAG, "   Model name: $modelName")
+
         try {
             val modelsDir = File(context.filesDir, MODELS_DIR)
             if (!modelsDir.exists()) {
-                modelsDir.mkdirs()
+                val created = modelsDir.mkdirs()
+                Log.i(TAG, "   Models dir created: $created")
             }
 
             val destFile = File(modelsDir, modelName)
-
             Log.i(TAG, "📁 Moving file to: ${destFile.absolutePath}")
 
-            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+            val inputStream = context.contentResolver.openInputStream(sourceUri)
+            if (inputStream == null) {
+                Log.e(TAG, "❌ Could not open input stream from URI")
+                downloadCompleteCallback?.invoke(false, "Could not read downloaded file")
+                return
+            }
+
+            inputStream.use { input ->
                 FileOutputStream(destFile).use { output ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
@@ -217,20 +280,25 @@ class ModelDownloadManager(private val context: Context) {
                     }
 
                     Log.i(TAG, "✅ File moved successfully: ${totalBytes / 1024 / 1024}MB")
+                    Log.i(TAG, "   Final size: ${destFile.length() / 1024 / 1024}MB")
                 }
             }
 
             // Delete original download file
             try {
                 context.contentResolver.delete(sourceUri, null, null)
+                Log.i(TAG, "🗑️ Deleted original download")
             } catch (e: Exception) {
                 Log.w(TAG, "Could not delete original download: ${e.message}")
             }
 
+            Log.i(TAG, "✅ Invoking success callback")
             downloadCompleteCallback?.invoke(true, "")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to move file", e)
+            Log.e(TAG, "   Exception: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
             downloadCompleteCallback?.invoke(false, "Failed to save file: ${e.message}")
         }
     }
