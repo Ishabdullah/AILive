@@ -1,13 +1,7 @@
 package com.ailive
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
-import android.Manifest;
-import android.content.pm.PackageManager;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import android.util.Log
 import android.view.View
 import android.widget.FrameLayout
@@ -16,9 +10,6 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
-import androidx.core.app.ActivityCompat
-import androidx.core.app.ActivityCompat.OnRequestPermissionsResultCallback
-import androidx.core.content.ContextCompat
 import com.ailive.ai.models.ModelManager
 import com.ailive.audio.AudioManager
 import com.ailive.audio.CommandRouter
