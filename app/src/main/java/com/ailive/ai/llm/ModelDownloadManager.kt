@@ -253,6 +253,23 @@ class ModelDownloadManager(private val context: Context) {
 
             Log.i(TAG, "📥 Importing model from storage: $fileName")
 
+            // Phase 7.6: Validate model format - ONNX Runtime only supports .onnx files
+            if (fileName.endsWith(".gguf", ignoreCase = true)) {
+                Log.e(TAG, "❌ GGUF format not supported - ONNX Runtime requires .onnx files")
+                withContext(Dispatchers.Main) {
+                    onComplete(false, "GGUF format not supported.\n\nAILive uses ONNX Runtime which only supports .onnx model files.\n\nPlease download an ONNX model from HuggingFace or convert your GGUF model to ONNX format.")
+                }
+                return@withContext
+            }
+
+            if (!fileName.endsWith(".onnx", ignoreCase = true)) {
+                Log.w(TAG, "⚠️ Warning: File does not have .onnx extension: $fileName")
+                withContext(Dispatchers.Main) {
+                    onComplete(false, "Invalid model format.\n\nOnly .onnx model files are supported.\n\nPlease select a valid ONNX model file.")
+                }
+                return@withContext
+            }
+
             // Ensure models directory exists
             val modelsDir = File(context.filesDir, MODELS_DIR)
             if (!modelsDir.exists()) {
