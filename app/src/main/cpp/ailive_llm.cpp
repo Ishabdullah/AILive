@@ -53,8 +53,8 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
         llama_model_params model_params = llama_model_default_params();
         model_params.n_gpu_layers = 99; // Offload as much as possible to GPU
 
-        // Load model
-        g_model = llama_load_model_from_file(path, model_params);
+        // Load model (new API)
+        g_model = llama_model_load_from_file(path, model_params);
         if (g_model == nullptr) {
             LOGE("Failed to load model from %s", path);
             env->ReleaseStringUTFChars(model_path, path);
@@ -67,11 +67,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
         ctx_params.n_threads = 4;  // 4 CPU threads
         ctx_params.n_batch = 512;
 
-        // Create context
-        g_ctx = llama_new_context_with_model(g_model, ctx_params);
+        // Create context (new API)
+        g_ctx = llama_init_from_model(g_model, ctx_params);
         if (g_ctx == nullptr) {
             LOGE("Failed to create context");
-            llama_free_model(g_model);
+            llama_model_free(g_model);
             g_model = nullptr;
             env->ReleaseStringUTFChars(model_path, path);
             return JNI_FALSE;
@@ -88,7 +88,6 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
         llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.9f, 1));
 
         LOGI("✅ Model loaded successfully!");
-        LOGI("   Vocab size: %d", llama_n_vocab(g_model));
         LOGI("   Context size: %d", llama_n_ctx(g_ctx));
 
         env->ReleaseStringUTFChars(model_path, path);
@@ -126,10 +125,13 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
     LOGI("🔍 Generating response for: %.50s...", prompt_cstr);
 
     try {
-        // Tokenize prompt
+        // Get model vocab for tokenization
+        const llama_vocab* vocab = llama_model_get_vocab(g_model);
+
+        // Tokenize prompt (new API)
         std::vector<llama_token> tokens;
         const int n_prompt_tokens = -llama_tokenize(
-            g_model,
+            vocab,
             prompt_cstr,
             strlen(prompt_cstr),
             nullptr,
@@ -140,7 +142,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
 
         tokens.resize(n_prompt_tokens);
         llama_tokenize(
-            g_model,
+            vocab,
             prompt_cstr,
             strlen(prompt_cstr),
             tokens.data(),
@@ -169,15 +171,18 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
             // Sample next token
             llama_token token = llama_sampler_sample(g_sampler, g_ctx, -1);
 
-            // Check for EOS
-            if (llama_token_is_eog(g_model, token)) {
+            // Get vocab for token operations
+            const llama_vocab* vocab = llama_model_get_vocab(g_model);
+
+            // Check for EOS (new API)
+            if (llama_vocab_is_eog(vocab, token)) {
                 LOGI("End of generation (EOS token)");
                 break;
             }
 
-            // Convert token to text
+            // Convert token to text (new API)
             char buf[256];
-            int n = llama_token_to_piece(g_model, token, buf, sizeof(buf), 0, false);
+            int n = llama_token_to_piece(vocab, token, buf, sizeof(buf), 0, false);
             if (n > 0) {
                 result.append(buf, n);
             }
@@ -222,7 +227,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(JNIEnv* env, jobject thiz) {
     }
 
     if (g_model != nullptr) {
-        llama_free_model(g_model);
+        llama_model_free(g_model);
         g_model = nullptr;
     }
 
