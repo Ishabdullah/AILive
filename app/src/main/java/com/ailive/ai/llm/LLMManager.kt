@@ -3,6 +3,7 @@ package com.ailive.ai.llm
 import android.content.Context
 import android.util.Log
 import ai.onnxruntime.*
+import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -54,9 +55,8 @@ class LLMManager(private val context: Context) {
     // Model download manager
     private val modelDownloadManager = ModelDownloadManager(context)
 
-    // Simple tokenizer (will use byte-pair encoding approximation for ONNX)
-    private val vocabulary = mutableMapOf<String, Long>()
-    private var vocabSize = 32000  // TinyLlama vocab size
+    // HuggingFace tokenizer (proper BPE tokenization)
+    private var tokenizer: HuggingFaceTokenizer? = null
 
     // Current model path and info
     private var currentModelPath: String? = null
@@ -147,8 +147,23 @@ class LLMManager(private val context: Context) {
             // Create session
             ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
 
-            // Initialize vocabulary
-            initializeVocabulary()
+            // Load HuggingFace tokenizer from assets
+            Log.i(TAG, "📖 Loading tokenizer...")
+            val tokenizerFile = File(context.filesDir, "tokenizer.json")
+
+            // Copy tokenizer from assets to filesDir if not exists
+            if (!tokenizerFile.exists()) {
+                context.assets.open("tokenizer.json").use { input ->
+                    tokenizerFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                Log.i(TAG, "   Copied tokenizer.json to ${tokenizerFile.absolutePath}")
+            }
+
+            // Initialize DJL tokenizer
+            tokenizer = HuggingFaceTokenizer.newInstance(tokenizerFile.toPath())
+            Log.i(TAG, "✅ Tokenizer loaded successfully")
 
             true
         } catch (e: Exception) {
@@ -228,26 +243,30 @@ Be warm, helpful, concise, and conversational."""
     }
 
     /**
-     * Simple tokenization (approximation for demo)
-     * In production, use proper BPE tokenizer
+     * Tokenize text using HuggingFace BPE tokenizer
      */
     private fun tokenize(text: String): LongArray {
-        // Simplified tokenization - split by whitespace and map to IDs
-        val tokens = text.lowercase().split(Regex("\\s+"))
-        return tokens.map { token ->
-            vocabulary.getOrPut(token) {
-                (vocabulary.size + 1).toLong()
-            }
-        }.toLongArray()
+        val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
+
+        Log.d(TAG, "Tokenizing: ${text.take(100)}...")
+        val encoding = tok.encode(text)
+        val ids = encoding.ids
+
+        Log.d(TAG, "Token count: ${ids.size}, First 10 tokens: ${ids.take(10).contentToString()}")
+        return ids
     }
 
     /**
-     * Decode token IDs back to text
+     * Decode token IDs back to text using HuggingFace tokenizer
      */
     private fun decode(ids: LongArray): String {
-        // Reverse vocabulary lookup
-        val reverseVocab = vocabulary.entries.associate { it.value to it.key }
-        return ids.map { reverseVocab[it] }.filterNotNull().joinToString(" ")
+        val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
+
+        Log.d(TAG, "Decoding ${ids.size} tokens...")
+        val text = tok.decode(ids)
+
+        Log.d(TAG, "Decoded: ${text.take(100)}...")
+        return text
     }
 
     /**
@@ -308,28 +327,6 @@ Be warm, helpful, concise, and conversational."""
         return probs.indices.maxByOrNull { probs[it] }?.toLong() ?: 0L
     }
 
-    /**
-     * Initialize simple vocabulary
-     */
-    private fun initializeVocabulary() {
-        // Basic English tokens (simplified for demo)
-        val commonWords = listOf(
-            "the", "a", "an", "i", "you", "he", "she", "it", "we", "they",
-            "is", "are", "was", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did",
-            "will", "would", "can", "could", "should", "may", "might",
-            "hello", "hi", "how", "what", "when", "where", "why", "who",
-            "yes", "no", "ok", "okay", "thanks", "thank", "please",
-            "see", "look", "watch", "feel", "think", "know", "remember",
-            "system", "status", "help", "camera", "vision", "emotion", "memory"
-        )
-
-        commonWords.forEachIndexed { index, word ->
-            vocabulary[word] = (index + 3).toLong()  // Start from 3 (0=pad, 1=unk, 2=eos)
-        }
-
-        Log.d(TAG, "📖 Vocabulary initialized: ${vocabulary.size} tokens")
-    }
 
     /**
      * Check if a model is available (checks for ANY model, GGUF or ONNX)
