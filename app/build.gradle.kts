@@ -115,6 +115,9 @@ dependencies {
     // ONNX Runtime for LLM inference (Phase 2.6)
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.0")
 
+    // Hugging Face Tokenizers for proper ONNX model tokenization
+    implementation("ai.djl.huggingface:tokenizers:0.29.0")
+
     // TODO: Add proper llama.cpp Android library for GGUF support
     // Current issue: io.github.ljcamargo:llamacpp-kotlin not available on Maven Central
     // Alternative: Build llama.cpp JNI bindings manually or wait for stable release
