@@ -33,12 +33,12 @@ class ModelDownloadManager(private val context: Context) {
         private const val TAG = "ModelDownloadManager"
 
         // ONNX models (TEMPORARY: ONNX-only support in Phase 7.10)
-        // Fixed URLs: models are in /onnx/ subdirectory, named model.onnx
-        const val ONNX_360M_NAME = "smollm2-360m.onnx"
-        const val ONNX_360M_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct/resolve/main/onnx/model.onnx"
+        // INT8 quantized models for optimal size/performance balance
+        const val ONNX_360M_NAME = "smollm2-360m-int8.onnx"
+        const val ONNX_360M_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct/resolve/main/onnx/model_int8.onnx"
 
-        const val ONNX_135M_NAME = "smollm2-135m.onnx"
-        const val ONNX_135M_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/resolve/main/onnx/model.onnx"
+        const val ONNX_135M_NAME = "smollm2-135m-int8.onnx"
+        const val ONNX_135M_URL = "https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct/resolve/main/onnx/model_int8.onnx"
 
         // GGUF support disabled (native library not built yet)
         // Will be re-enabled in future phase when llama.cpp JNI is ready

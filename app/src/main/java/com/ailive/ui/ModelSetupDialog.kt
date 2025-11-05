@@ -77,9 +77,9 @@ class ModelSetupDialog(
             .setMessage(
                 "To get started, AILive needs an AI model for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download SmolLM2-360M ONNX (~348MB, recommended)\n" +
+                "• Download SmolLM2-360M INT8 (~348MB, recommended)\n" +
                 "• Import an ONNX model from your device\n" +
-                "• Download a smaller ONNX model for testing\n\n" +
+                "• Download a smaller INT8 model (~131MB)\n\n" +
                 "TEMPORARY: This version only supports ONNX models.\n" +
                 "All models run 100% on your device - no internet needed after download."
             )
@@ -102,8 +102,8 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "SmolLM2-360M ONNX INT8 (~348MB) - Recommended",
-            "SmolLM2-135M ONNX INT8 (~135MB) - Smaller/Faster"
+            "SmolLM2-360M INT8 (~348MB) - Recommended",
+            "SmolLM2-135M INT8 (~131MB) - Smaller/Faster"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
