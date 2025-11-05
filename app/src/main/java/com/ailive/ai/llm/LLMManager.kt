@@ -11,19 +11,19 @@ import java.nio.FloatBuffer
 import kotlin.math.exp
 
 /**
- * LLMManager - Language model inference using llama.cpp (GGUF) or ONNX Runtime
+ * LLMManager - Language model inference using ONNX Runtime
  * Phase 2.6 & Phase 7: Provides intelligent text generation for AI agents
  *
- * Supports:
- * - GGUF models via llama.cpp JNI (PRIMARY - recommended) 🦙
- * - ONNX models via ONNX Runtime (LEGACY - fallback) 🔷
+ * TEMPORARY: ONNX-only implementation (Phase 7 quick fix)
+ * - ONNX models via ONNX Runtime with NNAPI GPU acceleration 🔷
+ * - GGUF support temporarily disabled (native library not built yet)
  *
  * Based on SmolChat architecture (541 GitHub stars)
- * Uses JNI bridge to native llama.cpp for optimal performance
+ * TODO: Add llama.cpp JNI support for GGUF models in future phase
  *
  * @author AILive Team
  * @since Phase 2.6
- * @updated Phase 7.9 - GGUF support via JNI + llama.cpp
+ * @updated Phase 7.10 - Simplified to ONNX-only for quick deployment
  */
 class LLMManager(private val context: Context) {
 
@@ -41,15 +41,15 @@ class LLMManager(private val context: Context) {
         private const val TOP_P = 0.9f
     }
 
-    // JNI bridge for llama.cpp (GGUF models)
-    private val llamaBridge = LLMBridge()
-
-    // ONNX Runtime (for .onnx models - legacy fallback)
+    // ONNX Runtime (primary inference engine)
     private var ortSession: OrtSession? = null
     private var ortEnv: OrtEnvironment? = null
 
     private var isInitialized = false
-    private var isGGUF = false  // Track which engine is active
+
+    // GGUF support temporarily disabled (native library not built)
+    // private val llamaBridge = LLMBridge()
+    // private var isGGUF = false
 
     // Model download manager
     private val modelDownloadManager = ModelDownloadManager(context)
@@ -63,13 +63,15 @@ class LLMManager(private val context: Context) {
     private var currentModelName: String? = null
 
     /**
-     * Initialize the LLM model
+     * Initialize the LLM model (ONNX-only)
      * Called once on app startup in background thread
-     * Auto-detects GGUF or ONNX and uses appropriate engine
+     *
+     * TEMPORARY: Only supports ONNX models (.onnx files)
+     * GGUF support will be added when native library is built
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "🤖 Initializing LLM...")
+            Log.i(TAG, "🤖 Initializing LLM (ONNX-only mode)...")
 
             // Check if ANY model is available
             val availableModels = modelDownloadManager.getAvailableModels()
@@ -79,34 +81,27 @@ class LLMManager(private val context: Context) {
                 return@withContext false
             }
 
-            // Prefer GGUF models (better performance via native llama.cpp)
-            val ggufModel = availableModels.firstOrNull { it.name.endsWith(".gguf", ignoreCase = true) }
+            // ONNX-only: Look for .onnx models
             val onnxModel = availableModels.firstOrNull { it.name.endsWith(".onnx", ignoreCase = true) }
 
-            val modelFile = ggufModel ?: onnxModel
-
-            if (modelFile == null) {
-                Log.e(TAG, "❌ No supported models found")
-                Log.i(TAG, "   Supported formats: .gguf (preferred), .onnx (legacy)")
+            if (onnxModel == null) {
+                Log.e(TAG, "❌ No ONNX models found")
+                Log.i(TAG, "   This version only supports .onnx format")
+                Log.i(TAG, "   Found models: ${availableModels.joinToString { it.name }}")
+                Log.i(TAG, "   Please download an ONNX model")
                 return@withContext false
             }
 
+            val modelFile = onnxModel
             currentModelPath = modelFile.absolutePath
             currentModelName = modelFile.name
-            isGGUF = modelFile.name.endsWith(".gguf", ignoreCase = true)
 
             Log.i(TAG, "📂 Loading model: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
-            Log.i(TAG, "   Format: ${if (isGGUF) "GGUF (llama.cpp)" else "ONNX (ONNX Runtime)"}")
+            Log.i(TAG, "   Format: ONNX (ONNX Runtime with NNAPI)")
 
-            val success = if (isGGUF) {
-                // Use JNI bridge for GGUF models
-                Log.i(TAG, "🦙 Loading with llama.cpp...")
-                llamaBridge.loadModel(modelFile.absolutePath, contextSize = 2048)
-            } else {
-                // Use ONNX Runtime for ONNX models
-                Log.i(TAG, "🔷 Loading with ONNX Runtime...")
-                initializeONNX(modelFile)
-            }
+            // Load with ONNX Runtime
+            Log.i(TAG, "🔷 Loading with ONNX Runtime...")
+            val success = initializeONNX(modelFile)
 
             if (!success) {
                 Log.e(TAG, "❌ Failed to load model")
@@ -117,7 +112,7 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "✅ LLM initialized successfully!")
             Log.i(TAG, "   Model: $currentModelName")
             Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
-            Log.i(TAG, "   Engine: ${if (isGGUF) "llama.cpp (JNI)" else "ONNX Runtime"}")
+            Log.i(TAG, "   Engine: ONNX Runtime")
             Log.i(TAG, "   Max length: $MAX_LENGTH tokens")
 
             true
@@ -129,7 +124,7 @@ class LLMManager(private val context: Context) {
     }
 
     /**
-     * Initialize ONNX model (legacy fallback)
+     * Initialize ONNX model (primary inference engine)
      */
     private fun initializeONNX(modelFile: File): Boolean {
         return try {
@@ -180,15 +175,9 @@ class LLMManager(private val context: Context) {
             val chatPrompt = createChatPrompt(prompt, agentName)
             Log.d(TAG, "🔍 Generating response for: ${prompt.take(50)}...")
 
-            val response = if (isGGUF) {
-                // Use llama.cpp JNI for GGUF models
-                Log.d(TAG, "🦙 Generating with llama.cpp...")
-                llamaBridge.generate(chatPrompt, MAX_LENGTH)
-            } else {
-                // Use ONNX Runtime for ONNX models
-                Log.d(TAG, "🔷 Generating with ONNX Runtime...")
-                generateONNX(chatPrompt)
-            }
+            // Use ONNX Runtime
+            Log.d(TAG, "🔷 Generating with ONNX Runtime...")
+            val response = generateONNX(chatPrompt)
 
             Log.d(TAG, "✨ Generated: ${response.take(50)}...")
             return@withContext response.trim().ifEmpty {
@@ -203,7 +192,7 @@ class LLMManager(private val context: Context) {
     }
 
     /**
-     * Generate using ONNX Runtime (legacy)
+     * Generate using ONNX Runtime (primary inference engine)
      */
     private fun generateONNX(chatPrompt: String): String {
         if (ortSession == null) {
@@ -357,7 +346,7 @@ Be warm, helpful, concise, and conversational."""
      */
     fun getModelInfo(): String {
         return if (isInitialized) {
-            "Model: $currentModelName\nEngine: ${if (isGGUF) "llama.cpp (GGUF)" else "ONNX Runtime"}"
+            "Model: $currentModelName\nEngine: ONNX Runtime"
         } else {
             "No model loaded"
         }
@@ -381,14 +370,9 @@ Be warm, helpful, concise, and conversational."""
      */
     fun close() {
         try {
-            if (isGGUF) {
-                llamaBridge.free()
-                Log.i(TAG, "🔒 llama.cpp resources released")
-            } else {
-                ortSession?.close()
-                ortEnv?.close()
-                Log.i(TAG, "🔒 ONNX Runtime resources released")
-            }
+            ortSession?.close()
+            ortEnv?.close()
+            Log.i(TAG, "🔒 ONNX Runtime resources released")
             isInitialized = false
         } catch (e: Exception) {
             Log.e(TAG, "Error closing LLM", e)

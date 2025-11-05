@@ -77,10 +77,10 @@ class ModelSetupDialog(
             .setMessage(
                 "To get started, AILive needs an AI model for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download SmolLM2-360M GGUF (~180MB, recommended)\n" +
-                "• Import a GGUF model from your device\n" +
-                "• Download a smaller GGUF model for testing\n\n" +
-                "GGUF models are smaller and faster than ONNX.\n" +
+                "• Download SmolLM2-360M ONNX (~348MB, recommended)\n" +
+                "• Import an ONNX model from your device\n" +
+                "• Download a smaller ONNX model for testing\n\n" +
+                "TEMPORARY: This version only supports ONNX models.\n" +
                 "All models run 100% on your device - no internet needed after download."
             )
             .setPositiveButton("Download Model") { _, _ ->
@@ -98,13 +98,12 @@ class ModelSetupDialog(
     }
 
     /**
-     * Show model selection dialog with recommendations
+     * Show model selection dialog with recommendations (ONNX-only)
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "SmolLM2-360M GGUF Q4 (~180MB) - Recommended",
-            "SmolLM2-135M GGUF Q4 (~70MB) - Smaller/Faster",
-            "SmolLM2-360M ONNX INT8 (~348MB) - Legacy"
+            "SmolLM2-360M ONNX INT8 (~348MB) - Recommended",
+            "SmolLM2-135M ONNX INT8 (~135MB) - Smaller/Faster"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
@@ -113,18 +112,13 @@ class ModelSetupDialog(
             .setItems(models) { _, which ->
                 when (which) {
                     0 -> downloadModel(
-                        ModelDownloadManager.DEFAULT_MODEL_URL,
-                        ModelDownloadManager.DEFAULT_MODEL_NAME,
+                        ModelDownloadManager.ONNX_360M_URL,
+                        ModelDownloadManager.ONNX_360M_NAME,
                         onComplete
                     )
                     1 -> downloadModel(
-                        ModelDownloadManager.ALT_MODEL_URL,
-                        ModelDownloadManager.ALT_MODEL_NAME,
-                        onComplete
-                    )
-                    2 -> downloadModel(
-                        ModelDownloadManager.ONNX_360M_URL,
-                        ModelDownloadManager.ONNX_360M_NAME,
+                        ModelDownloadManager.ONNX_135M_URL,
+                        ModelDownloadManager.ONNX_135M_NAME,
                         onComplete
                     )
                 }
@@ -255,11 +249,12 @@ class ModelSetupDialog(
      * Show file picker to import model from device
      * BUGFIX Phase 7.5: Use ActivityResultLauncher instead of deprecated startActivityForResult
      * BUGFIX Phase 7.6: Store onComplete callback so it can be invoked after import
+     * Phase 7.10: ONNX-only version
      */
     private fun showFilePickerDialog(onComplete: () -> Unit) {
         Toast.makeText(
             activity,
-            "Select a .gguf model file (or .onnx for legacy support)",
+            "Select an .onnx model file",
             Toast.LENGTH_SHORT
         ).show()
 
