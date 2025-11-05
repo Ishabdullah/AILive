@@ -15,27 +15,19 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Manages Android runtime permissions for AILive.
  * Thread-safe, user-consent focused.
+ *
+ * NOTE: This version does NOT use ActivityResultLauncher to avoid
+ * "attempting to register while current state is RESUMED" lifecycle errors.
+ * For runtime permission requests, use MainActivity's permissionLauncher instead.
  */
 class PermissionManager(private val activity: FragmentActivity) {
     private val TAG = "PermissionManager"
-    
+
     private val _permissionStates = MutableStateFlow<Map<String, PermissionState>>(emptyMap())
     val permissionStates: StateFlow<Map<String, PermissionState>> = _permissionStates.asStateFlow()
-    
-    // Single permission launcher
-    private val singlePermissionLauncher: ActivityResultLauncher<String> =
-        activity.registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            handlePermissionResult(pendingPermission, granted)
-        }
-    
-    // Multiple permissions launcher
-    private val multiplePermissionsLauncher: ActivityResultLauncher<Array<String>> =
-        activity.registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-            results.forEach { (permission, granted) ->
-                handlePermissionResult(permission, granted)
-            }
-        }
-    
+
+    // Removed ActivityResultLauncher registrations - they cause lifecycle errors
+    // when PermissionManager is created after onCreate
     private var pendingPermission: String? = null
     private var onPermissionResultCallback: ((String, Boolean) -> Unit)? = null
     
@@ -55,6 +47,8 @@ class PermissionManager(private val activity: FragmentActivity) {
     
     /**
      * Request a single permission with callback.
+     * NOTE: This method only checks if permission is already granted.
+     * To request new permissions, use MainActivity's permissionLauncher.
      */
     fun requestPermission(
         context: Context,
@@ -69,46 +63,40 @@ class PermissionManager(private val activity: FragmentActivity) {
                 onResult(true)
             }
             activity.shouldShowRequestPermissionRationale(permission) -> {
-                Log.i(TAG, "Showing rationale for: $permission")
+                Log.i(TAG, "Permission requires rationale: $permission")
                 updatePermissionState(permission, PermissionState.RationaleRequired(rationale ?: ""))
-                // In production, show a dialog with rationale before requesting
-                requestPermissionInternal(permission, onResult)
+                // Cannot launch permission request - would cause lifecycle error
+                Log.w(TAG, "⚠️ Permission not granted. Use MainActivity's permissionLauncher to request.")
+                onResult(false)
             }
             else -> {
-                Log.d(TAG, "Requesting permission: $permission")
-                requestPermissionInternal(permission, onResult)
+                Log.d(TAG, "Permission not granted: $permission")
+                Log.w(TAG, "⚠️ Cannot request permission from PermissionManager. Use MainActivity's permissionLauncher.")
+                onResult(false)
             }
         }
     }
-    
+
     /**
      * Request multiple permissions at once.
+     * NOTE: This method only checks if permissions are already granted.
+     * To request new permissions, use MainActivity's permissionLauncher.
      */
     fun requestPermissions(
         context: Context,
         permissions: List<String>,
         onResult: (Map<String, Boolean>) -> Unit
     ) {
-        val deniedPermissions = permissions.filter { !isPermissionGranted(context, it) }
-        
-        if (deniedPermissions.isEmpty()) {
+        val results = permissions.associateWith { isPermissionGranted(context, it) }
+        val allGranted = results.values.all { it }
+
+        if (allGranted) {
             Log.d(TAG, "All permissions already granted")
-            onResult(permissions.associateWith { true })
-            return
+        } else {
+            Log.w(TAG, "⚠️ Some permissions not granted. Use MainActivity's permissionLauncher to request.")
         }
-        
-        Log.d(TAG, "Requesting ${deniedPermissions.size} permissions")
-        
-        // Store callback for multiple permissions
-        val results = mutableMapOf<String, Boolean>()
-        onPermissionResultCallback = { permission, granted ->
-            results[permission] = granted
-            if (results.size == deniedPermissions.size) {
-                onResult(results)
-            }
-        }
-        
-        multiplePermissionsLauncher.launch(deniedPermissions.toTypedArray())
+
+        onResult(results)
     }
     
     /**
@@ -121,24 +109,6 @@ class PermissionManager(private val activity: FragmentActivity) {
                 PermissionState.RationaleRequired("Please grant $permission permission")
             else -> PermissionState.NotRequested
         }
-    }
-    
-    private fun requestPermissionInternal(permission: String, onResult: (Boolean) -> Unit) {
-        pendingPermission = permission
-        onPermissionResultCallback = { _, granted -> onResult(granted) }
-        singlePermissionLauncher.launch(permission)
-    }
-    
-    private fun handlePermissionResult(permission: String?, granted: Boolean) {
-        permission ?: return
-        
-        Log.i(TAG, "Permission result: $permission = $granted")
-        updatePermissionState(
-            permission,
-            if (granted) PermissionState.Granted else PermissionState.Denied
-        )
-        
-        onPermissionResultCallback?.invoke(permission, granted)
     }
     
     private fun updatePermissionState(permission: String, state: PermissionState) {

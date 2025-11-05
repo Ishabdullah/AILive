@@ -626,6 +626,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun processTextCommand(command: String) {
         Log.i(TAG, "📝 Processing text command: '$command'")
+
+        // Check if commandRouter is initialized
+        if (!::commandRouter.isInitialized) {
+            Log.w(TAG, "⚠️ Command router not initialized yet - system still starting up")
+            runOnUiThread {
+                statusIndicator.text = "● INITIALIZING..."
+                classificationResult.text = "System is still initializing. Please wait..."
+                android.widget.Toast.makeText(
+                    this,
+                    "Please wait for initialization to complete",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            return
+        }
+
         statusIndicator.text = "● PROCESSING"
         lifecycleScope.launch(Dispatchers.Default) {
             commandRouter.processCommand(command)
