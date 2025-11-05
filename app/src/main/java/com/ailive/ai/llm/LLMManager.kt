@@ -252,7 +252,7 @@ Be warm, helpful, concise, and conversational."""
         val encoding = tok.encode(text)
         val ids = encoding.ids
 
-        Log.d(TAG, "Token count: ${ids.size}, First 10 tokens: ${ids.take(10).contentToString()}")
+        Log.d(TAG, "Token count: ${ids.size}, First 10 tokens: ${ids.take(10).joinToString()}")
         return ids
     }
 
@@ -311,6 +311,9 @@ Be warm, helpful, concise, and conversational."""
      * Sample next token using temperature and top-p
      */
     private fun sampleNextToken(logits: FloatBuffer): Long {
+        // Get vocab size from logits buffer size
+        val vocabSize = logits.remaining()
+
         // Apply temperature
         val probs = FloatArray(vocabSize)
         for (i in 0 until vocabSize) {
