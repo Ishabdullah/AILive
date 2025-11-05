@@ -158,19 +158,21 @@ class ModelDownloadManager(private val context: Context) {
         }
 
         try {
-            // Use app's external files directory - no storage permission required on Android 10+
+            // Download to public Downloads folder (like SmolChat does)
+            // This approach is more reliable than setDestinationInExternalFilesDir
             val request = DownloadManager.Request(modelUrl.toUri())
-                .setTitle("Downloading AI Model")
-                .setDescription("Downloading $modelName for AILive...")
+                .setTitle("AILive Model Download")
+                .setDescription("Downloading $modelName...")
                 .setMimeType("application/octet-stream")
                 .setAllowedNetworkTypes(
                     DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
                 )
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalFilesDir(context, null, "models/$modelName")
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, modelName)
 
             downloadId = downloadManager.enqueue(request)
             Log.i(TAG, "✅ Download queued with ID: $downloadId")
+            Log.i(TAG, "   Destination: Downloads/$modelName")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to start download", e)
@@ -269,22 +271,27 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "   Model name: $modelName")
 
         try {
+            // Create models directory in app's private storage
             val modelsDir = File(context.filesDir, MODELS_DIR)
             if (!modelsDir.exists()) {
                 val created = modelsDir.mkdirs()
-                Log.i(TAG, "   Models dir created: $created")
+                Log.i(TAG, "   Models dir created: $created at ${modelsDir.absolutePath}")
+            } else {
+                Log.i(TAG, "   Models dir exists at ${modelsDir.absolutePath}")
             }
 
             val destFile = File(modelsDir, modelName)
-            Log.i(TAG, "📁 Moving file to: ${destFile.absolutePath}")
+            Log.i(TAG, "📁 Copying file to: ${destFile.absolutePath}")
 
+            // Open input stream from Downloads
             val inputStream = context.contentResolver.openInputStream(sourceUri)
             if (inputStream == null) {
-                Log.e(TAG, "❌ Could not open input stream from URI")
+                Log.e(TAG, "❌ Could not open input stream from URI: $sourceUri")
                 downloadCompleteCallback?.invoke(false, "Could not read downloaded file")
                 return
             }
 
+            // Copy file to app's private storage
             inputStream.use { input ->
                 FileOutputStream(destFile).use { output ->
                     val buffer = ByteArray(8192)
@@ -297,19 +304,24 @@ class ModelDownloadManager(private val context: Context) {
 
                         // Log progress every 50MB
                         if (totalBytes % (50 * 1024 * 1024) == 0L) {
-                            Log.d(TAG, "   Moved: ${totalBytes / 1024 / 1024}MB...")
+                            Log.d(TAG, "   Copied: ${totalBytes / 1024 / 1024}MB...")
                         }
                     }
 
-                    Log.i(TAG, "✅ File moved successfully: ${totalBytes / 1024 / 1024}MB")
+                    Log.i(TAG, "✅ File copied successfully: ${totalBytes / 1024 / 1024}MB")
                     Log.i(TAG, "   Final size: ${destFile.length() / 1024 / 1024}MB")
+                    Log.i(TAG, "   Destination: ${destFile.absolutePath}")
                 }
             }
 
-            // Delete original download file
+            // Delete original download file from Downloads folder
             try {
-                context.contentResolver.delete(sourceUri, null, null)
-                Log.i(TAG, "🗑️ Deleted original download")
+                val downloadsFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), modelName)
+                if (downloadsFile.exists() && downloadsFile.delete()) {
+                    Log.i(TAG, "🗑️ Deleted original download from Downloads folder")
+                } else {
+                    Log.w(TAG, "⚠️ Could not delete original download (may not exist or no permission)")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Could not delete original download: ${e.message}")
             }
@@ -318,7 +330,7 @@ class ModelDownloadManager(private val context: Context) {
             downloadCompleteCallback?.invoke(true, "")
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to move file", e)
+            Log.e(TAG, "❌ Failed to copy file", e)
             Log.e(TAG, "   Exception: ${e.javaClass.simpleName}: ${e.message}")
             e.printStackTrace()
             downloadCompleteCallback?.invoke(false, "Failed to save file: ${e.message}")
