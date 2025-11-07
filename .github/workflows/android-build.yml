@@ -2,7 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'claude/**'  # Build on all Claude Code branches
   pull_request:
     branches: [ main ]
   workflow_dispatch:
