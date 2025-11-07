@@ -46,6 +46,9 @@ class ModelDownloadManager(private val context: Context) {
         // const val DEFAULT_MODEL_URL = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q4_K_M.gguf"
 
         private const val MODELS_DIR = "models"
+
+        // Minimum valid model size (1MB) - models smaller than this are likely corrupted
+        private const val MIN_MODEL_SIZE_BYTES = 1024 * 1024L
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -243,8 +246,9 @@ class ModelDownloadManager(private val context: Context) {
                             val reason = cursor.getInt(
                                 cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
                             )
-                            Log.e(TAG, "❌ Download failed with reason: $reason")
-                            downloadCompleteCallback?.invoke(false, "Download failed (code: $reason)")
+                            val errorMessage = getDownloadErrorMessage(reason)
+                            Log.e(TAG, "❌ Download failed with reason: $reason - $errorMessage")
+                            downloadCompleteCallback?.invoke(false, errorMessage)
                         }
                         else -> {
                             Log.w(TAG, "⚠️ Download status: $status")
@@ -312,6 +316,14 @@ class ModelDownloadManager(private val context: Context) {
                     Log.i(TAG, "   Final size: ${destFile.length() / 1024 / 1024}MB")
                     Log.i(TAG, "   Destination: ${destFile.absolutePath}")
                 }
+            }
+
+            // Validate file size
+            if (destFile.length() < MIN_MODEL_SIZE_BYTES) {
+                Log.e(TAG, "❌ Downloaded file is too small (${destFile.length()} bytes)")
+                destFile.delete()
+                downloadCompleteCallback?.invoke(false, "Downloaded file is corrupted or incomplete. Please try again.")
+                return
             }
 
             // Delete original download file from Downloads folder
@@ -400,6 +412,16 @@ class ModelDownloadManager(private val context: Context) {
                     Log.i(TAG, "✅ Model imported successfully: ${totalBytes / 1024 / 1024}MB")
                     Log.i(TAG, "   Location: ${destFile.absolutePath}")
                 }
+            }
+
+            // Validate file size
+            if (destFile.length() < MIN_MODEL_SIZE_BYTES) {
+                Log.e(TAG, "❌ Imported file is too small (${destFile.length()} bytes)")
+                destFile.delete()
+                withContext(Dispatchers.Main) {
+                    onComplete(false, "File is too small or corrupted. Please select a valid model file.")
+                }
+                return@withContext
             }
 
             withContext(Dispatchers.Main) {
@@ -519,6 +541,34 @@ class ModelDownloadManager(private val context: Context) {
             deleted
         } else {
             false
+        }
+    }
+
+    /**
+     * Get human-readable error message for download failure reason
+     */
+    private fun getDownloadErrorMessage(reason: Int): String {
+        return when (reason) {
+            DownloadManager.ERROR_CANNOT_RESUME ->
+                "Download cannot be resumed. Please try again."
+            DownloadManager.ERROR_DEVICE_NOT_FOUND ->
+                "No external storage found. Please check your device storage."
+            DownloadManager.ERROR_FILE_ALREADY_EXISTS ->
+                "File already exists. Please delete it and try again."
+            DownloadManager.ERROR_FILE_ERROR ->
+                "File system error. Please check available storage space."
+            DownloadManager.ERROR_HTTP_DATA_ERROR ->
+                "Network error. Please check your internet connection and try again."
+            DownloadManager.ERROR_INSUFFICIENT_SPACE ->
+                "Insufficient storage space. Please free up space and try again."
+            DownloadManager.ERROR_TOO_MANY_REDIRECTS ->
+                "Too many redirects. The download URL may be invalid."
+            DownloadManager.ERROR_UNHANDLED_HTTP_CODE ->
+                "Server error. Please try again later."
+            DownloadManager.ERROR_UNKNOWN ->
+                "Unknown error. Please check your internet connection and try again."
+            else ->
+                "Download failed (error code: $reason). Please try again."
         }
     }
 }

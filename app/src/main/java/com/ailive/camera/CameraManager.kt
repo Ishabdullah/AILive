@@ -39,6 +39,13 @@ class CameraManager(
     @Volatile
     private var latestFrame: Bitmap? = null
     private val frameLock = Any()
+
+    // Performance optimization: Process every Nth frame to reduce CPU usage
+    private val FRAME_SKIP_RATE = 30  // Process 1 out of every 30 frames (~1 FPS at 30 FPS camera)
+
+    // Debouncing: Track last classification to avoid redundant UI updates
+    private var lastClassificationTime = 0L
+    private val MIN_CLASSIFICATION_INTERVAL_MS = 500  // Update UI at most every 500ms
     
     /**
      * Start camera with S24 Ultra optimizations
@@ -101,15 +108,16 @@ class CameraManager(
             // CRITICAL: Set analyzer with proper executor
             imageAnalysis.setAnalyzer(mainExecutor) { imageProxy ->
                 frameCount++
-                
+
                 if (frameCount == 1) {
                     Log.i(TAG, "========================================")
                     Log.i(TAG, "🎉 FIRST FRAME RECEIVED!")
                     Log.i(TAG, "========================================")
                 }
-                
-                if (frameCount % 30 == 0) {
-                    Log.i(TAG, "📸 Frame #$frameCount - processing...")
+
+                // OPTIMIZATION: Skip frames to reduce CPU/battery usage
+                if (frameCount % FRAME_SKIP_RATE == 0) {
+                    Log.d(TAG, "📸 Frame #$frameCount - processing...")
                     processFrame(imageProxy)
                 } else {
                     imageProxy.close()
@@ -164,14 +172,19 @@ class CameraManager(
                     val result = modelManager.classifyImage(bitmap)
 
                     if (result != null) {
-                        Log.i(TAG, "✅ ${result.topLabel} (${(result.confidence*100).toInt()}%)")
+                        Log.d(TAG, "✅ ${result.topLabel} (${(result.confidence*100).toInt()}%)")
 
-                        withContext(Dispatchers.Main) {
-                            onClassificationResult?.invoke(
-                                result.topLabel,
-                                result.confidence,
-                                result.inferenceTimeMs
-                            )
+                        // OPTIMIZATION: Debounce UI updates to avoid overwhelming the main thread
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastClassificationTime >= MIN_CLASSIFICATION_INTERVAL_MS) {
+                            lastClassificationTime = currentTime
+                            withContext(Dispatchers.Main) {
+                                onClassificationResult?.invoke(
+                                    result.topLabel,
+                                    result.confidence,
+                                    result.inferenceTimeMs
+                                )
+                            }
                         }
                     }
 
