@@ -127,12 +127,13 @@ class LLMManager(private val context: Context) {
      * Initialize ONNX model (primary inference engine)
      */
     private fun initializeONNX(modelFile: File): Boolean {
+        var sessionOptions: OrtSession.SessionOptions? = null
         return try {
             // Create ONNX Runtime environment
             ortEnv = OrtEnvironment.getEnvironment()
 
             // Create session options with GPU acceleration
-            val sessionOptions = OrtSession.SessionOptions()
+            sessionOptions = OrtSession.SessionOptions()
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             sessionOptions.setIntraOpNumThreads(4)
 
@@ -168,7 +169,17 @@ class LLMManager(private val context: Context) {
             true
         } catch (e: Exception) {
             Log.e(TAG, "❌ ONNX initialization failed", e)
+            // Clean up resources on failure
+            try {
+                ortSession?.close()
+                ortSession = null
+            } catch (ex: Exception) {
+                Log.w(TAG, "Error closing session during cleanup: ${ex.message}")
+            }
             false
+        } finally {
+            // SessionOptions should be closed after session creation
+            // Note: Don't close sessionOptions here as it's still needed by the session
         }
     }
 
@@ -275,36 +286,50 @@ Be warm, helpful, concise, and conversational."""
     private fun runInference(inputIds: LongArray): LongArray {
         val session = ortSession ?: throw IllegalStateException("Session not initialized")
 
-        // Prepare input tensor
-        val shape = longArrayOf(1, inputIds.size.toLong())
-        val inputTensor = OnnxTensor.createTensor(
-            ortEnv,
-            LongBuffer.wrap(inputIds),
-            shape
-        )
+        var inputTensor: OnnxTensor? = null
+        var outputs: OrtSession.Result? = null
 
-        // Run inference
-        val inputs = mapOf("input_ids" to inputTensor)
-        val outputs = session.run(inputs)
+        return try {
+            // Prepare input tensor
+            val shape = longArrayOf(1, inputIds.size.toLong())
+            inputTensor = OnnxTensor.createTensor(
+                ortEnv,
+                LongBuffer.wrap(inputIds),
+                shape
+            )
 
-        // Get output logits
-        val outputTensor = outputs[0] as OnnxTensor
-        val logits = outputTensor.floatBuffer
+            // Run inference
+            val inputs = mapOf("input_ids" to inputTensor)
+            outputs = session.run(inputs)
 
-        // Simple greedy decoding (take argmax)
-        val outputIds = mutableListOf<Long>()
-        for (i in 0 until MAX_LENGTH) {
-            val nextTokenId = sampleNextToken(logits)
-            outputIds.add(nextTokenId)
+            // Get output logits
+            val outputTensor = outputs[0] as OnnxTensor
+            val logits = outputTensor.floatBuffer
 
-            // Stop on end token (assumed to be 2)
-            if (nextTokenId == 2L) break
+            // Simple greedy decoding (take argmax)
+            val outputIds = mutableListOf<Long>()
+            for (i in 0 until MAX_LENGTH) {
+                val nextTokenId = sampleNextToken(logits)
+                outputIds.add(nextTokenId)
+
+                // Stop on end token (assumed to be 2)
+                if (nextTokenId == 2L) break
+            }
+
+            outputIds.toLongArray()
+        } finally {
+            // Always close resources even if an exception occurs
+            try {
+                outputs?.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error closing outputs: ${e.message}")
+            }
+            try {
+                inputTensor?.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error closing input tensor: ${e.message}")
+            }
         }
-
-        outputs.close()
-        inputTensor.close()
-
-        return outputIds.toLongArray()
     }
 
     /**
@@ -371,11 +396,31 @@ Be warm, helpful, concise, and conversational."""
     fun close() {
         try {
             ortSession?.close()
-            ortEnv?.close()
-            Log.i(TAG, "🔒 ONNX Runtime resources released")
-            isInitialized = false
+            ortSession = null
+            Log.d(TAG, "Session closed")
         } catch (e: Exception) {
-            Log.e(TAG, "Error closing LLM", e)
+            Log.w(TAG, "Error closing session: ${e.message}")
         }
+
+        try {
+            ortEnv?.close()
+            ortEnv = null
+            Log.d(TAG, "Environment closed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing environment: ${e.message}")
+        }
+
+        try {
+            tokenizer?.close()
+            tokenizer = null
+            Log.d(TAG, "Tokenizer closed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing tokenizer: ${e.message}")
+        }
+
+        isInitialized = false
+        currentModelPath = null
+        currentModelName = null
+        Log.i(TAG, "🔒 ONNX Runtime resources released")
     }
 }
