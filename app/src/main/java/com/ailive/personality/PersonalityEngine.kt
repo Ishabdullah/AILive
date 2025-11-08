@@ -400,6 +400,18 @@ class PersonalityEngine(
             Log.e(TAG, "Stack trace:")
             e.printStackTrace()
             Log.w(TAG, "Falling back to rule-based response")
+
+            // DEBUGGING: Show error to user via Toast
+            try {
+                android.widget.Toast.makeText(
+                    context,
+                    "LLM ERROR: ${e.javaClass.simpleName}: ${e.message?.take(100)}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } catch (toastError: Exception) {
+                Log.e(TAG, "Could not show toast", toastError)
+            }
+
             generateFallbackResponse(input, intent, toolResults)
         }
 
