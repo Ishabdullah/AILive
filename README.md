@@ -1,10 +1,10 @@
 # AILive - Unified AI Intelligence System
 
-**Version:** 0.7.5-beta
-**Status:** ⚠️ 75% Complete - Phase 7 In Progress (2 Critical Bugs)
+**Version:** 0.8.0-beta
+**Status:** ✅ ~85% Complete - LLM System FIXED! Phase 7 Complete
 **Platform:** Android 8.0+ (API 26+)
 **License:** Non-commercial (See LICENSE)
-**Latest Build:** [Download APK](https://github.com/Ishabdullah/AILive/actions/runs/18956424882)
+**Latest Build:** [GitHub Actions](https://github.com/Ishabdullah/AILive/actions) - Branch: `claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ`
 
 ---
 
@@ -73,14 +73,17 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ## 🚀 Quick Start
 
-### ⚠️ Important: Known Issues
+### ✅ Recent Fixes (2025-11-08)
 
-**Before installing, be aware:**
-- ❌ Model downloads currently fail (missing storage permission)
-- ❌ Model import causes crash (GGUF vs ONNX format issue)
-- ✅ Dashboard and visualization features work perfectly
+**Major LLM System Overhaul - ALL Critical Issues Fixed!**
+- ✅ Fixed chat template (now uses SmolLM2's ChatML format)
+- ✅ Updated tokenizer to official SmolLM2 tokenizer
+- ✅ Completely rewrote autoregressive generation (was fundamentally broken)
+- ✅ Fixed token sampling and logits extraction
+- ✅ Added comprehensive error logging throughout pipeline
 
-**Recommendation:** Wait for next release with fixes, or see [PHASE-7-HANDOFF.md](PHASE-7-HANDOFF.md) to implement fixes yourself.
+**See:** [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for complete technical analysis
+**See:** [LLM_INITIALIZATION_FIX.md](LLM_INITIALIZATION_FIX.md) for initialization race condition fix
 
 ### Download Pre-built APK
 
@@ -93,8 +96,11 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
    ```bash
    adb install app-debug.apk
    ```
-7. Grant required permissions (camera, microphone)
-8. **Note:** Model functionality not working yet - see [KNOWN-ISSUES.md](KNOWN-ISSUES.md)
+7. Grant required permissions (camera, microphone, storage)
+8. **First Launch:** App will prompt to download SmolLM2 model (348MB)
+9. **Wait ~10 seconds** for model initialization after download
+10. **Voice notification** will confirm when AI is ready: "Language model loaded..."
+11. Start chatting! Try "Hello" or "What can you do?"
 
 ### Build from Source
 
@@ -121,7 +127,11 @@ adb logcat | grep "AILive"
 
 **Core Intelligence**
 - ✅ PersonalityEngine unified orchestration (606 lines)
-- ✅ LLMManager for inference (295 lines)
+- ✅ LLMManager for on-device inference with SmolLM2 (400+ lines)
+  - ONNX Runtime with NNAPI GPU acceleration
+  - Proper autoregressive generation
+  - ChatML format support
+  - HuggingFace tokenizer integration
 - ✅ TTSManager for voice output (308 lines)
 - ✅ MessageBus event coordination (232 lines)
 - ✅ State management system
@@ -191,18 +201,22 @@ adb logcat | grep "AILive"
 | Phase 6.1 | ✅ Complete | Real-time dashboard |
 | Phase 6.2 | ✅ Complete | Data visualization with charts |
 | Phase 6.3-6.4 | 🔄 Planned | Interactive features & polish |
-| Phase 7 | ⚠️ 75% Complete | Model download system (2 critical bugs) |
+| Phase 7 | ✅ COMPLETE | LLM system fully functional! |
 
 **Phase 7 Status:**
 - ✅ Model download infrastructure (ModelDownloadManager)
 - ✅ Model setup UI dialogs (ModelSetupDialog)
 - ✅ MainActivity integration with ActivityResultLauncher
-- ✅ HuggingFace download URLs configured
-- ✅ File picker for model import
-- ❌ **CRITICAL BUG #1:** App crashes after importing model (GGUF vs ONNX format mismatch)
-- ❌ **CRITICAL BUG #2:** Downloads fail (missing runtime storage permission)
+- ✅ SmolLM2-360M ONNX model integration (348MB, INT8 quantized)
+- ✅ File picker for model import (.onnx files)
+- ✅ **FIXED:** Chat template (TinyLlama → ChatML format)
+- ✅ **FIXED:** Tokenizer (now official SmolLM2 tokenizer)
+- ✅ **FIXED:** Autoregressive generation (was fundamentally broken)
+- ✅ **FIXED:** Token sampling and logits extraction
+- ✅ **FIXED:** Initialization race condition
+- ✅ **FIXED:** File validation and error messaging
 
-**Next Developer:**  Start with [PHASE-7-HANDOFF.md](PHASE-7-HANDOFF.md)
+**Recent Fixes:** See [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for complete technical analysis
 
 **For detailed history**: See [SESSION-6-SUMMARY.md](SESSION-6-SUMMARY.md) and [KNOWN-ISSUES.md](KNOWN-ISSUES.md)
 
@@ -267,12 +281,25 @@ adb logcat | grep "AILive"
 **Target SDK**: 34
 
 **Key Dependencies**:
-- ONNX Runtime 1.16.0 (ML inference)
-- TensorFlow Lite 2.14.0 (ML models)
+- ONNX Runtime 1.16.0 (ML inference with NNAPI GPU acceleration)
+- HuggingFace Tokenizers 0.29.0 (BPE tokenization)
+- TensorFlow Lite 2.14.0 (Vision models)
 - CameraX 1.3.1 (Camera integration)
 - MPAndroidChart 3.1.0 (Data visualization)
 - Kotlin Coroutines 1.7.3 (Async operations)
 - Material Design 3 (UI components)
+
+**LLM Model**:
+- **Model**: SmolLM2-360M-Instruct (HuggingFace)
+- **Format**: ONNX (INT8 quantized for mobile)
+- **Size**: 348MB
+- **Parameters**: 360 million
+- **Context Length**: 2048 tokens
+- **Chat Format**: ChatML (`<|im_start|>`, `<|im_end|>`)
+- **Generation**: Proper autoregressive with greedy sampling
+- **Acceleration**: NNAPI for GPU/NPU when available
+- **Tokenizer**: Official SmolLM2 BPE tokenizer (2.1MB)
+- **Download**: Automatic from HuggingFace on first launch
 
 ---
 
