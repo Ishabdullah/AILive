@@ -77,10 +77,9 @@ class ModelSetupDialog(
             .setMessage(
                 "To get started, AILive needs an AI model for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download SmolLM2-360M INT8 (~348MB, recommended)\n" +
-                "• Import an ONNX model from your device\n" +
-                "• Download a smaller INT8 model (~131MB)\n\n" +
-                "TEMPORARY: This version only supports ONNX models.\n" +
+                "• Download GPT-2 ONNX (~548MB, compatible with standard ONNX Runtime)\n" +
+                "• Import an ONNX model from your device\n\n" +
+                "IMPORTANT: Only models with standard ONNX operators are supported.\n" +
                 "All models run 100% on your device - no internet needed after download."
             )
             .setPositiveButton("Download Model") { _, _ ->
@@ -102,8 +101,7 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "SmolLM2-360M INT8 (~348MB) - Recommended",
-            "SmolLM2-135M INT8 (~131MB) - Smaller/Faster"
+            "GPT-2 ONNX (~548MB) - Standard ONNX ops only"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
@@ -112,13 +110,8 @@ class ModelSetupDialog(
             .setItems(models) { _, which ->
                 when (which) {
                     0 -> downloadModel(
-                        ModelDownloadManager.ONNX_360M_URL,
-                        ModelDownloadManager.ONNX_360M_NAME,
-                        onComplete
-                    )
-                    1 -> downloadModel(
-                        ModelDownloadManager.ONNX_135M_URL,
-                        ModelDownloadManager.ONNX_135M_NAME,
+                        ModelDownloadManager.GPT2_URL,
+                        ModelDownloadManager.GPT2_NAME,
                         onComplete
                     )
                 }

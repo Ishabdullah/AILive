@@ -123,6 +123,16 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "📂 Loading model: ${modelFile.name} (${modelFile.length() / 1024 / 1024}MB)")
             Log.i(TAG, "   Format: ONNX (ONNX Runtime with NNAPI)")
 
+            // Verify model integrity before attempting to load
+            Log.i(TAG, "🔍 Verifying model integrity...")
+            if (!ModelIntegrityVerifier.verify(modelFile.name)) {
+                val error = "Model integrity check failed. File may be corrupted. Please re-download."
+                Log.e(TAG, "❌ $error")
+                initializationError = error
+                isInitializing = false
+                return@withContext false
+            }
+
             // Load with ONNX Runtime
             Log.i(TAG, "🔷 Loading with ONNX Runtime...")
             val success = initializeONNX(modelFile)
@@ -282,8 +292,8 @@ class LLMManager(private val context: Context) {
      * instead of six separate agent personalities. The agentName parameter
      * is kept for backward compatibility but should always be "AILive".
      *
-     * IMPORTANT: SmolLM2 uses ChatML format with special tokens:
-     * <|im_start|> and <|im_end|>
+     * IMPORTANT: GPT-2 format - simpler than ChatML, no special chat tokens
+     * GPT-2 is a causal LM without instruction tuning, so we use natural language formatting
      */
     private fun createChatPrompt(userMessage: String, agentName: String): String {
         // Unified personality for all interactions
@@ -292,14 +302,13 @@ You are ONE cohesive intelligence with multiple capabilities (vision, emotion, m
 Speak naturally as a single character, never as separate agents or systems.
 Be warm, helpful, concise, and conversational."""
 
-        // SmolLM2 ChatML format (NOT TinyLlama format)
-        // Using <|im_start|> and <|im_end|> special tokens
-        return """<|im_start|>system
-$personality<|im_end|>
-<|im_start|>user
-$userMessage<|im_end|>
-<|im_start|>assistant
-"""
+        // GPT-2 format - simple concatenation with clear structure
+        // No special tokens needed, just natural text flow
+        return """System: $personality
+
+User: $userMessage
+
+Assistant:"""
     }
 
     /**
