@@ -100,20 +100,20 @@ class ModelDownloadManager(private val context: Context) {
     /**
      * Get the path to a model file
      */
-    fun getModelPath(modelName: String = ONNX_360M_NAME): String {
+    fun getModelPath(modelName: String = GPT2_NAME): String {
         return File(context.filesDir, "$MODELS_DIR/$modelName").absolutePath
     }
 
     /**
      * Download a model from HuggingFace (ONNX-only)
      *
-     * @param modelUrl URL to download from (defaults to SmolLM2-360M ONNX)
+     * @param modelUrl URL to download from (defaults to GPT-2 ONNX)
      * @param modelName Name to save as
      * @param onComplete Callback with (success, errorMessage)
      */
     fun downloadModel(
-        modelUrl: String = ONNX_360M_URL,
-        modelName: String = ONNX_360M_NAME,
+        modelUrl: String = GPT2_URL,
+        modelName: String = GPT2_NAME,
         onComplete: (Boolean, String) -> Unit
     ) {
         Log.i(TAG, "📥 Starting download: $modelName")
@@ -368,7 +368,7 @@ class ModelDownloadManager(private val context: Context) {
         onComplete: (Boolean, String) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
-            var fileName = ONNX_360M_NAME
+            var fileName = GPT2_NAME
 
             // Get original filename
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
