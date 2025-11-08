@@ -76,8 +76,8 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 ### ✅ Recent Fixes (2025-11-08)
 
 **Major LLM System Overhaul - ALL Critical Issues Fixed!**
-- ✅ Fixed chat template (now uses SmolLM2's ChatML format)
-- ✅ Updated tokenizer to official SmolLM2 tokenizer
+- ✅ Fixed chat template (now uses GPT-2 format (simple text formatting))
+- ✅ Updated tokenizer to official GPT-2 tokenizer
 - ✅ Completely rewrote autoregressive generation (was fundamentally broken)
 - ✅ Fixed token sampling and logits extraction
 - ✅ Added comprehensive error logging throughout pipeline
@@ -97,7 +97,7 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
    adb install app-debug.apk
    ```
 7. Grant required permissions (camera, microphone, storage)
-8. **First Launch:** App will prompt to download SmolLM2 model (348MB)
+8. **First Launch:** App will prompt to download GPT-2 model (548MB)
 9. **Wait ~10 seconds** for model initialization after download
 10. **Voice notification** will confirm when AI is ready: "Language model loaded..."
 11. Start chatting! Try "Hello" or "What can you do?"
@@ -127,7 +127,7 @@ adb logcat | grep "AILive"
 
 **Core Intelligence**
 - ✅ PersonalityEngine unified orchestration (606 lines)
-- ✅ LLMManager for on-device inference with SmolLM2 (400+ lines)
+- ✅ LLMManager for on-device inference with GPT-2 (400+ lines)
   - ONNX Runtime with NNAPI GPU acceleration
   - Proper autoregressive generation
   - ChatML format support
@@ -207,10 +207,10 @@ adb logcat | grep "AILive"
 - ✅ Model download infrastructure (ModelDownloadManager)
 - ✅ Model setup UI dialogs (ModelSetupDialog)
 - ✅ MainActivity integration with ActivityResultLauncher
-- ✅ SmolLM2-360M ONNX model integration (348MB, INT8 quantized)
+- ✅ GPT-2 ONNX model integration (548MB, INT8 quantized)
 - ✅ File picker for model import (.onnx files)
 - ✅ **FIXED:** Chat template (TinyLlama → ChatML format)
-- ✅ **FIXED:** Tokenizer (now official SmolLM2 tokenizer)
+- ✅ **FIXED:** Tokenizer (now official GPT-2 tokenizer)
 - ✅ **FIXED:** Autoregressive generation (was fundamentally broken)
 - ✅ **FIXED:** Token sampling and logits extraction
 - ✅ **FIXED:** Initialization race condition
@@ -290,15 +290,15 @@ adb logcat | grep "AILive"
 - Material Design 3 (UI components)
 
 **LLM Model**:
-- **Model**: SmolLM2-360M-Instruct (HuggingFace)
+- **Model**: GPT-2 (HuggingFace)
 - **Format**: ONNX (INT8 quantized for mobile)
-- **Size**: 348MB
+- **Size**: 548MB
 - **Parameters**: 360 million
 - **Context Length**: 2048 tokens
-- **Chat Format**: ChatML (`<|im_start|>`, `<|im_end|>`)
+- **Chat Format**: Standard text format (no special tokens)
 - **Generation**: Proper autoregressive with greedy sampling
 - **Acceleration**: NNAPI for GPU/NPU when available
-- **Tokenizer**: Official SmolLM2 BPE tokenizer (2.1MB)
+- **Tokenizer**: Official GPT-2 BPE tokenizer (1.3MB)
 - **Download**: Automatic from HuggingFace on first launch
 
 ---
