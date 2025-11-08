@@ -371,6 +371,28 @@ class PersonalityEngine(
             } else {
                 llmResponse
             }
+        } catch (e: IllegalStateException) {
+            // Handle initialization state errors with user-friendly messages
+            val message = e.message ?: ""
+            when {
+                "still loading" in message.lowercase() -> {
+                    Log.w(TAG, "⏳ LLM still initializing...")
+                    "I'm still loading my language model. This takes about 5-10 seconds. Please try again in a moment!"
+                }
+                "not initialized" in message.lowercase() -> {
+                    Log.w(TAG, "⚠️ LLM not available: $message")
+                    val error = llmManager.getInitializationError()
+                    if (error != null) {
+                        "I'm having trouble with my language model: $error"
+                    } else {
+                        generateFallbackResponse(input, intent, toolResults)
+                    }
+                }
+                else -> {
+                    Log.w(TAG, "LLM error: ${e.message}, using fallback")
+                    generateFallbackResponse(input, intent, toolResults)
+                }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "LLM generation failed, using fallback: ${e.message}")
             generateFallbackResponse(input, intent, toolResults)
