@@ -36,9 +36,9 @@ class ModelDownloadManager(private val context: Context) {
         // Using Optimum-exported models which use standard ONNX ops only
         // These are proven to work with ONNX Runtime on Android
 
-        // GPT-2 Base model (optimized and quantized)
-        const val GPT2_NAME = "gpt2-onnx.onnx"
-        const val GPT2_URL = "https://huggingface.co/optimum/gpt2/resolve/main/model.onnx"
+        // GPT-2 Base model (decoder only, no KV cache)
+        const val GPT2_NAME = "gpt2-decoder.onnx"
+        const val GPT2_URL = "https://huggingface.co/optimum/gpt2/resolve/main/decoder_model.onnx"
 
         // Note: GPT-2 is used instead of TinyLlama/SmolLM2 because:
         // - SmolLM2 uses custom Microsoft RotaryEmbedding op (not in standard Android ONNX Runtime)
@@ -46,12 +46,13 @@ class ModelDownloadManager(private val context: Context) {
         // - GPT-2 from Optimum uses only standard ONNX ops
         // - Proven to work with ONNX Runtime 1.16.0 on Android
         //
-        // Chat format: Standard <|system|>, <|user|>, <|assistant|> tokens work
-        // Size: ~500MB for FP32, ~250MB for quantized
+        // File: decoder_model.onnx (653 MB, FP32)
+        // Alternative: decoder_with_past_model.onnx (with KV caching, but more complex)
         //
-        // Alternative models that might work:
-        // - DistilGPT-2: https://huggingface.co/optimum/distilgpt2/resolve/main/model.onnx
-        // - GPT-2 Medium: https://huggingface.co/optimum/gpt2-medium/resolve/main/model.onnx
+        // Chat format: Simple text format (no special tokens needed)
+        //
+        // Alternative smaller models:
+        // - DistilGPT-2: https://huggingface.co/optimum/distilgpt2/resolve/main/decoder_model.onnx
 
         private const val MODELS_DIR = "models"
 
