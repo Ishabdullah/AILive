@@ -46,6 +46,7 @@ class CommandRouter(private val aiCore: AILiveCore) {
     private suspend fun handleWithPersonalityEngine(command: String) {
         try {
             Log.i(TAG, "🧠 Routing to PersonalityEngine (unified mode)")
+            Log.d(TAG, "Input command: '$command'")
 
             // Process through PersonalityEngine
             val response = aiCore.personalityEngine.processInput(
@@ -53,15 +54,26 @@ class CommandRouter(private val aiCore: AILiveCore) {
                 inputType = InputType.VOICE
             )
 
-            // Response callback
-            onResponse?.invoke(response.text)
+            // CRITICAL: Send response to user
+            val responseText = response.text
+            Log.i(TAG, "✅ PersonalityEngine generated response: '$responseText'")
+            Log.d(TAG, "Response length: ${responseText.length} chars")
+            Log.d(TAG, "Tools used: ${response.usedTools.joinToString()}")
+            Log.d(TAG, "Confidence: ${response.confidence}")
 
-            Log.i(TAG, "✓ PersonalityEngine response: ${response.text.take(50)}...")
-            Log.d(TAG, "Used tools: ${response.usedTools.joinToString()}")
+            // Invoke callback to send to user
+            onResponse?.invoke(responseText)
+            Log.d(TAG, "✓ Response sent to user via callback")
 
         } catch (e: Exception) {
-            Log.e(TAG, "PersonalityEngine error", e)
-            onResponse?.invoke("I'm having trouble processing that. Could you try again?")
+            Log.e(TAG, "❌ PersonalityEngine error - DETAILED", e)
+            Log.e(TAG, "Exception: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Message: ${e.message}")
+            e.printStackTrace()
+
+            val errorResponse = "I'm having trouble processing that. Could you try again?"
+            onResponse?.invoke(errorResponse)
+            Log.w(TAG, "Sent error response to user")
         }
     }
 
