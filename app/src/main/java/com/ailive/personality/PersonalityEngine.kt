@@ -394,7 +394,12 @@ class PersonalityEngine(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "LLM generation failed, using fallback: ${e.message}")
+            Log.e(TAG, "❌ LLM GENERATION FAILED - DETAILED ERROR", e)
+            Log.e(TAG, "Exception type: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Message: ${e.message}")
+            Log.e(TAG, "Stack trace:")
+            e.printStackTrace()
+            Log.w(TAG, "Falling back to rule-based response")
             generateFallbackResponse(input, intent, toolResults)
         }
 

@@ -281,6 +281,9 @@ class LLMManager(private val context: Context) {
      * REFACTORING NOTE: This now uses ONE consistent personality (AILive)
      * instead of six separate agent personalities. The agentName parameter
      * is kept for backward compatibility but should always be "AILive".
+     *
+     * IMPORTANT: SmolLM2 uses ChatML format with special tokens:
+     * <|im_start|> and <|im_end|>
      */
     private fun createChatPrompt(userMessage: String, agentName: String): String {
         // Unified personality for all interactions
@@ -289,8 +292,14 @@ You are ONE cohesive intelligence with multiple capabilities (vision, emotion, m
 Speak naturally as a single character, never as separate agents or systems.
 Be warm, helpful, concise, and conversational."""
 
-        // TinyLlama chat format
-        return "<|system|>\n$personality</s>\n<|user|>\n$userMessage</s>\n<|assistant|>\n"
+        // SmolLM2 ChatML format (NOT TinyLlama format)
+        // Using <|im_start|> and <|im_end|> special tokens
+        return """<|im_start|>system
+$personality<|im_end|>
+<|im_start|>user
+$userMessage<|im_end|>
+<|im_start|>assistant
+"""
     }
 
     /**
@@ -321,78 +330,132 @@ Be warm, helpful, concise, and conversational."""
     }
 
     /**
-     * Run ONNX inference
+     * Run ONNX inference with proper autoregressive generation
+     *
+     * CRITICAL FIX: Implements proper transformer generation loop
+     * - Feeds generated tokens back as new inputs
+     * - Samples from last position logits only
+     * - Stops on EOS token
      */
     private fun runInference(inputIds: LongArray): LongArray {
         val session = ortSession ?: throw IllegalStateException("Session not initialized")
 
-        var inputTensor: OnnxTensor? = null
-        var outputs: OrtSession.Result? = null
+        val generatedIds = mutableListOf<Long>()
+        val currentSequence = inputIds.toMutableList()
 
-        return try {
-            // Prepare input tensor
-            val shape = longArrayOf(1, inputIds.size.toLong())
-            inputTensor = OnnxTensor.createTensor(
-                ortEnv,
-                LongBuffer.wrap(inputIds),
-                shape
-            )
+        try {
+            // Autoregressive generation loop
+            for (step in 0 until MAX_LENGTH) {
+                var inputTensor: OnnxTensor? = null
+                var outputs: OrtSession.Result? = null
 
-            // Run inference
-            val inputs = mapOf("input_ids" to inputTensor)
-            outputs = session.run(inputs)
+                try {
+                    // Create input tensor from current sequence
+                    val shape = longArrayOf(1, currentSequence.size.toLong())
+                    inputTensor = OnnxTensor.createTensor(
+                        ortEnv,
+                        LongBuffer.wrap(currentSequence.toLongArray()),
+                        shape
+                    )
 
-            // Get output logits
-            val outputTensor = outputs[0] as OnnxTensor
-            val logits = outputTensor.floatBuffer
+                    // Run model
+                    val inputs = mapOf("input_ids" to inputTensor)
+                    outputs = session.run(inputs)
 
-            // Simple greedy decoding (take argmax)
-            val outputIds = mutableListOf<Long>()
-            for (i in 0 until MAX_LENGTH) {
-                val nextTokenId = sampleNextToken(logits)
-                outputIds.add(nextTokenId)
+                    // Get logits tensor: shape [batch_size, seq_len, vocab_size]
+                    val outputTensor = outputs[0] as OnnxTensor
+                    val logitsBuffer = outputTensor.floatBuffer
 
-                // Stop on end token (assumed to be 2)
-                if (nextTokenId == 2L) break
+                    // Extract logits for LAST position only
+                    val vocabSize = outputTensor.info.shape[2].toInt()
+                    val seqLen = currentSequence.size
+                    val lastPosLogits = extractLastPositionLogits(logitsBuffer, seqLen, vocabSize)
+
+                    // Sample next token from last position logits
+                    val nextTokenId = sampleNextToken(lastPosLogits)
+
+                    // Add to generated sequence
+                    generatedIds.add(nextTokenId)
+                    currentSequence.add(nextTokenId)
+
+                    Log.v(TAG, "Step $step: Generated token $nextTokenId")
+
+                    // Check for end tokens
+                    // SmolLM2 uses token ID 0 (EOS) or 2 (another common EOS)
+                    if (nextTokenId == 0L || nextTokenId == 2L) {
+                        Log.d(TAG, "End token detected, stopping generation")
+                        break
+                    }
+
+                } finally {
+                    // Clean up resources for this step
+                    outputs?.close()
+                    inputTensor?.close()
+                }
             }
 
-            outputIds.toLongArray()
-        } finally {
-            // Always close resources even if an exception occurs
-            try {
-                outputs?.close()
-            } catch (e: Exception) {
-                Log.w(TAG, "Error closing outputs: ${e.message}")
-            }
-            try {
-                inputTensor?.close()
-            } catch (e: Exception) {
-                Log.w(TAG, "Error closing input tensor: ${e.message}")
-            }
+            Log.d(TAG, "Generated ${generatedIds.size} tokens")
+            return generatedIds.toLongArray()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in autoregressive generation", e)
+            throw e
         }
     }
 
     /**
-     * Sample next token using temperature and top-p
+     * Extract logits for the last position from ONNX output
+     *
+     * Output shape: [batch_size, seq_len, vocab_size] = [1, seq_len, vocab_size]
+     * We need logits for position [0, seq_len-1, :] (last position in sequence)
      */
-    private fun sampleNextToken(logits: FloatBuffer): Long {
-        // Get vocab size from logits buffer size
-        val vocabSize = logits.remaining()
+    private fun extractLastPositionLogits(logitsBuffer: FloatBuffer, seqLen: Int, vocabSize: Int): FloatArray {
+        val lastPosLogits = FloatArray(vocabSize)
 
-        // Apply temperature
-        val probs = FloatArray(vocabSize)
-        for (i in 0 until vocabSize) {
-            probs[i] = exp((logits[i] / TEMPERATURE).toDouble()).toFloat()
+        // Calculate offset to last position: (seqLen - 1) * vocabSize
+        val offset = (seqLen - 1) * vocabSize
+
+        // Set buffer position and read vocab_size floats
+        logitsBuffer.position(offset)
+        logitsBuffer.get(lastPosLogits, 0, vocabSize)
+
+        return lastPosLogits
+    }
+
+    /**
+     * Sample next token using temperature and softmax
+     *
+     * FIXED: Now takes FloatArray (from extractLastPositionLogits)
+     * Properly applies softmax with numerical stability
+     *
+     * @param logits Raw logits for vocabulary (shape: [vocab_size])
+     * @return Sampled token ID
+     */
+    private fun sampleNextToken(logits: FloatArray): Long {
+        val vocabSize = logits.size
+
+        // Apply temperature scaling
+        val scaledLogits = FloatArray(vocabSize) { i ->
+            logits[i] / TEMPERATURE
         }
 
-        // Normalize to probabilities
-        val sum = probs.sum()
-        for (i in probs.indices) {
-            probs[i] /= sum
+        // Apply softmax with numerical stability (subtract max for stability)
+        val maxLogit = scaledLogits.maxOrNull() ?: 0f
+        val expLogits = FloatArray(vocabSize) { i ->
+            exp((scaledLogits[i] - maxLogit).toDouble()).toFloat()
         }
 
-        // Greedy sampling (take argmax for now)
-        return probs.indices.maxByOrNull { probs[it] }?.toLong() ?: 0L
+        val sumExp = expLogits.sum()
+        val probs = FloatArray(vocabSize) { i ->
+            expLogits[i] / sumExp
+        }
+
+        // Greedy sampling (argmax) - most reliable for small models
+        val sampledToken = probs.indices.maxByOrNull { probs[it] }?.toLong() ?: 0L
+
+        Log.v(TAG, "Sampled token $sampledToken with probability ${probs[sampledToken.toInt()]}")
+
+        return sampledToken
     }
 
 
