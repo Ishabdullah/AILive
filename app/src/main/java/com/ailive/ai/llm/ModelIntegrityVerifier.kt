@@ -21,12 +21,12 @@ object ModelIntegrityVerifier {
 
     // Model expectations
     private const val MODEL_DIR = "/data/data/com.ailive/files/models/"
-    private const val GPT2_MODEL_NAME = "gpt2-onnx.onnx"
-    private const val EXPECTED_MIN_SIZE_MB = 500  // GPT-2 is ~548MB
-    private const val EXPECTED_MAX_SIZE_MB = 600
+    private const val GPT2_MODEL_NAME = "gpt2-decoder.onnx"
+    private const val EXPECTED_MIN_SIZE_MB = 600  // GPT-2 decoder is ~653MB
+    private const val EXPECTED_MAX_SIZE_MB = 700
 
     // Optional: Set this to the SHA-256 hash of your verified model
-    // To get hash: adb shell run-as com.ailive sha256sum /data/data/com.ailive/files/models/gpt2-onnx.onnx
+    // To get hash: adb shell run-as com.ailive sha256sum /data/data/com.ailive/files/models/gpt2-decoder.onnx
     private const val EXPECTED_SHA256 = ""  // Empty = skip checksum verification
 
     /**

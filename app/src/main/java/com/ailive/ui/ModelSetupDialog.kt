@@ -77,7 +77,7 @@ class ModelSetupDialog(
             .setMessage(
                 "To get started, AILive needs an AI model for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download GPT-2 ONNX (~548MB, compatible with standard ONNX Runtime)\n" +
+                "• Download GPT-2 ONNX (~653MB, compatible with standard ONNX Runtime)\n" +
                 "• Import an ONNX model from your device\n\n" +
                 "IMPORTANT: Only models with standard ONNX operators are supported.\n" +
                 "All models run 100% on your device - no internet needed after download."
@@ -101,7 +101,7 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "GPT-2 ONNX (~548MB) - Standard ONNX ops only"
+            "GPT-2 ONNX (~653MB) - Standard ONNX ops only"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display

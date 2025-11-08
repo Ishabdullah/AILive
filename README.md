@@ -97,7 +97,7 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
    adb install app-debug.apk
    ```
 7. Grant required permissions (camera, microphone, storage)
-8. **First Launch:** App will prompt to download GPT-2 model (548MB)
+8. **First Launch:** App will prompt to download GPT-2 model (653MB)
 9. **Wait ~10 seconds** for model initialization after download
 10. **Voice notification** will confirm when AI is ready: "Language model loaded..."
 11. Start chatting! Try "Hello" or "What can you do?"
@@ -207,7 +207,7 @@ adb logcat | grep "AILive"
 - ✅ Model download infrastructure (ModelDownloadManager)
 - ✅ Model setup UI dialogs (ModelSetupDialog)
 - ✅ MainActivity integration with ActivityResultLauncher
-- ✅ GPT-2 ONNX model integration (548MB, INT8 quantized)
+- ✅ GPT-2 ONNX model integration (653MB, INT8 quantized)
 - ✅ File picker for model import (.onnx files)
 - ✅ **FIXED:** Chat template (TinyLlama → ChatML format)
 - ✅ **FIXED:** Tokenizer (now official GPT-2 tokenizer)
@@ -292,7 +292,7 @@ adb logcat | grep "AILive"
 **LLM Model**:
 - **Model**: GPT-2 (HuggingFace)
 - **Format**: ONNX (INT8 quantized for mobile)
-- **Size**: 548MB
+- **Size**: 653MB
 - **Parameters**: 360 million
 - **Context Length**: 2048 tokens
 - **Chat Format**: Standard text format (no special tokens)
