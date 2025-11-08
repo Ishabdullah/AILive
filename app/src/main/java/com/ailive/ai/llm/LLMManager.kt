@@ -46,7 +46,10 @@ class LLMManager(private val context: Context) {
     private var ortSession: OrtSession? = null
     private var ortEnv: OrtEnvironment? = null
 
+    // Initialization state tracking
     private var isInitialized = false
+    private var isInitializing = false
+    private var initializationError: String? = null
 
     // GGUF support temporarily disabled (native library not built)
     // private val llamaBridge = LLMBridge()
@@ -70,14 +73,31 @@ class LLMManager(private val context: Context) {
      * GGUF support will be added when native library is built
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+        // Prevent duplicate initialization
+        if (isInitialized) {
+            Log.i(TAG, "LLM already initialized")
+            return@withContext true
+        }
+
+        if (isInitializing) {
+            Log.w(TAG, "LLM initialization already in progress")
+            return@withContext false
+        }
+
+        isInitializing = true
+        initializationError = null
+
         try {
             Log.i(TAG, "🤖 Initializing LLM (ONNX-only mode)...")
+            Log.i(TAG, "⏱️  This may take 5-10 seconds for model loading...")
 
             // Check if ANY model is available
             val availableModels = modelDownloadManager.getAvailableModels()
             if (availableModels.isEmpty()) {
-                Log.e(TAG, "❌ No model files found")
-                Log.i(TAG, "📥 Please download or import a model")
+                val error = "No model files found. Please download or import a model."
+                Log.e(TAG, "❌ $error")
+                initializationError = error
+                isInitializing = false
                 return@withContext false
             }
 
@@ -85,10 +105,14 @@ class LLMManager(private val context: Context) {
             val onnxModel = availableModels.firstOrNull { it.name.endsWith(".onnx", ignoreCase = true) }
 
             if (onnxModel == null) {
+                val foundModels = availableModels.joinToString { it.name }
+                val error = "No ONNX models found. This version only supports .onnx format. Found: $foundModels"
                 Log.e(TAG, "❌ No ONNX models found")
                 Log.i(TAG, "   This version only supports .onnx format")
-                Log.i(TAG, "   Found models: ${availableModels.joinToString { it.name }}")
+                Log.i(TAG, "   Found models: $foundModels")
                 Log.i(TAG, "   Please download an ONNX model")
+                initializationError = error
+                isInitializing = false
                 return@withContext false
             }
 
@@ -104,21 +128,29 @@ class LLMManager(private val context: Context) {
             val success = initializeONNX(modelFile)
 
             if (!success) {
-                Log.e(TAG, "❌ Failed to load model")
+                val error = "Failed to load ONNX model. The model file may be corrupted."
+                Log.e(TAG, "❌ $error")
+                initializationError = error
+                isInitializing = false
                 return@withContext false
             }
 
             isInitialized = true
+            isInitializing = false
             Log.i(TAG, "✅ LLM initialized successfully!")
             Log.i(TAG, "   Model: $currentModelName")
             Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
             Log.i(TAG, "   Engine: ONNX Runtime")
             Log.i(TAG, "   Max length: $MAX_LENGTH tokens")
+            Log.i(TAG, "🎉 AI responses are now powered by the language model!")
 
             true
         } catch (e: Exception) {
+            val error = "LLM initialization failed: ${e.message}"
             Log.e(TAG, "❌ Failed to initialize LLM", e)
             e.printStackTrace()
+            initializationError = error
+            isInitializing = false
             false
         }
     }
@@ -191,9 +223,17 @@ class LLMManager(private val context: Context) {
      * @return Generated text response
      */
     suspend fun generate(prompt: String, agentName: String = "AILive"): String = withContext(Dispatchers.IO) {
-        if (!isInitialized) {
-            Log.w(TAG, "⚠️ LLM not initialized, using fallback response")
-            return@withContext getFallbackResponse(prompt, agentName)
+        // Check initialization status
+        when {
+            isInitializing -> {
+                Log.w(TAG, "⏳ LLM still initializing (loading model)...")
+                throw IllegalStateException("LLM is still loading. Please wait a moment.")
+            }
+            !isInitialized -> {
+                val errorMsg = initializationError ?: "LLM not initialized"
+                Log.w(TAG, "⚠️ $errorMsg")
+                throw IllegalStateException(errorMsg)
+            }
         }
 
         try {
@@ -360,6 +400,21 @@ Be warm, helpful, concise, and conversational."""
      * Check if a model is available (checks for ANY model, GGUF or ONNX)
      */
     fun isModelAvailable(): Boolean = modelDownloadManager.isModelAvailable(modelName = null)
+
+    /**
+     * Check if LLM is currently initializing
+     */
+    fun isInitializing(): Boolean = isInitializing
+
+    /**
+     * Get initialization error message if failed
+     */
+    fun getInitializationError(): String? = initializationError
+
+    /**
+     * Check if LLM is ready to use
+     */
+    fun isReady(): Boolean = isInitialized
 
     /**
      * Get the ModelDownloadManager for access from UI

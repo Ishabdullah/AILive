@@ -75,12 +75,20 @@ class AILiveCore(
             llmManager = LLMManager(context)
 
             // Initialize LLM in background (takes ~5-10 seconds)
+            Log.i(TAG, "⏱️  Starting LLM initialization (5-10 seconds)...")
             CoroutineScope(Dispatchers.IO).launch {
                 val success = llmManager.initialize()
                 if (success) {
-                    Log.i(TAG, "✓ LLM ready for intelligent responses")
+                    Log.i(TAG, "✅ LLM ready for intelligent responses")
+                    // Notify user that AI is now fully powered
+                    ttsManager.speak(
+                        text = "Language model loaded. AI responses are now fully powered!",
+                        priority = TTSManager.Priority.LOW
+                    )
                 } else {
-                    Log.w(TAG, "⚠️ LLM not available, using fallback responses")
+                    val error = llmManager.getInitializationError()
+                    Log.w(TAG, "⚠️ LLM not available: $error")
+                    Log.w(TAG, "   Using fallback response system")
                 }
             }
 
