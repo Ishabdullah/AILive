@@ -101,7 +101,7 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "Qwen2-VL-2B (~3.7GB) - Vision + Text AI (6 files)"
+            "Qwen2-VL-2B (~3.7GB) - Vision + Text AI (8 files)"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
@@ -122,13 +122,13 @@ class ModelSetupDialog(
      * Download all Qwen2-VL model files with progress tracking
      */
     private fun downloadQwenVLModel(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting Qwen2-VL batch download (6 files)")
+        Log.i(TAG, "Starting Qwen2-VL batch download (8 files)")
         Toast.makeText(activity, "Downloading Qwen2-VL model...", Toast.LENGTH_SHORT).show()
 
         isProcessingDownload = false  // Reset state
         var currentFileName = ""
         var currentFileNum = 0
-        var totalFiles = 6
+        var totalFiles = 8
 
         modelDownloadManager.downloadQwenVLModel(
             onProgress = { fileName, fileNum, total ->
@@ -147,7 +147,7 @@ class ModelSetupDialog(
                     isProcessingDownload = false
 
                     if (success) {
-                        Log.i(TAG, "Qwen2-VL download complete (all 6 files)")
+                        Log.i(TAG, "Qwen2-VL download complete (all 8 files)")
                         Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
                         markSetupComplete()
                         onComplete()
@@ -169,7 +169,7 @@ class ModelSetupDialog(
      * Show batch download progress dialog (for multiple files)
      */
     private fun showBatchDownloadProgressDialog() {
-        val message = "Downloading Qwen2-VL model files...\n\nThis will download 6 files (~3.7GB total).\n\nPlease wait, this may take several minutes."
+        val message = "Downloading Qwen2-VL model files...\n\nThis will download 8 files (~3.7GB total).\n\nPlease wait, this may take several minutes."
 
         downloadDialog = AlertDialog.Builder(activity)
             .setTitle("Downloading Qwen2-VL")

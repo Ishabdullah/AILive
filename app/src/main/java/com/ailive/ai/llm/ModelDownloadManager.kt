@@ -40,14 +40,21 @@ class ModelDownloadManager(private val context: Context) {
         private const val QWEN_VL_BASE_URL = "https://huggingface.co/pdufour/Qwen2-VL-2B-Instruct-ONNX-Q4-F16/resolve/main"
 
         // Model files (Q4F16 quantized - ~3.7GB total)
+        // A: Output projection (1.33GB), B: Vision encoder (234MB)
+        // C: Batch size computation (6KB), D: Vision-text fusion (25KB)
+        // E: Text decoder (997MB)
         const val QWEN_VL_MODEL_A = "QwenVL_A_q4f16.onnx"
         const val QWEN_VL_MODEL_B = "QwenVL_B_q4f16.onnx"
+        const val QWEN_VL_MODEL_C = "QwenVL_C_q4f16.onnx"
+        const val QWEN_VL_MODEL_D = "QwenVL_D_q4f16.onnx"
         const val QWEN_VL_MODEL_E = "QwenVL_E_q4f16.onnx"
         const val QWEN_VL_EMBEDDINGS = "embeddings_bf16.bin"
 
         // URLs for each model file
         const val QWEN_VL_URL_A = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_A"
         const val QWEN_VL_URL_B = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_B"
+        const val QWEN_VL_URL_C = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_C"
+        const val QWEN_VL_URL_D = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_D"
         const val QWEN_VL_URL_E = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_E"
         const val QWEN_VL_URL_EMBEDDINGS = "$QWEN_VL_BASE_URL/$QWEN_VL_EMBEDDINGS"
 
@@ -91,6 +98,8 @@ class ModelDownloadManager(private val context: Context) {
         val requiredFiles = listOf(
             QWEN_VL_MODEL_A,
             QWEN_VL_MODEL_B,
+            QWEN_VL_MODEL_C,
+            QWEN_VL_MODEL_D,
             QWEN_VL_MODEL_E,
             QWEN_VL_EMBEDDINGS,
             QWEN_VL_VOCAB,
@@ -167,19 +176,25 @@ class ModelDownloadManager(private val context: Context) {
 
     /**
      * Download all Qwen2-VL model files (batch download)
-     * Downloads: 3 model files, embeddings, vocab, merges
+     * Downloads: 5 ONNX models (A,B,C,D,E), embeddings, vocab, merges
      * Total: ~3.7GB
+     *
+     * Pipeline: Image → A → B → C → D → E → Output
      */
     fun downloadQwenVLModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
-        Log.i(TAG, "📥 Starting Qwen2-VL model batch download...")
+        Log.i(TAG, "📥 Starting Qwen2-VL model batch download (8 files)...")
 
         val filesToDownload = listOf(
-            Pair(QWEN_VL_URL_VOCAB, QWEN_VL_VOCAB),
-            Pair(QWEN_VL_URL_MERGES, QWEN_VL_MERGES),
-            Pair(QWEN_VL_URL_EMBEDDINGS, QWEN_VL_EMBEDDINGS),
-            Pair(QWEN_VL_URL_B, QWEN_VL_MODEL_B),
-            Pair(QWEN_VL_URL_E, QWEN_VL_MODEL_E),
-            Pair(QWEN_VL_URL_A, QWEN_VL_MODEL_A)
+            // Download small files first (tokenizer + tiny models)
+            Pair(QWEN_VL_URL_VOCAB, QWEN_VL_VOCAB),        // 2.78 MB
+            Pair(QWEN_VL_URL_MERGES, QWEN_VL_MERGES),      // 1.67 MB
+            Pair(QWEN_VL_URL_C, QWEN_VL_MODEL_C),          // 6 KB (batch size)
+            Pair(QWEN_VL_URL_D, QWEN_VL_MODEL_D),          // 25 KB (vision-text fusion)
+            // Then medium/large files
+            Pair(QWEN_VL_URL_B, QWEN_VL_MODEL_B),          // 234 MB (vision encoder)
+            Pair(QWEN_VL_URL_EMBEDDINGS, QWEN_VL_EMBEDDINGS), // 467 MB
+            Pair(QWEN_VL_URL_E, QWEN_VL_MODEL_E),          // 997 MB (text decoder)
+            Pair(QWEN_VL_URL_A, QWEN_VL_MODEL_A)           // 1.33 GB (output projection)
         )
 
         var currentFileIndex = 0
