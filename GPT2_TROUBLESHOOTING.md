@@ -266,7 +266,59 @@ When everything works:
 - `diagnose_gpt2.sh` - Comprehensive diagnostic script
 - `GPT2_TROUBLESHOOTING.md` - This file
 
+## Performance Expectations
+
+### Response Time (Optimized Build)
+
+**Current optimizations (as of 2025-11-09):**
+- **MAX_LENGTH:** 5 tokens (minimal responses: 3-5 words)
+- **Input tokens:** ~20 tokens (minimal prompt format)
+- **Temperature:** 0.7 (faster sampling)
+
+**Expected timing:**
+- Token generation rate: ~2.5 seconds/token (0.4 tokens/sec)
+- Total response time: **~12 seconds** for 5-token response
+- First token latency: ~3-5 seconds (processing 20 input tokens)
+
+**Logs will show:**
+```
+🚀 Starting generation for: "hello"
+📝 Tokenizing prompt: "Q: hello A:"
+   ✓ Input tokens: 18 (optimized from ~800 tokens)
+🎯 Starting autoregressive generation
+   Input: 18 tokens | Max output: 5 tokens
+   Token 1/5 (20%) - 2.3s - ID: 12982
+   Token 3/5 (60%) - 2.5s - ID: 392
+✅ Generation complete:
+   Tokens generated: 5
+   Total time: 12.5s
+   Speed: 0.40 tokens/sec
+   Response: "Hello there!"
+```
+
+### If Response Takes Too Long
+
+**Symptom:** Response takes > 60 seconds
+
+**Causes:**
+- Old version of app (MAX_LENGTH was 80 tokens = 200s)
+- Multiple concurrent requests running
+- Device thermal throttling
+
+**Solution:**
+1. Update to latest build (commit cd8c111 or later)
+2. Wait for current generation to finish before next request
+3. Check device temperature - let it cool down if hot
+
 ## Version History
+
+- **2025-11-09 (Latest - Commit 61a6c88):** Ultra-fast 5-token responses
+  - Reduced MAX_LENGTH: 80 → **5 tokens** (~**12s** response time)
+  - Minimal prompt format (20 vs 800 tokens input)
+  - Added comprehensive timing logs (per-token, total time, tokens/sec)
+  - Progress logging every 5 tokens with percentages
+  - Lower temperature (0.7) for faster sampling
+  - Response quality: 3-5 word answers (minimal but usable)
 
 - **2025-11-09:** Initial diagnostic tooling
   - Added enhanced logging to runInference()
