@@ -75,13 +75,14 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ### ✅ Recent Fixes & Optimizations (2025-11-09)
 
-**Latest: Extended Response Length (Commit 87da4f2+) - 40-Token Responses! 🎉**
-- 🔥 **FIXED:** Removed 596-token personality prompt AND "Q: A:" format causing loops
-- ⚡ Input tokens: **~5-11 tokens** (was 596! Now truly minimal)
-- ⚡ Response time: **~100 seconds** for coherent, natural completions
-- ⚡ MAX_LENGTH: **40 tokens** (30-35 word responses for better quality)
-- ✅ Full pipeline: User "Hello" → GPT-2 (raw text completion) → Natural AI response
-- ✅ **Root causes fixed:** PersonalityEngine prompt wrapper + LLMManager Q&A format
+**Latest: CRITICAL TOKENIZER FIX - Proper BPE Encoding! 🎉**
+- 🔥 **ROOT CAUSE FOUND:** SimpleGPT2Tokenizer was doing word-level lookup instead of proper BPE!
+- 🔥 **FIXED:** Implemented proper Byte Pair Encoding (BPE) algorithm with merge ranks
+- ⚡ **Why it matters:** Wrong token IDs → wrong embeddings → nonsensical outputs (Philadelphia, URLs, statusCode loops)
+- ✅ **Now using:** GPT-2's byte encoder + BPE merges + correct token IDs
+- ✅ **Previous fixes:** Removed 596-token personality prompt + "Q: A:" format
+- ⚡ MAX_LENGTH: **40 tokens** (30-35 word responses)
+- ✅ **Full pipeline:** User input → Proper BPE encoding → Correct token IDs → GPT-2 → Coherent text completions
 
 **Major LLM System Overhaul (2025-11-08)**
 - ✅ Fixed Android tokenizer compatibility (replaced DJL with pure Kotlin)

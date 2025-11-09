@@ -315,7 +315,17 @@ When everything works:
 
 ## Version History
 
-- **2025-11-09 (Latest):** Extended 40-token responses + Q&A format removal
+- **2025-11-09 (Latest - CRITICAL FIX):** Proper BPE Tokenizer Implementation
+  - 🔥 **FIXED:** Implemented proper Byte Pair Encoding (BPE) algorithm in SimpleGPT2Tokenizer
+  - **Root cause found:** Tokenizer was doing word-level lookup instead of BPE, sending wrong token IDs
+  - **Impact:** Wrong token IDs → wrong embeddings → nonsensical outputs
+  - Added byte encoder with GPT-2's special byte-to-unicode mapping
+  - Added BPE merge ranks for proper token merging
+  - Implemented `getPairs()` and `bpe()` functions for proper BPE algorithm
+  - **User feedback:** Responses were nonsensical (Philadelphia, URLs, statusCode loops) - tokenizer was the root cause
+  - **Expected result:** Correct token IDs should produce coherent GPT-2 text completions
+
+- **2025-11-09:** Extended 40-token responses + Q&A format removal
   - Increased MAX_LENGTH: 20 → **40 tokens** (~**100s** response time)
   - Removed "Q: A:" format from LLMManager - GPT-2 base doesn't understand it
   - Quality improvement: Medium-length responses (30-35 words)

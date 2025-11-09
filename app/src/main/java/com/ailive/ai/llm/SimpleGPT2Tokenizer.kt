@@ -28,8 +28,13 @@ class SimpleGPT2Tokenizer(private val context: Context) {
     private val vocab = mutableMapOf<String, Int>()
     private val reverseVocab = mutableMapOf<Int, String>()
     private val bpeMerges = mutableListOf<Pair<String, String>>()
+    private val bpeRanks = mutableMapOf<Pair<String, String>, Int>()
 
     private var eosTokenId: Int = 50256
+
+    // Byte encoder for proper GPT-2 BPE
+    private val byteEncoder = mutableMapOf<Int, String>()
+    private val byteDecoder = mutableMapOf<String, Int>()
 
     /**
      * Initialize tokenizer from tokenizer.json in assets
@@ -70,19 +75,26 @@ class SimpleGPT2Tokenizer(private val context: Context) {
                 Log.w(TAG, "⚠️  Expected 50257 tokens, got $tokenCount")
             }
 
-            // Load BPE merges
+            // Load BPE merges and build ranks
             Log.d(TAG, "   Loading BPE merges...")
             val mergesArray = modelJson.getJSONArray("merges")
             var mergeCount = 0
             for (i in 0 until mergesArray.length()) {
                 val merge = mergesArray.getString(i).split(" ")
                 if (merge.size == 2) {
-                    bpeMerges.add(Pair(merge[0], merge[1]))
+                    val pair = Pair(merge[0], merge[1])
+                    bpeMerges.add(pair)
+                    bpeRanks[pair] = i  // Rank is the merge order
                     mergeCount++
                 }
             }
 
-            Log.i(TAG, "✅ Loaded $mergeCount BPE merges")
+            Log.i(TAG, "✅ Loaded $mergeCount BPE merges with ranks")
+
+            // Initialize byte encoder (GPT-2 uses a special byte encoding)
+            Log.d(TAG, "   Initializing byte encoder...")
+            initByteEncoder()
+            Log.i(TAG, "✅ Byte encoder initialized (${byteEncoder.size} mappings)")
 
             // Find special tokens
             eosTokenId = vocab[EOS_TOKEN] ?: 50256
@@ -116,58 +128,135 @@ class SimpleGPT2Tokenizer(private val context: Context) {
     }
 
     /**
-     * Encode text to token IDs
-     * Simplified version - just splits on spaces and looks up in vocab
+     * Initialize byte encoder (GPT-2's special byte-to-unicode mapping)
+     */
+    private fun initByteEncoder() {
+        // GPT-2 uses a specific byte-to-unicode mapping to handle all possible bytes
+        // This is a simplified version that covers printable ASCII + special encoding
+        val ranges = listOf(
+            33..126,     // Printable ASCII except space
+            161..172,    // Latin-1 supplement start
+            174..255     // Rest of Latin-1
+        )
+
+        val bs = mutableListOf<Int>()
+        for (range in ranges) {
+            bs.addAll(range.toList())
+        }
+
+        var cs = bs.toMutableList()
+        var n = 0
+        for (b in 0..255) {
+            if (b !in bs) {
+                bs.add(b)
+                cs.add(256 + n)
+                n++
+            }
+        }
+
+        for (i in bs.indices) {
+            byteEncoder[bs[i]] = cs[i].toChar().toString()
+            byteDecoder[cs[i].toChar().toString()] = bs[i]
+        }
+    }
+
+    /**
+     * Get BPE pairs from a word
+     */
+    private fun getPairs(word: List<String>): Set<Pair<String, String>> {
+        val pairs = mutableSetOf<Pair<String, String>>()
+        if (word.size < 2) return pairs
+
+        var prevChar = word[0]
+        for (i in 1 until word.size) {
+            pairs.add(Pair(prevChar, word[i]))
+            prevChar = word[i]
+        }
+        return pairs
+    }
+
+    /**
+     * Apply BPE merges to encode a word
+     */
+    private fun bpe(token: String): String {
+        if (token.length == 1) return token
+
+        var word = token.map { it.toString() }
+        var pairs = getPairs(word)
+
+        if (pairs.isEmpty()) return token
+
+        while (true) {
+            // Find the pair with the lowest merge rank
+            val bigram = pairs.minByOrNull { bpeRanks[it] ?: Int.MAX_VALUE } ?: break
+
+            // If this pair isn't in our merge rules, we're done
+            if (bigram !in bpeRanks) break
+
+            val (first, second) = bigram
+            val newWord = mutableListOf<String>()
+            var i = 0
+
+            while (i < word.size) {
+                val j = word.subList(i, word.size).indexOf(first)
+                if (j == -1) {
+                    newWord.addAll(word.subList(i, word.size))
+                    break
+                }
+
+                newWord.addAll(word.subList(i, i + j))
+                i += j
+
+                if (i < word.size - 1 && word[i] == first && word[i + 1] == second) {
+                    newWord.add(first + second)
+                    i += 2
+                } else {
+                    newWord.add(word[i])
+                    i += 1
+                }
+            }
+
+            word = newWord
+            if (word.size == 1) break
+            pairs = getPairs(word)
+        }
+
+        return word.joinToString(" ")
+    }
+
+    /**
+     * Encode text to token IDs using proper BPE algorithm
      */
     fun encode(text: String): LongArray {
         Log.d(TAG, "🔤 Encoding text: \"${text.take(100)}${if (text.length > 100) "..." else ""}\"")
 
         val tokens = mutableListOf<Long>()
-        var unknownTokenCount = 0
 
-        // Very simple tokenization - split on whitespace and punctuation
-        val words = text.split(Regex("\\s+|(?=[.,!?])"))
+        // GPT-2 pattern: splits on whitespace and keeps punctuation
+        val pattern = Regex("""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+        val words = pattern.findAll(text).map { it.value }.toList()
 
         for (word in words) {
-            if (word.isEmpty()) continue
+            // Convert word to bytes, then to unicode chars using byte encoder
+            val tokenBytes = word.toByteArray(Charsets.UTF_8)
+            val encodedWord = tokenBytes.map {
+                byteEncoder[it.toInt() and 0xFF] ?: ""
+            }.joinToString("")
 
-            var foundToken = false
+            // Apply BPE to get the final token representation
+            val bpeTokens = bpe(encodedWord).split(" ")
 
-            // Try exact match first
-            val tokenId = vocab[word]
-            if (tokenId != null) {
-                tokens.add(tokenId.toLong())
-                foundToken = true
-                continue
-            }
-
-            // Try lowercase
-            val lowerTokenId = vocab[word.lowercase()]
-            if (lowerTokenId != null) {
-                tokens.add(lowerTokenId.toLong())
-                foundToken = true
-                continue
-            }
-
-            // Try with leading space (GPT-2 tokenizer adds spaces)
-            val spacedTokenId = vocab[" $word"]
-            if (spacedTokenId != null) {
-                tokens.add(spacedTokenId.toLong())
-                foundToken = true
-                continue
-            }
-
-            // Split into characters as fallback
-            if (!foundToken) {
-                unknownTokenCount++
-                for (char in word) {
-                    val charTokenId = vocab[char.toString()] ?: vocab[UNK_TOKEN] ?: 0
-                    tokens.add(charTokenId.toLong())
+            for (bpeToken in bpeTokens) {
+                val tokenId = vocab[bpeToken]
+                if (tokenId != null) {
+                    tokens.add(tokenId.toLong())
+                } else {
+                    Log.w(TAG, "⚠️  Unknown BPE token: '$bpeToken'")
                 }
             }
         }
 
-        Log.d(TAG, "✓ Encoded to ${tokens.size} tokens (${unknownTokenCount} unknown words)")
+        Log.d(TAG, "✓ Encoded to ${tokens.size} tokens using proper BPE")
         Log.d(TAG, "   First 10 token IDs: ${tokens.take(10).joinToString()}")
 
         return tokens.toLongArray()
@@ -233,6 +322,9 @@ class SimpleGPT2Tokenizer(private val context: Context) {
         vocab.clear()
         reverseVocab.clear()
         bpeMerges.clear()
-        Log.d(TAG, "✅ Tokenizer closed (${vocab.size} vocab entries cleared)")
+        bpeRanks.clear()
+        byteEncoder.clear()
+        byteDecoder.clear()
+        Log.d(TAG, "✅ Tokenizer closed (all data structures cleared)")
     }
 }
