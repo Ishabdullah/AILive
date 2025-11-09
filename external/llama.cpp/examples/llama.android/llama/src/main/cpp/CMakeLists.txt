@@ -31,8 +31,8 @@ project("llama-android")
 # is preferred for the same purpose.
 #
 
-#load local llama.cpp
-add_subdirectory(../../../../../../ build-llama)
+#load local llama.cpp from root submodule
+add_subdirectory(../../../../../../../../llama.cpp build-llama)
 
 # In order to load a library into your app from Java/Kotlin, you must call
 # System.loadLibrary() and pass the name of the library defined here;
