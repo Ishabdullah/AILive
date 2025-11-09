@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
 
     // UI
     private lateinit var cameraPreview: PreviewView
+    private lateinit var appIconBackground: android.widget.ImageView
     private lateinit var appTitle: TextView
     private lateinit var classificationResult: TextView
     private lateinit var confidenceText: TextView
@@ -151,6 +152,7 @@ class MainActivity : AppCompatActivity() {
 
         // Init UI references (ensure activity_main contains these IDs)
         cameraPreview = findViewById(R.id.cameraPreview)
+        appIconBackground = findViewById(R.id.appIconBackground)
         appTitle = findViewById(R.id.appTitle)
         classificationResult = findViewById(R.id.classificationResult)
         confidenceText = findViewById(R.id.confidenceText)
@@ -351,12 +353,15 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "✓ VisionAnalysisTool registered")
 
             runOnUiThread {
-                statusIndicator.text = "● ANALYZING..."
-                classificationResult.text = "Point at objects"
+                statusIndicator.text = "●"
+                classificationResult.text = "Ready for input..."
 
-                isCameraEnabled = true
-                btnToggleCamera.text = "📷 CAM"
-                btnToggleCamera.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_green_dark)
+                // Camera starts OFF by default - user must enable manually
+                isCameraEnabled = false
+                btnToggleCamera.text = "📷 CAM OFF"
+                btnToggleCamera.setBackgroundResource(R.drawable.button_toggle_off)
+                cameraPreview.visibility = View.GONE
+                appIconBackground.visibility = View.VISIBLE
             }
 
             // Debug counter coroutine - use lifecycleScope so it's cancelled with Activity
@@ -478,14 +483,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Start listening
-            isListeningForWakeWord = true
-            isMicEnabled = true
-            startWakeWordListening()
+            // Mic starts OFF by default - user must enable manually
+            isListeningForWakeWord = false
+            isMicEnabled = false
+            // Don't start wake word listening automatically
 
             runOnUiThread {
-                btnToggleMic.text = "🎤 MIC"
-                btnToggleMic.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_green_dark)
+                btnToggleMic.text = "🎤 MIC OFF"
+                btnToggleMic.setBackgroundResource(R.drawable.button_toggle_off)
             }
 
             lifecycleScope.launch {
@@ -553,10 +558,11 @@ class MainActivity : AppCompatActivity() {
                     isListeningForWakeWord = false
                 }
                 isMicEnabled = false
-                btnToggleMic.text = "🎤 MIC"
-                btnToggleMic.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-                statusIndicator.text = "● MIC OFF"
-                editTextCommand.hint = "Type command..."
+                btnToggleMic.text = "🎤 MIC OFF"
+                btnToggleMic.setBackgroundResource(R.drawable.button_toggle_off)
+                statusIndicator.text = "●"
+                statusIndicator.textSize = 16f
+                editTextCommand.hint = "Type your command..."
                 Log.i(TAG, "🎤 Microphone manually disabled")
             } else {
                 if (::speechProcessor.isInitialized) {
@@ -566,8 +572,10 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     isMicEnabled = true
                 }
-                btnToggleMic.text = "🎤 MIC"
-                btnToggleMic.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_green_dark)
+                btnToggleMic.text = "🎤 MIC ON"
+                btnToggleMic.setBackgroundResource(R.drawable.button_toggle_on)
+                statusIndicator.text = "●"
+                statusIndicator.textSize = 16f
                 Log.i(TAG, "🎤 Microphone manually enabled")
             }
         }
@@ -577,27 +585,29 @@ class MainActivity : AppCompatActivity() {
                 if (::cameraManager.isInitialized) {
                     cameraManager.stopCamera()
                 }
-                cameraPreview.visibility = View.INVISIBLE
-                cameraPreview.setBackgroundColor(android.graphics.Color.BLACK)
+                cameraPreview.visibility = View.GONE
+                appIconBackground.visibility = View.VISIBLE
                 isCameraEnabled = false
-                btnToggleCamera.text = "📷 CAM"
-                btnToggleCamera.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_red_dark)
-                statusIndicator.text = "● CAM OFF"
-                classificationResult.text = "Camera off"
+                btnToggleCamera.text = "📷 CAM OFF"
+                btnToggleCamera.setBackgroundResource(R.drawable.button_toggle_off)
+                statusIndicator.text = "●"
+                statusIndicator.textSize = 16f
+                classificationResult.text = "Camera is OFF. Enable to use vision features."
                 confidenceText.text = ""
                 inferenceTime.text = ""
                 Log.i(TAG, "📷 Camera manually disabled")
             } else {
                 cameraPreview.visibility = View.VISIBLE
-                cameraPreview.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                appIconBackground.visibility = View.GONE
                 if (::cameraManager.isInitialized) {
                     cameraManager.startCamera(cameraPreview)
                 }
                 isCameraEnabled = true
-                btnToggleCamera.text = "📷 CAM"
-                btnToggleCamera.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.holo_green_dark)
-                statusIndicator.text = "● ANALYZING"
-                classificationResult.text = "Point at objects"
+                btnToggleCamera.text = "📷 CAM ON"
+                btnToggleCamera.setBackgroundResource(R.drawable.button_toggle_on)
+                statusIndicator.text = "●"
+                statusIndicator.textSize = 16f
+                classificationResult.text = "Point camera at objects to analyze"
                 Log.i(TAG, "📷 Camera manually enabled")
             }
         }
