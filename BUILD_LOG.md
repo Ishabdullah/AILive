@@ -336,15 +336,49 @@ git commit -m "chore: update llama.cpp to <version>"
 
 ---
 
+## Problem 3: CMake Build Failure
+
+### Error
+```
+CMake Error at CMakeLists.txt:35 (add_subdirectory):
+  The source directory
+    /home/runner/work/AILive/AILive/external/llama.cpp
+  does not contain a CMakeLists.txt file.
+```
+
+### Root Cause
+- CMakeLists.txt was using wrong relative path
+- Pointed to `external/llama.cpp` (Android wrapper only)
+- Should point to `llama.cpp` at root (full C++ source)
+
+### Solution
+**File**: `external/llama.cpp/examples/llama.android/llama/src/main/cpp/CMakeLists.txt:35`
+
+```cmake
+# BEFORE (incorrect - 7 levels up)
+add_subdirectory(../../../../../../ build-llama)
+
+# AFTER (correct - 8 levels up, then into llama.cpp)
+add_subdirectory(../../../../../../../../llama.cpp build-llama)
+```
+
+### Result
+- CMake now finds the full llama.cpp source at root
+- Native libraries compile successfully
+- APK builds with ARM64 native support
+
+---
+
 ## Summary
 
-We successfully fixed two critical issues:
+We successfully fixed three critical issues:
 
 1. ✅ **Token Limit**: Increased from 64 to 512 for complete responses
-2. ✅ **Build Error**: Hybrid approach keeps core as submodule, wrapper as direct source
+2. ✅ **Submodule Error**: Hybrid approach keeps core as submodule, wrapper as direct source
+3. ✅ **CMake Path**: Fixed relative path to point to root llama.cpp submodule
 
-The app should now generate longer, more natural responses while building successfully in GitHub Actions.
+The app now generates longer, more natural responses and builds successfully in GitHub Actions.
 
-**Final Commit**: `bb2ab87` - feat: re-add llama.cpp submodule for native library source
+**Final Commit**: `86087b4` - fix: correct CMakeLists.txt path to point to root llama.cpp submodule
 **Branch**: `claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ`
-**Status**: Ready for testing
+**Status**: ✅ **Build Passing** - Ready for production testing
