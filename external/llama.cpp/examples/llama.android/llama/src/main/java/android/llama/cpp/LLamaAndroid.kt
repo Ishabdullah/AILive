@@ -79,6 +79,23 @@ class LLamaAndroid {
 
     private external fun kv_cache_clear(context: Long)
 
+    // GPU Detection (v1.1 - OpenCL Support)
+    private external fun detect_gpu(): String
+
+    /**
+     * Detect GPU acceleration support via OpenCL.
+     *
+     * Returns a string in format "Backend:DeviceName":
+     * - "OpenCL:Adreno 750" - GPU acceleration available
+     * - "CPU:None" - No GPU found
+     * - "CPU:OpenCL_Not_Compiled" - OpenCL support not compiled in
+     *
+     * This function should be called after backend_init() and before load_model().
+     */
+    fun detectGPU(): String {
+        return detect_gpu()
+    }
+
     suspend fun bench(pp: Int, tg: Int, pl: Int, nr: Int = 1): String {
         return withContext(runLoop) {
             when (val state = threadLocalState.get()) {

@@ -22,6 +22,12 @@ android {
                 arguments += "-DLLAMA_BUILD_COMMON=ON"
                 arguments += "-DGGML_LLAMAFILE=OFF"
                 arguments += "-DCMAKE_BUILD_TYPE=Release"
+
+                // ✨ OpenCL GPU Acceleration for Adreno 750 (v1.1)
+                arguments += "-DGGML_OPENCL=ON"
+                arguments += "-DGGML_OPENCL_EMBED_KERNELS=ON"
+                arguments += "-DGGML_OPENCL_USE_ADRENO_KERNELS=ON"
+
                 cppFlags += listOf()
                 arguments += listOf()
 

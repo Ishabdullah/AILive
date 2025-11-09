@@ -7,6 +7,11 @@
 #include "llama.h"
 #include "common.h"
 
+// OpenCL GPU detection (v1.1)
+#ifdef GGML_USE_OPENCL
+#include <CL/cl.h>
+#endif
+
 // Write C++ code here.
 //
 // Do not forget to dynamically load the C++ library into your application.
@@ -449,4 +454,88 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_android_llama_cpp_LLamaAndroid_kv_1cache_1clear(JNIEnv *, jobject, jlong context) {
     llama_memory_clear(llama_get_memory(reinterpret_cast<llama_context *>(context)), true);
+}
+
+// ============================================================================
+// GPU Detection for v1.1 (OpenCL Support)
+// ============================================================================
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_android_llama_cpp_LLamaAndroid_detect_1gpu(JNIEnv *env, jobject) {
+    #ifdef GGML_USE_OPENCL
+    LOGi("Detecting OpenCL GPU...");
+
+    cl_uint num_platforms = 0;
+    cl_int ret = clGetPlatformIDs(0, nullptr, &num_platforms);
+
+    if (ret != CL_SUCCESS || num_platforms == 0) {
+        LOGi("No OpenCL platforms found (error code: %d)", ret);
+        return env->NewStringUTF("CPU:None");
+    }
+
+    LOGi("Found %d OpenCL platform(s)", num_platforms);
+
+    cl_platform_id platform;
+    ret = clGetPlatformIDs(1, &platform, nullptr);
+
+    if (ret != CL_SUCCESS) {
+        LOGe("Failed to get OpenCL platform (error code: %d)", ret);
+        return env->NewStringUTF("CPU:None");
+    }
+
+    // Get platform name
+    char platform_name[128];
+    clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(platform_name), platform_name, nullptr);
+    LOGi("OpenCL Platform: %s", platform_name);
+
+    cl_uint num_devices = 0;
+    ret = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, nullptr, &num_devices);
+
+    if (ret != CL_SUCCESS || num_devices == 0) {
+        LOGi("No OpenCL GPU devices found (error code: %d)", ret);
+        return env->NewStringUTF("CPU:None");
+    }
+
+    LOGi("Found %d OpenCL GPU device(s)", num_devices);
+
+    cl_device_id device;
+    ret = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
+
+    if (ret != CL_SUCCESS) {
+        LOGe("Failed to get OpenCL device (error code: %d)", ret);
+        return env->NewStringUTF("CPU:None");
+    }
+
+    // Get device name
+    char device_name[128];
+    ret = clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_name), device_name, nullptr);
+
+    if (ret != CL_SUCCESS) {
+        LOGe("Failed to get device name (error code: %d)", ret);
+        return env->NewStringUTF("OpenCL:Unknown");
+    }
+
+    LOGi("OpenCL GPU Device: %s", device_name);
+
+    // Get device compute units
+    cl_uint compute_units = 0;
+    clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute_units), &compute_units, nullptr);
+
+    // Get device global memory size
+    cl_ulong global_mem_size = 0;
+    clGetDeviceInfo(device, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(global_mem_size), &global_mem_size, nullptr);
+
+    LOGi("  Compute Units: %u", compute_units);
+    LOGi("  Global Memory: %llu MB", (unsigned long long)(global_mem_size / (1024 * 1024)));
+
+    // Return format: "OpenCL:DeviceName"
+    std::string result = "OpenCL:" + std::string(device_name);
+    return env->NewStringUTF(result.c_str());
+
+    #else
+    // OpenCL not compiled in
+    LOGi("OpenCL support not compiled (GGML_USE_OPENCL not defined)");
+    return env->NewStringUTF("CPU:OpenCL_Not_Compiled");
+    #endif
 }
