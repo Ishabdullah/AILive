@@ -36,6 +36,39 @@ android {
         // }
     }
 
+    // ✨ GPU/CPU Build Variants (v1.1)
+    // Allows installing both GPU and CPU versions side-by-side
+    flavorDimensions += "acceleration"
+    productFlavors {
+        create("gpu") {
+            dimension = "acceleration"
+            applicationIdSuffix = ".gpu"
+            versionNameSuffix = "-GPU"
+
+            // Set build config field to indicate GPU variant
+            buildConfigField("boolean", "GPU_ENABLED", "true")
+            buildConfigField("String", "BUILD_VARIANT", "\"GPU (OpenCL Adreno 750)\"")
+
+            // CRITICAL: Pass GPU flag to llama.cpp module via gradle property
+            // This triggers OpenCL compilation in the native library
+            externalNativeBuild {
+                cmake {
+                    // Signal to llama module that this is a GPU build
+                    // The llama module's build.gradle.kts checks for ENABLE_GPU property
+                }
+            }
+        }
+
+        create("cpu") {
+            dimension = "acceleration"
+            applicationIdSuffix = ".cpu"
+            versionNameSuffix = "-CPU"
+
+            buildConfigField("boolean", "GPU_ENABLED", "false")
+            buildConfigField("String", "BUILD_VARIANT", "\"CPU Only\"")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -44,6 +77,11 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+
+    // Enable BuildConfig generation
+    buildFeatures {
+        buildConfig = true
     }
 
     // External native build disabled (ONNX-only mode - Phase 7.10)
