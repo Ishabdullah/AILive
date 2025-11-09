@@ -43,14 +43,17 @@ class QwenVLTokenizer {
     private val byteDecoder = mutableMapOf<String, Int>()
 
     /**
-     * Initialize tokenizer from vocab.json and merges.txt in Downloads folder
+     * Initialize tokenizer from vocab.json and merges.txt in models folder
+     *
+     * @param modelsDir Directory where model files are stored (null = use public Downloads)
      */
-    fun initialize(): Boolean {
+    fun initialize(modelsDir: File? = null): Boolean {
         return try {
-            Log.i(TAG, "📖 Loading Qwen2-VL tokenizer from Downloads...")
+            val downloadsDir = modelsDir ?: Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+
+            Log.i(TAG, "📖 Loading Qwen2-VL tokenizer from ${downloadsDir.absolutePath}...")
 
             val startTime = System.currentTimeMillis()
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
 
             // Load vocabulary from vocab.json
             Log.d(TAG, "   Reading vocab.json...")
