@@ -166,42 +166,42 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleVisionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MotorAI (Vision)")
-        val response = aiCore.llmManager.generate(cmd, "MotorAI")
+        val response = aiCore.llmManager.generate(cmd, agentName = "MotorAI")
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MotorAI", response)
     }
 
     private suspend fun handleEmotionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to EmotionAI")
-        val response = aiCore.llmManager.generate(cmd, "EmotionAI")
+        val response = aiCore.llmManager.generate(cmd, agentName = "EmotionAI")
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("EmotionAI", response)
     }
 
     private suspend fun handleMemoryCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MemoryAI")
-        val response = aiCore.llmManager.generate(cmd, "MemoryAI")
+        val response = aiCore.llmManager.generate(cmd, agentName = "MemoryAI")
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MemoryAI", response)
     }
 
     private suspend fun handlePredictionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to PredictiveAI")
-        val response = aiCore.llmManager.generate(cmd, "PredictiveAI")
+        val response = aiCore.llmManager.generate(cmd, agentName = "PredictiveAI")
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("PredictiveAI", response)
     }
 
     private suspend fun handleRewardCommand(cmd: String) {
         Log.i(TAG, "→ Routing to RewardAI")
-        val response = aiCore.llmManager.generate(cmd, "RewardAI")
+        val response = aiCore.llmManager.generate(cmd, agentName = "RewardAI")
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("RewardAI", response)
     }
 
     private suspend fun handleMetaCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MetaAI")
-        val response = aiCore.llmManager.generate(cmd, "MetaAI")
+        val response = aiCore.llmManager.generate(cmd, agentName = "MetaAI")
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MetaAI", response)
     }
@@ -217,7 +217,7 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleUnknownCommand(cmd: String) {
         Log.w(TAG, "⚠️ Unknown command: '$cmd'")
-        val response = aiCore.llmManager.generate(cmd, "AILive")
+        val response = aiCore.llmManager.generate(cmd, agentName = "AILive")
         onResponse?.invoke(response)
         aiCore.ttsManager.speak(response, TTSManager.Priority.HIGH)
     }
