@@ -24,9 +24,17 @@ android {
                 arguments += "-DCMAKE_BUILD_TYPE=Release"
 
                 // ✨ OpenCL GPU Acceleration for Adreno 750 (v1.1)
-                arguments += "-DGGML_OPENCL=ON"
-                arguments += "-DGGML_OPENCL_EMBED_KERNELS=ON"
-                arguments += "-DGGML_OPENCL_USE_ADRENO_KERNELS=ON"
+                // Enable GPU by setting environment variable: ENABLE_GPU=true
+                // Or run locally after: ./scripts/setup_opencl.sh
+                val enableGpu = System.getenv("ENABLE_GPU")?.toBoolean() ?: false
+                if (enableGpu) {
+                    arguments += "-DGGML_OPENCL=ON"
+                    arguments += "-DGGML_OPENCL_EMBED_KERNELS=ON"
+                    arguments += "-DGGML_OPENCL_USE_ADRENO_KERNELS=ON"
+                    println("✨ GPU Acceleration: ENABLED (OpenCL for Adreno 750)")
+                } else {
+                    println("ℹ️  GPU Acceleration: DISABLED (set ENABLE_GPU=true to enable)")
+                }
 
                 cppFlags += listOf()
                 arguments += listOf()

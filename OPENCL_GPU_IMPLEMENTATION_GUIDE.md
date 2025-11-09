@@ -83,18 +83,22 @@ Expected speedup: 3-5x (7→20-30 tokens/second)
 # Clean previous build
 ./gradlew clean
 
-# Build with OpenCL support
+# Build with GPU support (requires OpenCL setup from Step 2)
+ENABLE_GPU=true ./gradlew assembleDebug
+
+# Or build without GPU (CPU-only, works without OpenCL setup)
 ./gradlew assembleDebug
 
 # Expected build time: 5-10 minutes (first build)
-# Watch for OpenCL compilation messages
+# Watch for "GPU Acceleration: ENABLED" message
 ```
 
 **What happens during build**:
-- CMake configures with `-DGGML_OPENCL=ON`
+- If `ENABLE_GPU=true`: CMake configures with `-DGGML_OPENCL=ON`
 - llama.cpp compiles with OpenCL backend
 - Adreno-optimized kernels embedded in binary
 - libOpenCL.so linked into native library
+- If `ENABLE_GPU` not set: Builds CPU-only version
 - Result: `app/build/outputs/apk/debug/app-debug.apk`
 
 ### Step 4: Install and Test on Device
