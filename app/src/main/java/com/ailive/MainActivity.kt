@@ -245,12 +245,12 @@ class MainActivity : AppCompatActivity() {
         // Android 13+ uses granular READ_MEDIA_* permissions
         // Android 10-12 uses READ_EXTERNAL_STORAGE
         // Android 9- uses WRITE_EXTERNAL_STORAGE
-        if (Build.VERSION.SDK_INT >= Build.VERSION.CODES.TIRAMISU) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // Android 13+ - need granular media permissions to read model files
             permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
             permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
             permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION.CODES.Q) {
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         } else {
