@@ -31,9 +31,9 @@ class LLMManager(private val context: Context) {
         private const val TAG = "LLMManager"
 
         // OPTIMIZATION: Balanced for quality and speed
-        // At ~2.5s/token, 20 tokens = ~50s response time (acceptable for mobile)
-        // Short sentence responses: 15-18 words
-        private const val MAX_LENGTH = 20
+        // At ~2.5s/token, 40 tokens = ~100s response time (acceptable for mobile)
+        // Medium-length responses: 30-35 words
+        private const val MAX_LENGTH = 40
 
         // OPTIMIZATION: Lower temperature for faster, more deterministic responses
         // Lower temp = faster sampling with less randomness
@@ -302,10 +302,9 @@ class LLMManager(private val context: Context) {
      * GPT-2 is a causal LM without instruction tuning, so we use natural language formatting
      */
     private fun createChatPrompt(userMessage: String, agentName: String): String {
-        // OPTIMIZED: Minimal prompt for fastest response (reduces input from ~800 to ~20 tokens)
-        // GPT-2 format - simple and concise
-        return """Q: $userMessage
-A:"""
+        // GPT-2 is a raw causal LM - just let it complete the text naturally
+        // No special format needed - the model will continue from the user's text
+        return userMessage
     }
 
     /**

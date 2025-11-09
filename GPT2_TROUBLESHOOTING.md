@@ -271,36 +271,36 @@ When everything works:
 ### Response Time (Optimized Build)
 
 **Current optimizations (as of 2025-11-09):**
-- **MAX_LENGTH:** 20 tokens (short sentence responses: 15-18 words)
-- **Input tokens:** ~20 tokens (minimal prompt format)
+- **MAX_LENGTH:** 40 tokens (medium-length responses: 30-35 words)
+- **Input tokens:** ~5-11 tokens (ultra-minimal, no Q&A format)
 - **Temperature:** 0.7 (faster sampling)
 
 **Expected timing:**
 - Token generation rate: ~2.5 seconds/token (0.4 tokens/sec)
-- Total response time: **~50 seconds** for 20-token response
-- First token latency: ~3-5 seconds (processing 20 input tokens)
+- Total response time: **~100 seconds** for 40-token response
+- First token latency: ~3-5 seconds (processing 5-11 input tokens)
 
 **Logs will show:**
 ```
 🚀 Starting generation for: "hello"
-📝 Tokenizing prompt: "Q: hello A:"
-   ✓ Input tokens: 18 (optimized from ~800 tokens)
+📝 Tokenizing prompt: "hello"
+   ✓ Input tokens: 5 (optimized from ~800 tokens)
 🎯 Starting autoregressive generation
-   Input: 18 tokens | Max output: 20 tokens
-   Token 1/20 (5%) - 2.3s - ID: 12982
-   Token 6/20 (30%) - 2.4s - ID: 392
-   Token 11/20 (55%) - 2.5s - ID: 8496
-   Token 16/20 (80%) - 2.6s - ID: 284
+   Input: 5 tokens | Max output: 40 tokens
+   Token 1/40 (2%) - 2.3s - ID: 12982
+   Token 10/40 (25%) - 2.4s - ID: 392
+   Token 20/40 (50%) - 2.5s - ID: 8496
+   Token 30/40 (75%) - 2.6s - ID: 284
 ✅ Generation complete:
-   Tokens generated: 20
-   Total time: 50.2s
+   Tokens generated: 40
+   Total time: 100.2s
    Speed: 0.40 tokens/sec
-   Response: "Hello! I'm AILive, your on-device AI assistant. How can I help you?"
+   Response: "Hello! I'm AILive, your on-device AI assistant. I can help you with various tasks..."
 ```
 
 ### If Response Takes Too Long
 
-**Symptom:** Response takes > 60 seconds
+**Symptom:** Response takes > 120 seconds
 
 **Causes:**
 - Old version of app (MAX_LENGTH was 80 tokens = 200s)
@@ -308,13 +308,23 @@ When everything works:
 - Device thermal throttling
 
 **Solution:**
-1. Update to latest build (commit cd8c111 or later)
+1. Update to latest build (40-token version)
 2. Wait for current generation to finish before next request
 3. Check device temperature - let it cool down if hot
+4. Note: 40-token responses legitimately take ~100s, so be patient!
 
 ## Version History
 
-- **2025-11-09 (Latest - Commit 0596ff2):** Balanced 20-token responses
+- **2025-11-09 (Latest):** Extended 40-token responses + Q&A format removal
+  - Increased MAX_LENGTH: 20 → **40 tokens** (~**100s** response time)
+  - Removed "Q: A:" format from LLMManager - GPT-2 base doesn't understand it
+  - Quality improvement: Medium-length responses (30-35 words)
+  - Ultra-minimal prompt format (5-11 vs 596 tokens input)
+  - Fixed UnifiedPrompt.kt removing 596-token personality prompt
+  - **Root cause:** GPT-2 base is causal LM, not instruction-tuned - just does text completion
+  - **User feedback:** 20 tokens better but requested 40 for more complete responses
+
+- **2025-11-09 (Commit 0596ff2):** Balanced 20-token responses
   - Increased MAX_LENGTH: 5 → **20 tokens** (~**50s** response time)
   - Quality improvement: Short sentence responses (15-18 words)
   - Minimal prompt format (20 vs 800 tokens input)
