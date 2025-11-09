@@ -241,20 +241,19 @@ class MainActivity : AppCompatActivity() {
         permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
 
         // Storage permissions:
-        // - Android 9 and below (API 28-): Need READ + WRITE for external storage access
-        // - Android 10-12 (API 29-32): Only READ if accessing shared storage (SAF preferred)
-        // - Android 13+ (API 33+): No storage permissions needed (SAF + app-specific directories)
-        //
-        // Since we use getExternalFilesDir() and SAF, we technically don't need storage permissions
-        // on Android 10+, but we request READ on 10-12 for compatibility with some file picker flows
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            // Android 9 and below - need both READ and WRITE
+        // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
+        // This requires READ_EXTERNAL_STORAGE permission on Android 10-12
+        // (Android 13+ uses READ_MEDIA_* permissions instead, but we'll handle that later)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            // Android 12 and below - need READ to access Downloads folder
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            // Android 9 and below - also need WRITE to download to Downloads
             permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
-        // Note: Android 10+ doesn't need storage permissions when using:
-        // - getExternalFilesDir() for app-specific storage (no permission needed)
-        // - Storage Access Framework (SAF) for user-selected files (no permission needed)
+        // Note: For Android 13+ (API 33+), we'd need READ_MEDIA_* permissions
+        // but Downloads folder access still works with READ_EXTERNAL_STORAGE for now
 
         // Check current permission status
         val missing = permissionsToRequest.filter {
@@ -270,7 +269,7 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "Requesting permissions: $missing")
             runOnUiThread {
                 statusIndicator.text = "● REQUESTING PERMISSIONS..."
-                classificationResult.text = "Please allow camera and microphone access"
+                classificationResult.text = "Please allow camera, microphone, and storage access"
             }
             // Launch modern permission flow
             permissionLauncher.launch(missing.toTypedArray())
