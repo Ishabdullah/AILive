@@ -5,8 +5,10 @@ import android.graphics.Bitmap
 import android.llama.cpp.LLamaAndroid
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -286,6 +288,81 @@ class LLMManager(private val context: Context) {
             e.printStackTrace()
             throw e  // Let caller handle fallback
         }
+    }
+
+    /**
+     * Generate text with streaming tokens (for UI display)
+     * Returns a Flow that emits tokens as they're generated
+     *
+     * @param prompt The user's prompt
+     * @param image Optional image (not yet supported)
+     * @param agentName Agent personality name
+     * @return Flow<String> that emits each generated token
+     */
+    fun generateStreaming(prompt: String, image: Bitmap? = null, agentName: String = "AILive"): Flow<String> = flow {
+        // Check initialization status
+        when {
+            isInitializing -> {
+                Log.w(TAG, "⏳ LLM still initializing (loading model)...")
+                throw IllegalStateException("LLM is still loading. Please wait a moment.")
+            }
+            !isInitialized -> {
+                val errorMsg = initializationError ?: "LLM not initialized"
+                Log.w(TAG, "⚠️ $errorMsg")
+                throw IllegalStateException(errorMsg)
+            }
+        }
+
+        // Warn if image provided
+        if (image != null) {
+            Log.w(TAG, "⚠️ Vision input not yet supported (requires mmproj file)")
+            Log.i(TAG, "   Continuing with text-only generation...")
+        }
+
+        val startTime = System.currentTimeMillis()
+        Log.i(TAG, "🚀 Starting streaming generation: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
+
+        // Create chat prompt
+        val chatPrompt = createChatPrompt(prompt, agentName)
+
+        // Stream tokens directly from llama.cpp
+        var tokenCount = 0
+        val backend = gpuInfo?.backend ?: "CPU"
+
+        llamaAndroid.send(chatPrompt, formatChat = false)
+            .catch { e ->
+                Log.e(TAG, "❌ Streaming generation error", e)
+                throw e
+            }
+            .collect { token ->
+                tokenCount++
+                emit(token)  // Emit each token to the UI
+
+                // Log progress every 10 tokens
+                if (tokenCount % 10 == 0) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val tokensPerSec = if (elapsed > 0) {
+                        (tokenCount.toFloat() / elapsed) * 1000
+                    } else {
+                        0f
+                    }
+                    Log.d(TAG, "   Token $tokenCount (${String.format("%.1f", tokensPerSec)} tok/s)")
+                }
+            }
+
+        // Record final performance
+        val totalTime = System.currentTimeMillis() - startTime
+        performanceMonitor.recordInference(tokenCount, totalTime, backend)
+
+        val tokensPerSec = if (totalTime > 0) {
+            (tokenCount.toFloat() / totalTime) * 1000
+        } else {
+            0f
+        }
+
+        Log.i(TAG, "✓ Streamed $tokenCount tokens in ${totalTime}ms")
+        Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tokens/second")
+        Log.i(TAG, "   Average speed (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
     }
 
     /**
