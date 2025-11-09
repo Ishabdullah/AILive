@@ -109,15 +109,11 @@ class LLMManager(private val context: Context) {
 
             // Create model parameters
             val modelParams = ModelParameters()
-                .setModelPath(modelPath)
-                .setNGpuLayers(0)  // CPU-only for now (will add GPU acceleration later)
-                .setVocabOnly(false)  // Load full model, not just tokenizer
-                .setUseMmap(true)  // Use memory mapping for faster loading
-                .setUseMlock(false)  // Don't lock memory (might fail on some devices)
+                .setModel(modelPath)
+                .setGpuLayers(0)  // CPU-only for now (will add GPU acceleration later)
 
             Log.i(TAG, "🔧 Model parameters:")
             Log.i(TAG, "   GPU layers: 0 (CPU-only)")
-            Log.i(TAG, "   Memory mapping: enabled")
             Log.i(TAG, "   Context size: default (2048)")
 
             // Load model
@@ -130,7 +126,7 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "✅ Qwen2-VL initialized successfully!")
             Log.i(TAG, "   Model: $currentModelName")
             Log.i(TAG, "   Capabilities: Text-only (vision coming with mmproj)")
-            Log.i(TAG, "   Engine: llama.cpp ${LlamaModel.version()}")
+            Log.i(TAG, "   Engine: llama.cpp")
             Log.i(TAG, "   Max length: $MAX_LENGTH tokens")
             Log.i(TAG, "🎉 AI is ready!")
 
@@ -217,7 +213,7 @@ class LLMManager(private val context: Context) {
             .setTopK(TOP_K)
             .setNPredict(MAX_LENGTH)  // Max tokens to generate
             .setPenalizeNl(false)  // Don't penalize newlines
-            .setStopStrings(listOf("<|im_end|>", "<|endoftext|>"))  // Qwen stop tokens
+            .setStopStrings("<|im_end|>", "<|endoftext|>")  // Qwen stop tokens
 
         Log.i(TAG, "🔧 Inference parameters:")
         Log.i(TAG, "   Temperature: $TEMPERATURE")
@@ -294,7 +290,7 @@ class LLMManager(private val context: Context) {
      */
     fun getModelInfo(): String {
         return if (isInitialized) {
-            "Model: $currentModelName\nEngine: llama.cpp ${LlamaModel.version()}"
+            "Model: $currentModelName\nEngine: llama.cpp"
         } else {
             "No model loaded"
         }

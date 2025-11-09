@@ -588,7 +588,8 @@ class ModelDownloadManager(private val context: Context) {
 
 
     /**
-     * Import a model from user's storage (file picker) to Downloads folder - ONNX-only
+     * Import a model from user's storage (file picker) to Downloads folder
+     * Supports GGUF, ONNX, and BIN formats
      *
      * @param uri URI of the file selected by user
      * @param onComplete Callback with (success, errorMessage)
@@ -598,7 +599,7 @@ class ModelDownloadManager(private val context: Context) {
         onComplete: (Boolean, String) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
-            var fileName = QWEN_VL_MODEL_A
+            var fileName = QWEN_VL_MODEL_GGUF
 
             // Get original filename
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -610,14 +611,15 @@ class ModelDownloadManager(private val context: Context) {
 
             Log.i(TAG, "📥 Importing model to Downloads: $fileName")
 
-            // Validate model format - ONNX/BIN files
-            val isValidFormat = fileName.endsWith(".onnx", ignoreCase = true) ||
+            // Validate model format - GGUF/ONNX/BIN files
+            val isValidFormat = fileName.endsWith(".gguf", ignoreCase = true) ||
+                                fileName.endsWith(".onnx", ignoreCase = true) ||
                                 fileName.endsWith(".bin", ignoreCase = true)
 
             if (!isValidFormat) {
                 Log.e(TAG, "❌ Invalid model format: $fileName")
                 withContext(Dispatchers.Main) {
-                    onComplete(false, "Invalid model format.\n\nSupported formats: .onnx, .bin")
+                    onComplete(false, "Invalid model format.\n\nSupported formats: .gguf, .onnx, .bin")
                 }
                 return@withContext
             }
