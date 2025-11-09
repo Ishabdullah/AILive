@@ -1,7 +1,8 @@
 # Quick Status - Where We Are
 
 **Last Updated:** 2025-11-09
-**Current Task:** Testing text-only mode with ONNX Runtime 1.19.2
+**Current Task:** Testing app-private storage fix for Android 13+
+**Device:** Samsung S24 Ultra, One UI 8, Android 16 (API 36)
 
 ---
 
@@ -12,10 +13,13 @@
 3. **UI** - Shows correct "8 files" ✅
 4. **ONNX Runtime** - Upgraded to 1.19.2 (supports IR v10) ✅
 5. **VisionPreprocessor** - Perfect implementation ✅
+6. **App-Private Storage** - Android 13+ scoped storage compliance ✅
 
 ## 🔄 What's In Progress
 
-**NOW:** Building app with ONNX Runtime 1.19.2 to test text-only mode
+**NOW:** Rebuild & test with app-private storage fix (Commit: `c0d418e`)
+- Android 13+: Models stored in `/Android/data/com.ailive/files/Download/` (NO permissions needed)
+- Android 12-: Models stored in `/storage/emulated/0/Download/` (requires permission)
 
 ## ❌ What's Not Done Yet
 
@@ -40,20 +44,27 @@
 
 ## 🔨 Build & Test Instructions
 
+**IMPORTANT:** Uninstall old app first! (permission changes require fresh install)
+
 ```bash
-# 1. Clean build
+# 1. Uninstall old app (REQUIRED!)
+adb uninstall com.ailive
+
+# 2. Clean build
 ./gradlew clean assembleDebug
 
-# 2. Install
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+# 3. Install new build
+adb install app/build/outputs/apk/debug/app-debug.apk
 
-# 3. Test
-# - Launch app
+# 4. Monitor logs during first run
+adb logcat | grep -E "QwenVLTokenizer|LLMManager|ModelDownloadManager"
+
+# 5. Test
+# - Launch app (will request Camera + Microphone permissions ONLY)
+# - Tap "Download Models" (downloads to app-private storage, NO permission needed)
+# - Wait for all 8 files to download
 # - Send message: "Hello"
 # - Check response (should NOT be fallback)
-
-# 4. Check logs
-adb logcat | grep -E "LLMManager|ModelDownloadManager|ONNX"
 ```
 
 ---
@@ -111,4 +122,4 @@ adb logcat | grep -E "LLMManager|ModelDownloadManager|ONNX"
 4. Check this file - Quick overview
 
 **Branch:** `claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ`
-**Latest commit:** `093f0df` (Implementation plan)
+**Latest commit:** `c0d418e` (App-private storage fix for Android 13+)
