@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var appIconBackground: android.widget.ImageView
     private lateinit var appTitle: TextView
     private lateinit var classificationResult: TextView
+    private lateinit var responseScrollView: android.widget.ScrollView
     private lateinit var confidenceText: TextView
     private lateinit var inferenceTime: TextView
     private lateinit var statusIndicator: TextView
@@ -155,6 +156,7 @@ class MainActivity : AppCompatActivity() {
         appIconBackground = findViewById(R.id.appIconBackground)
         appTitle = findViewById(R.id.appTitle)
         classificationResult = findViewById(R.id.classificationResult)
+        responseScrollView = findViewById(R.id.responseScrollView)
         confidenceText = findViewById(R.id.confidenceText)
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
@@ -640,9 +642,9 @@ class MainActivity : AppCompatActivity() {
     private fun processTextCommand(command: String) {
         Log.i(TAG, "📝 Processing text command: '$command'")
 
-        // Check if commandRouter is initialized
-        if (!::commandRouter.isInitialized) {
-            Log.w(TAG, "⚠️ Command router not initialized yet - system still starting up")
+        // Check if AILive core is initialized
+        if (!::aiLiveCore.isInitialized) {
+            Log.w(TAG, "⚠️ System not initialized yet - still starting up")
             runOnUiThread {
                 statusIndicator.text = "● INITIALIZING..."
                 classificationResult.text = "System is still initializing. Please wait..."
@@ -655,9 +657,77 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        statusIndicator.text = "● PROCESSING"
-        lifecycleScope.launch(Dispatchers.Default) {
-            commandRouter.processCommand(command)
+        // Show thinking indicator
+        runOnUiThread {
+            statusIndicator.text = "● THINKING..."
+            classificationResult.text = "⏳ Generating response..."
+            confidenceText.text = ""
+            inferenceTime.text = ""
+        }
+
+        // Stream response in real-time
+        lifecycleScope.launch {
+            try {
+                val responseBuilder = StringBuilder()
+                var tokenCount = 0
+                val startTime = System.currentTimeMillis()
+
+                aiLiveCore.llmManager.generateStreaming(command, agentName = "AILive")
+                    .collect { token ->
+                        tokenCount++
+                        responseBuilder.append(token)
+
+                        // Update UI with streaming text
+                        withContext(Dispatchers.Main) {
+                            classificationResult.text = responseBuilder.toString()
+
+                            // Auto-scroll to bottom to show new content
+                            responseScrollView.post {
+                                responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
+                            }
+
+                            // Update performance stats every 5 tokens
+                            if (tokenCount % 5 == 0) {
+                                val elapsed = System.currentTimeMillis() - startTime
+                                val tokensPerSec = if (elapsed > 0) {
+                                    (tokenCount.toFloat() / elapsed) * 1000
+                                } else {
+                                    0f
+                                }
+                                inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
+                                statusIndicator.text = "● GENERATING..."
+                            }
+                        }
+                    }
+
+                // Generation complete
+                val totalTime = System.currentTimeMillis() - startTime
+                val tokensPerSec = if (totalTime > 0) {
+                    (tokenCount.toFloat() / totalTime) * 1000
+                } else {
+                    0f
+                }
+
+                withContext(Dispatchers.Main) {
+                    statusIndicator.text = "●"
+                    confidenceText.text = "Completed"
+                    inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | ${totalTime}ms"
+                    Log.i(TAG, "✅ Streaming complete: $tokenCount tokens in ${totalTime}ms")
+
+                    // Speak the response if TTS available
+                    if (::aiLiveCore.isInitialized) {
+                        aiLiveCore.ttsManager.speak(responseBuilder.toString(), com.ailive.audio.TTSManager.Priority.NORMAL)
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Streaming generation failed", e)
+                withContext(Dispatchers.Main) {
+                    statusIndicator.text = "● ERROR"
+                    classificationResult.text = "Error: ${e.message}"
+                    inferenceTime.text = ""
+                }
+            }
         }
     }
 
