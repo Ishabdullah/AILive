@@ -128,24 +128,26 @@ class SimpleGPT2Tokenizer(private val context: Context) {
     }
 
     /**
-     * Initialize byte encoder (GPT-2's special byte-to-unicode mapping)
+     * Initialize byte encoder (GPT-2's exact byte-to-unicode mapping)
+     * This must match the original GPT-2 implementation exactly!
      */
     private fun initByteEncoder() {
-        // GPT-2 uses a specific byte-to-unicode mapping to handle all possible bytes
-        // This is a simplified version that covers printable ASCII + special encoding
-        val ranges = listOf(
-            33..126,     // Printable ASCII except space
-            161..172,    // Latin-1 supplement start
-            174..255     // Rest of Latin-1
-        )
+        // GPT-2's bytes_to_unicode() function
+        // Avoids mapping to whitespace/control characters in BPE
 
         val bs = mutableListOf<Int>()
-        for (range in ranges) {
-            bs.addAll(range.toList())
-        }
 
-        var cs = bs.toMutableList()
+        // Add printable ASCII (except space)
+        bs.addAll(('!'.code..'~'.code))           // 33-126
+
+        // Add Latin-1 Supplement characters
+        bs.addAll(('¡'.code..'¬'.code))           // 161-172
+        bs.addAll(('®'.code..'ÿ'.code))           // 174-255
+
+        val cs = bs.toMutableList()
         var n = 0
+
+        // For bytes not in bs, map to higher Unicode code points
         for (b in 0..255) {
             if (b !in bs) {
                 bs.add(b)
@@ -154,10 +156,17 @@ class SimpleGPT2Tokenizer(private val context: Context) {
             }
         }
 
+        // Create the mapping dictionaries
         for (i in bs.indices) {
-            byteEncoder[bs[i]] = cs[i].toChar().toString()
-            byteDecoder[cs[i].toChar().toString()] = bs[i]
+            val byteVal = bs[i]
+            val charVal = cs[i].toChar().toString()
+            byteEncoder[byteVal] = charVal
+            byteDecoder[charVal] = byteVal
         }
+
+        Log.d(TAG, "   Byte encoder created: ${byteEncoder.size} mappings")
+        Log.d(TAG, "   Sample: byte 104 ('h') → '${byteEncoder[104]}'")
+        Log.d(TAG, "   Sample: byte 32 (' ') → '${byteEncoder[32]}'")
     }
 
     /**
