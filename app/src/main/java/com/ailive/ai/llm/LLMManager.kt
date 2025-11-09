@@ -2,51 +2,44 @@ package com.ailive.ai.llm
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.llama.cpp.LLamaAndroid
 import android.util.Log
-import de.kherud.llama.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
- * LLMManager - Multimodal Vision-Chat inference using llama.cpp
- * Phase 9.0: Unified text + vision AI with Qwen2-VL-2B-Instruct GGUF
+ * LLMManager - On-device LLM inference using official llama.cpp Android
+ * Phase 9.0: Qwen2-VL-2B-Instruct GGUF with native llama.cpp
  *
  * Capabilities:
  * - Text-only conversation (current implementation)
- * - Visual Question Answering (VQA) when image provided (coming soon with mmproj)
- * - Image captioning and description (coming soon)
+ * - Visual Question Answering (coming soon with mmproj)
  *
  * Model: Qwen2-VL-2B-Instruct Q4_K_M GGUF (~986MB)
  * - Single GGUF file with built-in tokenizer
  * - Q4_K_M quantization: 4-bit with medium quality
- * - Much simpler than ONNX (no separate vocab files, embeddings, etc.)
  *
- * Benefits over ONNX:
+ * Benefits:
+ * - Native ARM64 libraries (no UnsatisfiedLinkError)
+ * - Official llama.cpp implementation
+ * - Streaming responses via Kotlin Flow
  * - Single file vs 8 files (986MB vs 3.7GB)
- * - Built-in tokenizer (no separate vocab.json/merges.txt)
- * - Better mobile support (no ArgMax incompatibility)
- * - Simpler API (no manual autoregressive loop)
- * - Faster inference with llama.cpp optimizations
+ * - Better mobile optimizations
  *
  * @author AILive Team
  * @since Phase 2.6
- * @updated Phase 9.0 - Switched from ONNX Runtime to llama.cpp + GGUF
+ * @updated Phase 9.0 - Using official llama.cpp Android bindings
  */
 class LLMManager(private val context: Context) {
 
     companion object {
         private const val TAG = "LLMManager"
-
-        // Generation parameters (balanced for mobile)
-        private const val MAX_LENGTH = 40  // Max tokens to generate
-        private const val TEMPERATURE = 0.7f  // Sampling temperature
-        private const val TOP_P = 0.9f  // Top-p (nucleus) sampling
-        private const val TOP_K = 40  // Top-k sampling
     }
 
-    // llama.cpp model instance
-    private var llamaModel: LlamaModel? = null
+    // Official llama.cpp Android instance (singleton)
+    private val llamaAndroid = LLamaAndroid.instance()
 
     // Initialization state tracking
     private var isInitialized = false
@@ -60,7 +53,7 @@ class LLMManager(private val context: Context) {
     private var currentModelName: String? = null
 
     /**
-     * Initialize Qwen2-VL GGUF model using llama.cpp
+     * Initialize Qwen2-VL GGUF model using official llama.cpp Android
      * Called once on app startup in background thread
      *
      * Checks for GGUF model file in app-private storage:
@@ -82,7 +75,7 @@ class LLMManager(private val context: Context) {
         initializationError = null
 
         try {
-            Log.i(TAG, "🤖 Initializing Qwen2-VL with llama.cpp...")
+            Log.i(TAG, "🤖 Initializing Qwen2-VL with llama.cpp Android...")
             Log.i(TAG, "⏱️  This may take 10-15 seconds for model loading...")
 
             // Check if Qwen2-VL GGUF model is available
@@ -100,25 +93,16 @@ class LLMManager(private val context: Context) {
 
             // Get model file path
             val modelPath = modelDownloadManager.getModelPath(ModelDownloadManager.QWEN_VL_MODEL_GGUF)
-            val modelFile = File(modelPath)
+            val modelFile = java.io.File(modelPath)
 
             Log.i(TAG, "📂 Loading model: ${modelFile.name}")
             Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
             Log.i(TAG, "   Format: GGUF (Q4_K_M quantization)")
-            Log.i(TAG, "   Engine: llama.cpp")
+            Log.i(TAG, "   Engine: llama.cpp (official Android)")
 
-            // Create model parameters
-            val modelParams = ModelParameters()
-                .setModel(modelPath)
-                .setGpuLayers(0)  // CPU-only for now (will add GPU acceleration later)
-
-            Log.i(TAG, "🔧 Model parameters:")
-            Log.i(TAG, "   GPU layers: 0 (CPU-only)")
-            Log.i(TAG, "   Context size: default (2048)")
-
-            // Load model
+            // Load model using official llama.cpp Android
             Log.i(TAG, "📥 Loading llama.cpp model...")
-            llamaModel = LlamaModel(modelParams)
+            llamaAndroid.load(modelPath)
 
             isInitialized = true
             isInitializing = false
@@ -126,8 +110,7 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "✅ Qwen2-VL initialized successfully!")
             Log.i(TAG, "   Model: $currentModelName")
             Log.i(TAG, "   Capabilities: Text-only (vision coming with mmproj)")
-            Log.i(TAG, "   Engine: llama.cpp")
-            Log.i(TAG, "   Max length: $MAX_LENGTH tokens")
+            Log.i(TAG, "   Engine: llama.cpp (official Android bindings)")
             Log.i(TAG, "🎉 AI is ready!")
 
             true
@@ -177,7 +160,7 @@ class LLMManager(private val context: Context) {
             // Create chat prompt with agent personality
             val chatPrompt = createChatPrompt(prompt, agentName)
 
-            // Generate response using llama.cpp
+            // Generate response using llama.cpp (streaming)
             val response = generateWithLlama(chatPrompt)
 
             val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
@@ -196,45 +179,32 @@ class LLMManager(private val context: Context) {
     }
 
     /**
-     * Generate text using llama.cpp
+     * Generate text using official llama.cpp Android (streaming)
      *
      * @param prompt The formatted chat prompt
      * @return Generated text
      */
-    private fun generateWithLlama(prompt: String): String {
-        val model = llamaModel ?: throw IllegalStateException("Model not initialized")
+    private suspend fun generateWithLlama(prompt: String): String {
+        Log.i(TAG, "🔷 Using llama.cpp for inference (streaming)")
 
-        Log.i(TAG, "🔷 Using llama.cpp for inference")
-
-        // Create inference parameters
-        val inferParams = InferenceParameters(prompt)
-            .setTemperature(TEMPERATURE)
-            .setTopP(TOP_P)
-            .setTopK(TOP_K)
-            .setNPredict(MAX_LENGTH)  // Max tokens to generate
-            .setPenalizeNl(false)  // Don't penalize newlines
-            .setStopStrings("<|im_end|>", "<|endoftext|>")  // Qwen stop tokens
-
-        Log.i(TAG, "🔧 Inference parameters:")
-        Log.i(TAG, "   Temperature: $TEMPERATURE")
-        Log.i(TAG, "   Top-P: $TOP_P")
-        Log.i(TAG, "   Top-K: $TOP_K")
-        Log.i(TAG, "   Max tokens: $MAX_LENGTH")
-
-        // Generate (llama.cpp handles tokenization, sampling, and decoding internally)
         val response = StringBuilder()
         var tokenCount = 0
 
-        for (output in model.generate(inferParams)) {
-            response.append(output)
-            tokenCount++
-
-            // Log progress every 10 tokens
-            if (tokenCount % 10 == 0) {
-                val progress = (tokenCount * 100) / MAX_LENGTH
-                Log.i(TAG, "   Token $tokenCount/$MAX_LENGTH ($progress%)")
+        // Use the official llama.cpp Android Flow API
+        llamaAndroid.send(prompt, formatChat = false)
+            .catch { e ->
+                Log.e(TAG, "❌ Generation error", e)
+                throw e
             }
-        }
+            .collect { token ->
+                response.append(token)
+                tokenCount++
+
+                // Log progress every 10 tokens
+                if (tokenCount % 10 == 0) {
+                    Log.d(TAG, "   Token $tokenCount generated")
+                }
+            }
 
         Log.i(TAG, "✓ Generated $tokenCount tokens")
 
@@ -290,7 +260,7 @@ class LLMManager(private val context: Context) {
      */
     fun getModelInfo(): String {
         return if (isInitialized) {
-            "Model: $currentModelName\nEngine: llama.cpp"
+            "Model: $currentModelName\nEngine: llama.cpp (official Android)"
         } else {
             "No model loaded"
         }
@@ -299,13 +269,12 @@ class LLMManager(private val context: Context) {
     /**
      * Cleanup resources
      */
-    fun close() {
+    suspend fun close() {
         try {
-            llamaModel?.close()
-            llamaModel = null
-            Log.d(TAG, "llama.cpp model closed")
+            llamaAndroid.unload()
+            Log.d(TAG, "llama.cpp model unloaded")
         } catch (e: Exception) {
-            Log.w(TAG, "Error closing model: ${e.message}")
+            Log.w(TAG, "Error unloading model: ${e.message}")
         }
 
         isInitialized = false

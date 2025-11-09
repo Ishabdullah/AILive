@@ -106,10 +106,10 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
-    // llama.cpp for LLM inference (Phase 2.6 - Switched from ONNX Runtime)
-    // java-llama.cpp provides Java/Android bindings for llama.cpp with GGUF support
-    // Better mobile performance and reliability than ONNX Runtime
-    implementation("de.kherud:llama:4.1.0")
+    // llama.cpp for LLM inference (Phase 9.0 - Official Android module)
+    // Official llama.cpp Android bindings from examples/llama.android
+    // Supports GGUF models with native ARM64 libraries
+    implementation(project(":llama"))
 
     // DEPRECATED: ONNX Runtime (ArgMax opset 13 not supported on Android)
     // implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
