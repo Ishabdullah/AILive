@@ -36,11 +36,241 @@ This document outlines the phased release strategy for AILive, organizing all fe
 
 ---
 
-## Version 1.1 - "Personality & Polish" 🎨
+## Version 1.1 - "Power & Performance" ⚡
 
 **Target**: December 2025 (1 month from v1.0)
-**Theme**: Personalization and UX improvements
-**Effort**: 2-3 weeks development + 1 week testing
+**Theme**: Performance optimization and UX polish
+**Effort**: 4 weeks (2 weeks GPU + 1 week streaming + 1 week cleanup)
+**Priority**: HIGH - These improvements benefit ALL future features
+
+### Implementation Timeline
+
+**Week 1-2: GPU Acceleration** 🚀
+- Enable Vulkan backend for Adreno 750
+- GPU detection and initialization
+- Performance benchmarking
+- Battery impact testing
+- **Expected**: 3-5x faster inference (7→20-30 tok/s)
+
+**Week 3: Streaming Token Display** 💬
+- ChatGPT-style incremental display
+- Update UI to show tokens as generated
+- Smooth scrolling animation
+- Typing indicator
+- **Expected**: Instant perceived responsiveness
+
+**Week 4: Cleanup & Optimization** 🧹
+- Remove deprecated TensorFlow dependencies
+- Tune context size (2048→4096 tokens)
+- Optimize batch size for GPU
+- Memory usage optimization
+- Complete documentation
+- **Expected**: Cleaner codebase, better performance
+
+### New Features
+
+#### 1. GPU Acceleration (Vulkan) 🚀
+**Impact**: Massive performance boost
+
+**Implementation**:
+```cmake
+# In build.gradle.kts externalNativeBuild
+arguments += listOf(
+    "-DGGML_VULKAN=ON",
+    "-DGGML_VULKAN_CHECK_RESULTS=ON"
+)
+```
+
+**Features**:
+- Automatic GPU detection
+- Fallback to CPU if GPU unavailable
+- Real-time performance monitoring
+- Battery efficiency optimization
+
+**Performance Targets**:
+- CPU: 7-8 tokens/second (baseline)
+- GPU: 20-30 tokens/second (target)
+- Short responses: 2-4s → <2s
+- Medium responses: 5-10s → 2-5s
+- Long responses: 10-20s → 5-10s
+
+#### 2. Streaming Token Display 💬
+**Impact**: Immediate perceived responsiveness
+
+**Implementation**:
+```kotlin
+// Already have Flow API, just need UI updates
+llmManager.generate(prompt).collect { token ->
+    appendToMessage(token)
+    smoothScrollToBottom()
+}
+```
+
+**Features**:
+- Incremental token display
+- Smooth auto-scroll
+- Typing indicator while generating
+- Cancel generation button
+- Token-per-second counter (live)
+
+#### 3. Technical Debt Cleanup 🧹
+**Impact**: Better maintainability and performance
+
+**Tasks**:
+- Remove unused TensorFlow Lite dependencies
+- Clean up commented ONNX code
+- Update all build warnings
+- Optimize memory usage
+- Document all major classes
+- Add inline code documentation
+
+**Dependencies to Remove**:
+```kotlin
+// DELETE from app/build.gradle.kts:
+implementation("org.tensorflow:tensorflow-lite:2.14.0")
+implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+```
+
+#### 4. Context & Batch Optimization
+**Impact**: Better conversation quality and performance
+
+**Changes**:
+- Context size: 2048 → 4096 tokens (longer conversations)
+- Batch size: Tune for GPU (512 → 1024 for throughput)
+- Smart context pruning (keep relevant, drop old)
+- Memory monitoring and limits
+
+### Technical Changes
+
+**CMake Changes**:
+```cmake
+# external/llama.cpp/.../CMakeLists.txt
+# Enable Vulkan
+find_library(vulkan-lib vulkan)
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    llama
+    common
+    android
+    log
+    ${vulkan-lib}  # Add Vulkan support
+)
+```
+
+**Kotlin Changes**:
+```kotlin
+// LLMManager.kt
+class LLMManager {
+    private var isGPUEnabled = false
+
+    suspend fun initialize(): Boolean {
+        // Detect GPU
+        isGPUEnabled = detectVulkanSupport()
+        Log.i(TAG, "GPU Acceleration: ${if (isGPUEnabled) "Enabled" else "CPU only"}")
+
+        // Initialize with appropriate settings
+        llamaAndroid.load(modelPath)
+    }
+
+    private fun detectVulkanSupport(): Boolean {
+        // Check for Vulkan support on device
+        // Adreno 750 should support Vulkan 1.3
+    }
+}
+```
+
+**UI Changes**:
+```kotlin
+// ChatUI.kt - Streaming display
+private fun displayStreamingResponse(messageId: Int, flow: Flow<String>) {
+    lifecycleScope.launch {
+        val response = StringBuilder()
+        flow.collect { token ->
+            response.append(token)
+            updateMessage(messageId, response.toString())
+            recyclerView.smoothScrollToPosition(messageId)
+            delay(10) // Smooth animation
+        }
+    }
+}
+```
+
+### Performance Metrics to Track
+
+**Before v1.1** (Baseline):
+- Tokens/sec: 7-8 (CPU)
+- Short response: 2-4s
+- Medium response: 5-10s
+- Long response: 10-20s
+- Memory usage: ~1.2GB
+- Battery: ~8-10%/hour
+
+**After v1.1** (Target):
+- Tokens/sec: 20-30 (GPU)
+- Short response: <2s
+- Medium response: 2-5s
+- Long response: 5-10s
+- Memory usage: ~1.0GB (optimized)
+- Battery: <5%/hour
+
+### Testing Focus
+
+**Week 1-2 (GPU)**:
+- Vulkan initialization on Adreno 750
+- Performance benchmarking (before/after)
+- Thermal testing (extended usage)
+- Battery drain measurement
+- Fallback to CPU when GPU unavailable
+- Stability under load (1000+ tokens)
+
+**Week 3 (Streaming)**:
+- Smooth token display
+- No UI jank during generation
+- Proper scroll handling
+- Cancel functionality
+- Memory leaks check
+
+**Week 4 (Cleanup)**:
+- Build succeeds with no warnings
+- All deprecated code removed
+- Memory usage reduced
+- Documentation complete
+- Performance regression tests
+
+### Release Criteria
+
+✅ **GPU Acceleration**:
+- 3x speedup vs CPU (minimum)
+- Stable for 8+ hour sessions
+- No thermal throttling
+- Battery drain <5%/hour
+- Graceful fallback to CPU
+
+✅ **Streaming Display**:
+- Tokens appear instantly
+- Smooth scrolling (60 FPS)
+- No memory leaks
+- Works with GPU and CPU
+
+✅ **Cleanup**:
+- Zero build warnings
+- No deprecated dependencies
+- Memory usage improved
+- Full documentation
+
+✅ **Overall**:
+- Passes all existing tests
+- No regressions from v1.0
+- User-noticeable performance improvement
+- Battery life acceptable
+
+---
+
+## Version 1.2 - "Personality & Polish" 🎨
+
+**Target**: January 2026 (2 months from v1.0)
+**Theme**: Personalization and context awareness
+**Effort**: 3 weeks development + 1 week testing
 
 ### New Features
 
@@ -61,92 +291,30 @@ This document outlines the phased release strategy for AILive, organizing all fe
 - "You're currently in New York, NY"
 - Reverse geocoding for city/state/country
 
-#### 4. Streaming Token Display 💬
-- ChatGPT-style incremental display
-- Show tokens as they generate
-- Smooth scrolling animation
-- Typing indicator
-
-#### 5. Working Statistics 📊
+#### 4. Working Statistics 📊
 - Real-time metric tracking
 - Total conversations, messages, tokens
-- Average response time
+- Average response time (now showing GPU boost!)
 - Memory usage
 - Display in Settings
 
 ### Technical Changes
 - Add Room database for statistics
 - Implement FusedLocationProviderClient
-- Update UI for streaming display
 - SharedPreferences for user settings
+- System context in prompts
 
 ### Testing Focus
 - Name persistence across app restarts
 - Location accuracy
 - Statistics accuracy
-- Smooth streaming performance
+- Time-aware responses
 
 **Release Criteria**:
 - All features working on Samsung S24 Ultra
 - No crashes during 100 message conversation
 - Statistics update in real-time
 - Location within 100m accuracy
-
----
-
-## Version 1.2 - "Power & Speed" ⚡
-
-**Target**: January 2026 (2 months from v1.0)
-**Theme**: Performance optimization
-**Effort**: 2-3 weeks development + 1 week testing
-
-### New Features
-
-#### 1. GPU Acceleration (Vulkan) 🚀
-- Enable Vulkan backend
-- Adreno 750 GPU support
-- 3-5x faster inference
-- 20-30 tokens/second
-
-#### 2. Context Management
-- Increase context to 4096 tokens
-- Smart context pruning
-- Keep conversation relevant
-
-#### 3. Battery Optimization
-- Doze mode compatibility
-- Background task limits
-- Efficient GPU usage
-
-#### 4. Performance Monitoring
-- Real-time tokens/second
-- GPU vs CPU comparison
-- Battery impact metrics
-
-### Technical Changes
-- CMake Vulkan flags enabled
-- GPU detection and initialization
-- Power consumption monitoring
-- Advanced batch size tuning
-
-### Performance Targets
-- Generation: 20-30 tok/s (GPU)
-- Short responses: <2s
-- Medium responses: 2-5s
-- Long responses: 5-10s
-- Battery drain: <5%/hour
-
-### Testing Focus
-- GPU stability
-- Battery consumption
-- Thermal management
-- Performance consistency
-
-**Release Criteria**:
-- 3x speedup vs CPU
-- No thermal throttling
-- Battery drain acceptable
-- Stable for 8+ hour sessions
 
 ---
 
@@ -769,8 +937,8 @@ class ResearchConfig(
 | Version | Release Target | Theme | Key Features | Effort |
 |---------|---------------|-------|--------------|--------|
 | 1.0 | Nov 2025 | Foundation | Core LLM chat | ✅ Done |
-| 1.1 | Dec 2025 | Personality | Name, time, location, streaming | 3 weeks |
-| 1.2 | Jan 2026 | Power | GPU acceleration, optimization | 3 weeks |
+| 1.1 | Dec 2025 | Power & Performance | GPU acceleration, streaming, cleanup | 4 weeks |
+| 1.2 | Jan 2026 | Personality | Name, time, location, statistics | 4 weeks |
 | 1.3 | Feb 2026 | Memory | Persistent memory, user info | 5 weeks |
 | 1.4 | Mar 2026 | Connected | Web search, APIs | 5 weeks |
 | 1.5 | Apr 2026 | Always There | Overlay, quick access | 4 weeks |
@@ -886,16 +1054,38 @@ class ResearchConfig(
 
 ## Next Immediate Steps
 
-### For Version 1.1 (Start Now)
-1. ✅ Create feature branch `v1.1-personality`
-2. ✅ Implement custom AI name (4h)
-3. ✅ Add temporal awareness (6h)
-4. ✅ Integrate GPS/location (8h)
-5. ✅ Build streaming display (2d)
-6. ✅ Add working statistics (1d)
-7. ✅ Testing & QA (1 week)
-8. ✅ Release v1.1
+### For Version 1.1 - Power & Performance (Start Now)
 
-**Timeline**: Start now, release in 3-4 weeks
+**Week 1-2: GPU Acceleration** 🚀
+1. ✅ Create feature branch `v1.1-power-performance`
+2. ✅ Enable Vulkan in CMake build
+3. ✅ Add GPU detection code
+4. ✅ Implement performance monitoring
+5. ✅ Benchmark CPU vs GPU
+6. ✅ Battery impact testing
+7. ✅ Thermal testing
+
+**Week 3: Streaming Display** 💬
+8. ✅ Update ChatUI for incremental display
+9. ✅ Implement smooth scrolling
+10. ✅ Add typing indicator
+11. ✅ Add cancel generation button
+12. ✅ Test memory leaks
+
+**Week 4: Cleanup & Optimization** 🧹
+13. ✅ Remove TensorFlow dependencies
+14. ✅ Clean up build warnings
+15. ✅ Optimize context/batch sizes
+16. ✅ Document all changes
+17. ✅ Performance regression tests
+18. ✅ Final QA and release
+
+**Timeline**: Start now, release in 4 weeks
+
+**Expected Impact**:
+- 3-5x faster responses (GPU acceleration)
+- Instant perceived responsiveness (streaming)
+- Cleaner, more maintainable codebase
+- Foundation for all future features
 
 Ready to begin v1.1 development?
