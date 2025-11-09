@@ -512,10 +512,21 @@ class LLMManager(private val context: Context) {
             expLogits[i] / sumExp
         }
 
-        // Greedy sampling (argmax) - most reliable for small models
-        val sampledToken = probs.indices.maxByOrNull { probs[it] }?.toLong() ?: 0L
+        // Multinomial sampling (categorical distribution)
+        // Sample a token based on the probability distribution
+        val randomValue = Math.random().toFloat() // 0.0 to 1.0
+        var cumulativeProb = 0f
+        var sampledToken = 0L
 
-        Log.v(TAG, "Sampled token $sampledToken with probability ${probs[sampledToken.toInt()]}")
+        for (i in probs.indices) {
+            cumulativeProb += probs[i]
+            if (randomValue <= cumulativeProb) {
+                sampledToken = i.toLong()
+                break
+            }
+        }
+
+        Log.v(TAG, "Sampled token $sampledToken with probability ${probs[sampledToken.toInt()]} (random=$randomValue)")
 
         return sampledToken
     }
