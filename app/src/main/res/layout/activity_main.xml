@@ -4,175 +4,224 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="@drawable/futuristic_background">
 
-    <!-- Camera Preview (fullscreen background) -->
-    <androidx.camera.view.PreviewView
-        android:id="@+id/cameraPreview"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+    <!-- App Icon Background (visible when camera is OFF) -->
+    <ImageView
+        android:id="@+id/appIconBackground"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:src="@mipmap/ic_launcher"
+        android:alpha="0.3"
+        android:scaleType="centerCrop"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- App Title (top with semi-transparent background) -->
+    <!-- Camera Preview (fullscreen background, hidden by default) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/cameraPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Gradient Overlay for Futuristic Effect -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/gradient_overlay"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- App Title (top with neon glow effect) -->
     <TextView
         android:id="@+id/appTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="AILive Vision"
-        android:textColor="#FFFFFF"
-        android:textSize="20sp"
+        android:text="AI LIVE"
+        android:textColor="#00FFFF"
+        android:textSize="28sp"
         android:textStyle="bold"
-        android:padding="12dp"
-        android:background="#AA000000"
+        android:fontFamily="sans-serif-light"
+        android:shadowColor="#00FFFF"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="15"
+        android:padding="16dp"
+        android:background="#15000000"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        android:layout_margin="8dp" />
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp" />
 
-    <!-- AILive Response Text (white, transparent, above text input) -->
+    <!-- Status Indicator (pulsing dot) -->
     <TextView
-        android:id="@+id/classificationResult"
+        android:id="@+id/statusIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="●"
+        android:textColor="#00FF00"
+        android:textSize="16sp"
+        android:shadowColor="#00FF00"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="10"
+        app:layout_constraintTop_toBottomOf="@id/appTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp" />
+
+    <!-- AILive Response Card (center, holographic style) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/responseCard"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text=""
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:padding="8dp"
-        android:background="#33000000"
-        android:maxLines="3"
-        android:ellipsize="end"
-        app:layout_constraintBottom_toTopOf="@id/editTextCommand"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="4dp" />
-
-    <!-- Text Input Field -->
-    <EditText
-        android:id="@+id/editTextCommand"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:hint="Type or speak..."
-        android:textColorHint="#888888"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:inputType="text"
-        android:imeOptions="actionSend"
-        android:background="#55000000"
-        android:padding="12dp"
-        app:layout_constraintBottom_toTopOf="@id/btnSendCommand"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Send Button (wide, above mic/camera) -->
-    <Button
-        android:id="@+id/btnSendCommand"
-        android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:text="SEND"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:backgroundTint="#FF6600"
-        app:layout_constraintBottom_toTopOf="@id/btnToggleMic"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Microphone Button (left bottom) -->
-    <Button
-        android:id="@+id/btnToggleMic"
-        android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:text="🎤 MIC"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:backgroundTint="#00AA00"
-        app:layout_constraintBottom_toTopOf="@id/statusBar"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btnToggleCamera"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="6dp"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Camera Button (right bottom) -->
-    <Button
-        android:id="@+id/btnToggleCamera"
-        android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:text="📷 CAM"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:backgroundTint="#00AA00"
-        app:layout_constraintBottom_toTopOf="@id/statusBar"
-        app:layout_constraintStart_toEndOf="@id/btnToggleMic"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginStart="6dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginBottom="8dp" />
-
-    <!-- Status Bar (horizontal at very bottom) -->
-    <LinearLayout
-        android:id="@+id/statusBar"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="#DD000000"
-        android:padding="8dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        app:cardBackgroundColor="#25FFFFFF"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Waiting Status (green, left) -->
-        <TextView
-            android:id="@+id/statusIndicator"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="● READY"
-            android:textColor="#00FF00"
-            android:textSize="12sp"
-            android:gravity="center"
-            android:padding="6dp"
-            android:background="#33FFFFFF"
-            android:layout_marginEnd="4dp" />
+            android:orientation="vertical"
+            android:padding="20dp">
 
-        <!-- Confidence (yellow, center) -->
-        <TextView
-            android:id="@+id/confidenceText"
-            android:layout_width="0dp"
+            <!-- Response Title -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="AI RESPONSE"
+                android:textColor="#00FFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.2"
+                android:layout_marginBottom="12dp" />
+
+            <!-- Response Text -->
+            <TextView
+                android:id="@+id/classificationResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Ready for input..."
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:lineSpacingExtra="4dp"
+                android:minLines="3"
+                android:maxLines="8"
+                android:scrollbars="vertical" />
+
+            <!-- Confidence and Time -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp">
+
+                <TextView
+                    android:id="@+id/confidenceText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Confidence: --"
+                    android:textColor="#FFD700"
+                    android:textSize="11sp"
+                    android:gravity="start" />
+
+                <TextView
+                    android:id="@+id/inferenceTime"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Time: --"
+                    android:textColor="#FF6B6B"
+                    android:textSize="11sp"
+                    android:gravity="end" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Input Container (bottom area) -->
+    <LinearLayout
+        android:id="@+id/inputContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#20000000"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Text Input Field (futuristic style) -->
+        <EditText
+            android:id="@+id/editTextCommand"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:hint="Type your command..."
+            android:textColorHint="#60FFFFFF"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:inputType="text"
+            android:imeOptions="actionSend"
+            android:background="@drawable/input_field_background"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Send Button (neon style) -->
+        <Button
+            android:id="@+id/btnSendCommand"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="SEND"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#000000"
+            android:background="@drawable/button_neon"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Toggle Buttons Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Confidence: --"
-            android:textColor="#FFFF00"
-            android:textSize="12sp"
-            android:gravity="center"
-            android:padding="6dp"
-            android:background="#33FFFFFF"
-            android:layout_marginStart="4dp"
-            android:layout_marginEnd="4dp" />
+            android:orientation="horizontal">
 
-        <!-- Inference Time (red, right) -->
-        <TextView
-            android:id="@+id/inferenceTime"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Inference: --"
-            android:textColor="#FF0000"
-            android:textSize="12sp"
-            android:gravity="center"
-            android:padding="6dp"
-            android:background="#33FFFFFF"
-            android:layout_marginStart="4dp" />
+            <!-- Microphone Toggle (OFF by default) -->
+            <Button
+                android:id="@+id/btnToggleMic"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="🎤 MIC OFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/button_toggle_off"
+                android:layout_marginEnd="8dp" />
 
+            <!-- Camera Toggle (OFF by default) -->
+            <Button
+                android:id="@+id/btnToggleCamera"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="📷 CAM OFF"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="@drawable/button_toggle_off"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- Dashboard Toggle Button (floating, top right) -->
@@ -181,18 +230,19 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:src="@android:drawable/ic_menu_view"
-        app:backgroundTint="#FF6600"
-        app:tint="#FFFFFF"
+        app:backgroundTint="#00FFFF"
+        app:tint="#000000"
+        app:elevation="12dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_margin="16dp" />
+        android:layout_margin="20dp" />
 
     <!-- Dashboard Container (hidden by default) -->
     <FrameLayout
         android:id="@+id/dashboardContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#1E1E1E"
+        android:background="#E6000000"
         android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
