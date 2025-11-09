@@ -40,6 +40,11 @@ class LLMManager(private val context: Context) {
         private const val TEMPERATURE = 0.9f
 
         private const val TOP_P = 0.9f
+
+        // GPT-2 specific tokens (from config.json)
+        private const val GPT2_EOS_TOKEN = 50256L  // GPT-2 uses 50256 for EOS
+        private const val GPT2_PAD_TOKEN = 0L      // Pad token
+        private const val GPT2_VOCAB_SIZE = 50257  // GPT-2 vocabulary size
     }
 
     // ONNX Runtime (primary inference engine)
@@ -344,7 +349,8 @@ Assistant:"""
      * CRITICAL FIX: Implements proper transformer generation loop
      * - Feeds generated tokens back as new inputs
      * - Samples from last position logits only
-     * - Stops on EOS token
+     * - Stops on EOS token (GPT-2 specific: 50256)
+     * - Includes attention_mask for proper GPT-2 inference
      */
     private fun runInference(inputIds: LongArray): LongArray {
         val session = ortSession ?: throw IllegalStateException("Session not initialized")
@@ -356,29 +362,43 @@ Assistant:"""
             // Autoregressive generation loop
             for (step in 0 until MAX_LENGTH) {
                 var inputTensor: OnnxTensor? = null
+                var attentionMaskTensor: OnnxTensor? = null
                 var outputs: OrtSession.Result? = null
 
                 try {
-                    // Create input tensor from current sequence
-                    val shape = longArrayOf(1, currentSequence.size.toLong())
+                    val seqLen = currentSequence.size.toLong()
+                    val shape = longArrayOf(1, seqLen)
+
+                    // Create input_ids tensor
                     inputTensor = OnnxTensor.createTensor(
                         ortEnv,
                         LongBuffer.wrap(currentSequence.toLongArray()),
                         shape
                     )
 
-                    // Run model
-                    val inputs = mapOf("input_ids" to inputTensor)
+                    // Create attention_mask tensor (all 1s for GPT-2)
+                    val attentionMask = LongArray(currentSequence.size) { 1L }
+                    attentionMaskTensor = OnnxTensor.createTensor(
+                        ortEnv,
+                        LongBuffer.wrap(attentionMask),
+                        shape
+                    )
+
+                    // Run model with both input_ids and attention_mask
+                    val inputs = mapOf(
+                        "input_ids" to inputTensor,
+                        "attention_mask" to attentionMaskTensor
+                    )
                     outputs = session.run(inputs)
 
                     // Get logits tensor: shape [batch_size, seq_len, vocab_size]
+                    // GPT-2 decoder_model.onnx outputs "logits" as first output
                     val outputTensor = outputs[0] as OnnxTensor
                     val logitsBuffer = outputTensor.floatBuffer
 
                     // Extract logits for LAST position only
                     val vocabSize = outputTensor.info.shape[2].toInt()
-                    val seqLen = currentSequence.size
-                    val lastPosLogits = extractLastPositionLogits(logitsBuffer, seqLen, vocabSize)
+                    val lastPosLogits = extractLastPositionLogits(logitsBuffer, currentSequence.size, vocabSize)
 
                     // Sample next token from last position logits
                     val nextTokenId = sampleNextToken(lastPosLogits)
@@ -389,10 +409,9 @@ Assistant:"""
 
                     Log.v(TAG, "Step $step: Generated token $nextTokenId")
 
-                    // Check for end tokens
-                    // SmolLM2 uses token ID 0 (EOS) or 2 (another common EOS)
-                    if (nextTokenId == 0L || nextTokenId == 2L) {
-                        Log.d(TAG, "End token detected, stopping generation")
+                    // Check for GPT-2 EOS token (50256)
+                    if (nextTokenId == GPT2_EOS_TOKEN) {
+                        Log.d(TAG, "GPT-2 EOS token detected, stopping generation")
                         break
                     }
 
@@ -400,6 +419,7 @@ Assistant:"""
                     // Clean up resources for this step
                     outputs?.close()
                     inputTensor?.close()
+                    attentionMaskTensor?.close()
                 }
             }
 
@@ -407,7 +427,9 @@ Assistant:"""
             return generatedIds.toLongArray()
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error in autoregressive generation", e)
+            Log.e(TAG, "❌ Error in autoregressive generation", e)
+            Log.e(TAG, "   Exception: ${e.javaClass.simpleName}: ${e.message}")
+            e.printStackTrace()
             throw e
         }
     }
