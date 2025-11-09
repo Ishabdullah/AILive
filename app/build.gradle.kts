@@ -106,16 +106,16 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
-    // ONNX Runtime for LLM inference (Phase 2.6)
-    // Updated to 1.19.2 to support ONNX IR version 10 (required for Qwen2-VL)
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
+    // llama.cpp for LLM inference (Phase 2.6 - Switched from ONNX Runtime)
+    // java-llama.cpp provides Java/Android bindings for llama.cpp with GGUF support
+    // Better mobile performance and reliability than ONNX Runtime
+    implementation("de.kherud:llama:4.1.0")
 
-    // Hugging Face Tokenizers for proper ONNX model tokenization
-    implementation("ai.djl.huggingface:tokenizers:0.29.0")
+    // DEPRECATED: ONNX Runtime (ArgMax opset 13 not supported on Android)
+    // implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
 
-    // TODO: Add proper llama.cpp Android library for GGUF support
-    // Current issue: io.github.ljcamargo:llamacpp-kotlin not available on Maven Central
-    // Alternative: Build llama.cpp JNI bindings manually or wait for stable release
+    // DEPRECATED: Hugging Face Tokenizers (llama.cpp has built-in tokenizer)
+    // implementation("ai.djl.huggingface:tokenizers:0.29.0")
 
     // CameraX for camera functionality
     implementation("androidx.camera:camera-core:1.3.1")
