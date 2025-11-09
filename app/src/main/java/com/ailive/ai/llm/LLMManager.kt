@@ -7,6 +7,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 /**
@@ -269,12 +270,14 @@ class LLMManager(private val context: Context) {
     /**
      * Cleanup resources
      */
-    suspend fun close() {
-        try {
-            llamaAndroid.unload()
-            Log.d(TAG, "llama.cpp model unloaded")
-        } catch (e: Exception) {
-            Log.w(TAG, "Error unloading model: ${e.message}")
+    fun close() {
+        runBlocking {
+            try {
+                llamaAndroid.unload()
+                Log.d(TAG, "llama.cpp model unloaded")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unloading model: ${e.message}")
+            }
         }
 
         isInitialized = false
