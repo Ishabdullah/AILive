@@ -178,16 +178,27 @@ class SimpleGPT2Tokenizer(private val context: Context) {
      */
     fun decode(ids: LongArray): String {
         Log.d(TAG, "🔠 Decoding ${ids.size} token IDs...")
-        Log.d(TAG, "   Token IDs: ${ids.take(20).joinToString()}${if (ids.size > 20) "..." else ""}")
+
+        // Show first 20 token IDs (LongArray doesn't have take(), so use slice)
+        val previewIds = if (ids.size > 20) {
+            ids.sliceArray(0 until 20).joinToString()
+        } else {
+            ids.joinToString()
+        }
+        Log.d(TAG, "   Token IDs: $previewIds${if (ids.size > 20) "..." else ""}")
 
         var unknownCount = 0
-        val tokens = ids.mapNotNull { id ->
+        val tokens = mutableListOf<String>()
+
+        // LongArray doesn't have mapNotNull, use manual loop
+        for (id in ids) {
             val token = reverseVocab[id.toInt()]
             if (token == null) {
                 unknownCount++
                 Log.w(TAG, "⚠️  Unknown token ID: $id")
+            } else {
+                tokens.add(token)
             }
-            token
         }
 
         val text = tokens.joinToString("")
@@ -213,4 +224,15 @@ class SimpleGPT2Tokenizer(private val context: Context) {
      * Get vocabulary size
      */
     fun getVocabSize(): Int = vocab.size
+
+    /**
+     * Clean up resources (tokenizer uses only in-memory structures)
+     */
+    fun close() {
+        Log.d(TAG, "🔒 Closing tokenizer...")
+        vocab.clear()
+        reverseVocab.clear()
+        bpeMerges.clear()
+        Log.d(TAG, "✅ Tokenizer closed (${vocab.size} vocab entries cleared)")
+    }
 }
