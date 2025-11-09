@@ -75,14 +75,16 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ### ✅ Recent Fixes & Optimizations (2025-11-09)
 
-**Latest: CRITICAL TOKENIZER FIX - Proper BPE Encoding! 🎉**
-- 🔥 **ROOT CAUSE FOUND:** SimpleGPT2Tokenizer was doing word-level lookup instead of proper BPE!
-- 🔥 **FIXED:** Implemented proper Byte Pair Encoding (BPE) algorithm with merge ranks
-- ⚡ **Why it matters:** Wrong token IDs → wrong embeddings → nonsensical outputs (Philadelphia, URLs, statusCode loops)
-- ✅ **Now using:** GPT-2's byte encoder + BPE merges + correct token IDs
-- ✅ **Previous fixes:** Removed 596-token personality prompt + "Q: A:" format
+**Latest: CRITICAL SAMPLING FIX - Multinomial Sampling! 🎉**
+- 🔥 **ROOT CAUSE #2 FOUND:** LLMManager was using greedy sampling (argmax) instead of probabilistic sampling!
+- 🔥 **FIXED:** Implemented proper multinomial/categorical sampling from probability distribution
+- ⚡ **Why it matters:** Greedy sampling always picks highest probability → identical outputs every time!
+- ✅ **Now using:** Temperature-scaled softmax + multinomial sampling for varied responses
+- ✅ **Previous fixes:**
+  - Proper BPE tokenization with GPT-2's exact byte encoder
+  - Removed 596-token personality prompt + "Q: A:" format
 - ⚡ MAX_LENGTH: **40 tokens** (30-35 word responses)
-- ✅ **Full pipeline:** User input → Proper BPE encoding → Correct token IDs → GPT-2 → Coherent text completions
+- ✅ **Full pipeline:** User input → BPE → GPT-2 → Multinomial sampling → VARIED text completions
 
 **Major LLM System Overhaul (2025-11-08)**
 - ✅ Fixed Android tokenizer compatibility (replaced DJL with pure Kotlin)
