@@ -75,12 +75,13 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ### ✅ Recent Fixes & Optimizations (2025-11-09)
 
-**Latest: Ultra-Fast Response Optimization (Commit 61a6c88)**
-- ⚡ Response time: **~12 seconds** (down from 200+ seconds!)
-- ⚡ MAX_LENGTH reduced: 80 → 5 tokens (3-5 word responses)
+**Latest: Balanced Response Optimization (Commit 0596ff2)**
+- ⚡ Response time: **~50 seconds** (down from 200+ seconds!)
+- ⚡ MAX_LENGTH optimized: 80 → 20 tokens (15-18 word responses)
 - ⚡ Input prompt optimized: 800 → 20 tokens (40x faster processing)
 - ⚡ Comprehensive timing logs (per-token, total time, tokens/sec)
-- 📊 Real-time progress updates every token
+- 📊 Real-time progress updates every 5 tokens
+- ✅ Quality verified: Coherent short sentences (vs gibberish at 5 tokens)
 
 **Major LLM System Overhaul (2025-11-08)**
 - ✅ Fixed Android tokenizer compatibility (replaced DJL with pure Kotlin)

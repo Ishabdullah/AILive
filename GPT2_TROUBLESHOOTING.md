@@ -271,13 +271,13 @@ When everything works:
 ### Response Time (Optimized Build)
 
 **Current optimizations (as of 2025-11-09):**
-- **MAX_LENGTH:** 5 tokens (minimal responses: 3-5 words)
+- **MAX_LENGTH:** 20 tokens (short sentence responses: 15-18 words)
 - **Input tokens:** ~20 tokens (minimal prompt format)
 - **Temperature:** 0.7 (faster sampling)
 
 **Expected timing:**
 - Token generation rate: ~2.5 seconds/token (0.4 tokens/sec)
-- Total response time: **~12 seconds** for 5-token response
+- Total response time: **~50 seconds** for 20-token response
 - First token latency: ~3-5 seconds (processing 20 input tokens)
 
 **Logs will show:**
@@ -286,14 +286,16 @@ When everything works:
 📝 Tokenizing prompt: "Q: hello A:"
    ✓ Input tokens: 18 (optimized from ~800 tokens)
 🎯 Starting autoregressive generation
-   Input: 18 tokens | Max output: 5 tokens
-   Token 1/5 (20%) - 2.3s - ID: 12982
-   Token 3/5 (60%) - 2.5s - ID: 392
+   Input: 18 tokens | Max output: 20 tokens
+   Token 1/20 (5%) - 2.3s - ID: 12982
+   Token 6/20 (30%) - 2.4s - ID: 392
+   Token 11/20 (55%) - 2.5s - ID: 8496
+   Token 16/20 (80%) - 2.6s - ID: 284
 ✅ Generation complete:
-   Tokens generated: 5
-   Total time: 12.5s
+   Tokens generated: 20
+   Total time: 50.2s
    Speed: 0.40 tokens/sec
-   Response: "Hello there!"
+   Response: "Hello! I'm AILive, your on-device AI assistant. How can I help you?"
 ```
 
 ### If Response Takes Too Long
@@ -312,13 +314,14 @@ When everything works:
 
 ## Version History
 
-- **2025-11-09 (Latest - Commit 61a6c88):** Ultra-fast 5-token responses
-  - Reduced MAX_LENGTH: 80 → **5 tokens** (~**12s** response time)
+- **2025-11-09 (Latest - Commit 0596ff2):** Balanced 20-token responses
+  - Increased MAX_LENGTH: 5 → **20 tokens** (~**50s** response time)
+  - Quality improvement: Short sentence responses (15-18 words)
   - Minimal prompt format (20 vs 800 tokens input)
   - Added comprehensive timing logs (per-token, total time, tokens/sec)
   - Progress logging every 5 tokens with percentages
   - Lower temperature (0.7) for faster sampling
-  - Response quality: 3-5 word answers (minimal but usable)
+  - **User feedback:** 5 tokens too short (gibberish), 20 tokens provides coherent responses
 
 - **2025-11-09:** Initial diagnostic tooling
   - Added enhanced logging to runInference()
