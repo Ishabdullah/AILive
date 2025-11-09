@@ -13,12 +13,18 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Storage permissions for importing/downloading models -->
-    <!-- READ_EXTERNAL_STORAGE needed for accessing Downloads folder (all Android versions) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- READ_EXTERNAL_STORAGE needed for accessing Downloads folder (Android 10-12) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <!-- WRITE needed for downloading to Downloads folder (Android 9 and below) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+
+    <!-- Android 13+ granular media permissions (for reading model files) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <!-- Background execution permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -33,6 +39,7 @@
         android:label="AILive"
         android:supportsRtl="true"
         android:theme="@style/Theme.AILive"
+        android:requestLegacyExternalStorage="true"
         tools:targetApi="31">
         
         <activity
