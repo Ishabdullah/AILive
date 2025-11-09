@@ -355,6 +355,9 @@ Assistant:"""
     private fun runInference(inputIds: LongArray): LongArray {
         val session = ortSession ?: throw IllegalStateException("Session not initialized")
 
+        Log.d(TAG, "🔍 Starting inference with ${inputIds.size} input tokens")
+        Log.d(TAG, "   Input tokens: ${inputIds.take(10).joinToString()}")
+
         val generatedIds = mutableListOf<Long>()
         val currentSequence = inputIds.toMutableList()
 
@@ -389,7 +392,22 @@ Assistant:"""
                         "input_ids" to inputTensor,
                         "attention_mask" to attentionMaskTensor
                     )
+
+                    if (step == 0) {
+                        Log.d(TAG, "🔍 First step - running model with inputs: ${inputs.keys}")
+                    }
+
                     outputs = session.run(inputs)
+
+                    if (step == 0) {
+                        Log.d(TAG, "🔍 Model outputs: ${outputs.size()} tensors")
+                        outputs.forEach { output ->
+                            val tensor = output.value as? OnnxTensor
+                            if (tensor != null) {
+                                Log.d(TAG, "   Output '${output.key}': shape ${tensor.info.shape.contentToString()}")
+                            }
+                        }
+                    }
 
                     // Get logits tensor: shape [batch_size, seq_len, vocab_size]
                     // GPT-2 decoder_model.onnx outputs "logits" as first output
@@ -398,6 +416,11 @@ Assistant:"""
 
                     // Extract logits for LAST position only
                     val vocabSize = outputTensor.info.shape[2].toInt()
+
+                    if (step == 0) {
+                        Log.d(TAG, "🔍 Vocab size: $vocabSize (expected: $GPT2_VOCAB_SIZE)")
+                    }
+
                     val lastPosLogits = extractLastPositionLogits(logitsBuffer, currentSequence.size, vocabSize)
 
                     // Sample next token from last position logits
@@ -407,11 +430,13 @@ Assistant:"""
                     generatedIds.add(nextTokenId)
                     currentSequence.add(nextTokenId)
 
-                    Log.v(TAG, "Step $step: Generated token $nextTokenId")
+                    if (step < 5 || step % 20 == 0) {
+                        Log.d(TAG, "Step $step: Generated token $nextTokenId")
+                    }
 
                     // Check for GPT-2 EOS token (50256)
                     if (nextTokenId == GPT2_EOS_TOKEN) {
-                        Log.d(TAG, "GPT-2 EOS token detected, stopping generation")
+                        Log.d(TAG, "✓ GPT-2 EOS token detected at step $step, stopping generation")
                         break
                     }
 
@@ -423,12 +448,14 @@ Assistant:"""
                 }
             }
 
-            Log.d(TAG, "Generated ${generatedIds.size} tokens")
+            Log.d(TAG, "✓ Generated ${generatedIds.size} tokens total")
+            Log.d(TAG, "   Generated token IDs: ${generatedIds.take(20).joinToString()}")
             return generatedIds.toLongArray()
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error in autoregressive generation", e)
             Log.e(TAG, "   Exception: ${e.javaClass.simpleName}: ${e.message}")
+            Log.e(TAG, "   Current sequence length: ${currentSequence.size}")
             e.printStackTrace()
             throw e
         }
