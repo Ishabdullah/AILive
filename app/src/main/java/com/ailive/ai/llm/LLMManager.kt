@@ -379,16 +379,33 @@ class LLMManager(private val context: Context) {
         }
 
         // If image is provided, preprocess it for vision encoder
-        // TODO: Add vision preprocessing in next task
+        var visionFeatures: FloatBuffer? = null
         if (image != null && isVisionEncoderLoaded) {
-            Log.d(TAG, "🎨 Vision mode: preprocessing image...")
-            // Vision preprocessing will be added in next task
+            Log.i(TAG, "🎨 Vision mode: preprocessing image...")
+
+            // Validate image
+            if (!VisionPreprocessor.validateImage(image)) {
+                Log.w(TAG, "⚠️ Invalid image, falling back to text-only")
+            } else {
+                try {
+                    // Preprocess image for vision encoder
+                    visionFeatures = VisionPreprocessor.preprocessImage(image)
+                    Log.i(TAG, "✅ Image preprocessed successfully")
+
+                    // TODO: Run vision encoder to extract features
+                    // This requires understanding Qwen2-VL's vision-text fusion architecture
+                    Log.d(TAG, "   Vision encoder inference will be integrated in next phase")
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Vision preprocessing failed", e)
+                    Log.w(TAG, "   Falling back to text-only mode")
+                }
+            }
         }
 
         // Tokenize input
         val inputIds = tokenize(chatPrompt)
 
-        // Run inference (vision features will be integrated in next task)
+        // Run inference (text-only for now, vision integration coming next)
         val outputIds = runInference(inputIds)
 
         // Decode output
