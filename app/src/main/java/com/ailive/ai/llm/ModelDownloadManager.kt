@@ -230,6 +230,17 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "📥 Starting download: $modelName")
         Log.i(TAG, "   URL: $modelUrl")
 
+        // Check if file already exists in Downloads
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val existingFile = File(downloadsDir, modelName)
+        if (existingFile.exists()) {
+            val fileSizeMB = existingFile.length() / 1024 / 1024
+            Log.i(TAG, "✓ File already exists: $modelName (${fileSizeMB}MB)")
+            Log.i(TAG, "   Skipping download")
+            onComplete(true, "")
+            return
+        }
+
         // Unregister any existing receiver
         downloadReceiver?.let {
             try {
