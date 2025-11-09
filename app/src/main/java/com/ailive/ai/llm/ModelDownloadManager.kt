@@ -81,7 +81,9 @@ class ModelDownloadManager(private val context: Context) {
         private const val MODELS_DIR = "models"
 
         // Minimum valid model size (1MB) - models smaller than this are likely corrupted
+        // Exception: Models C and D are tiny (6KB and 25KB) - they're valid
         private const val MIN_MODEL_SIZE_BYTES = 1024 * 1024L
+        private const val MIN_TINY_MODEL_SIZE_BYTES = 1024L  // 1KB for tiny models (C/D)
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -90,6 +92,7 @@ class ModelDownloadManager(private val context: Context) {
     private var downloadReceiver: BroadcastReceiver? = null  // Keep reference to unregister later
     private var currentModelName: String? = null  // Track current download model name
     private var completionCheckScheduled = false  // Prevent multiple manual checks
+    private var isHandlingCompletion = false  // Guard against duplicate handleDownloadComplete() calls
 
     // Polling mechanism for download status (fallback if BroadcastReceiver doesn't fire)
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -304,6 +307,7 @@ class ModelDownloadManager(private val context: Context) {
         downloadCompleteCallback = onComplete
         currentModelName = modelName
         completionCheckScheduled = false
+        isHandlingCompletion = false  // Reset for new download
 
         // Register broadcast receiver for download completion
         downloadReceiver = object : BroadcastReceiver() {
@@ -495,12 +499,36 @@ class ModelDownloadManager(private val context: Context) {
 
     /**
      * Handle download completion - verify file in Downloads folder
+     * BUGFIX: Prevent duplicate invocations from both BroadcastReceiver and polling
      */
     private fun handleDownloadComplete(modelName: String) {
+        // Guard against duplicate calls (can happen when both BroadcastReceiver and polling fire)
+        if (isHandlingCompletion) {
+            Log.w(TAG, "⚠️ handleDownloadComplete already in progress, ignoring duplicate call")
+            return
+        }
+
+        isHandlingCompletion = true
         Log.i(TAG, "📥 handleDownloadComplete called for: $modelName")
 
         // Stop polling (in case called from BroadcastReceiver)
         stopPollingDownloadStatus()
+
+        // Unregister BroadcastReceiver if still registered
+        downloadReceiver?.let {
+            try {
+                context.unregisterReceiver(it)
+                Log.d(TAG, "   Unregistered BroadcastReceiver in handleDownloadComplete")
+            } catch (e: Exception) {
+                // Already unregistered - that's fine
+                Log.d(TAG, "   BroadcastReceiver already unregistered")
+            }
+            downloadReceiver = null
+        }
+
+        // Store callback locally and clear it immediately to prevent duplicate invocations
+        val callback = downloadCompleteCallback
+        downloadCompleteCallback = null
 
         try {
             val query = DownloadManager.Query().setFilterById(downloadId)
@@ -523,17 +551,28 @@ class ModelDownloadManager(private val context: Context) {
                                 val downloadsDir = getModelsDir()
                                 val modelFile = File(downloadsDir, modelName)
 
-                                if (modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES) {
+                                // Tiny models (C/D) are legitimately small (6KB and 25KB)
+                                val minSize = if (modelName == QWEN_VL_MODEL_C || modelName == QWEN_VL_MODEL_D) {
+                                    MIN_TINY_MODEL_SIZE_BYTES
+                                } else {
+                                    MIN_MODEL_SIZE_BYTES
+                                }
+
+                                if (modelFile.exists() && modelFile.length() >= minSize) {
+                                    val sizeMB = modelFile.length() / 1024 / 1024
+                                    val sizeKB = modelFile.length() / 1024
+                                    val sizeStr = if (sizeMB > 0) "${sizeMB}MB" else "${sizeKB}KB"
                                     Log.i(TAG, "✅ File verified in Downloads: ${modelFile.absolutePath}")
-                                    Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
-                                    downloadCompleteCallback?.invoke(true, "")
+                                    Log.i(TAG, "   Size: $sizeStr")
+                                    callback?.invoke(true, "")
                                 } else {
                                     Log.e(TAG, "❌ File missing or too small in Downloads!")
-                                    downloadCompleteCallback?.invoke(false, "Download verification failed")
+                                    Log.e(TAG, "   Expected at least ${minSize / 1024}KB, got ${modelFile.length() / 1024}KB")
+                                    callback?.invoke(false, "Download verification failed")
                                 }
                             } else {
                                 Log.e(TAG, "❌ URI is null!")
-                                downloadCompleteCallback?.invoke(false, "Download URI is null")
+                                callback?.invoke(false, "Download URI is null")
                             }
                         }
                         DownloadManager.STATUS_FAILED -> {
@@ -542,21 +581,27 @@ class ModelDownloadManager(private val context: Context) {
                             )
                             val errorMessage = getDownloadErrorMessage(reason)
                             Log.e(TAG, "❌ Download failed with reason: $reason - $errorMessage")
-                            downloadCompleteCallback?.invoke(false, errorMessage)
+                            callback?.invoke(false, errorMessage)
                         }
                         else -> {
                             Log.w(TAG, "⚠️ Download status: $status")
-                            downloadCompleteCallback?.invoke(false, "Unexpected download status: $status")
+                            callback?.invoke(false, "Unexpected download status: $status")
                         }
                     }
                 } else {
                     Log.e(TAG, "❌ Cursor is empty!")
-                    downloadCompleteCallback?.invoke(false, "Could not query download status")
+                    callback?.invoke(false, "Could not query download status")
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling download completion", e)
-            downloadCompleteCallback?.invoke(false, "Error: ${e.message}")
+            callback?.invoke(false, "Error: ${e.message}")
+        } finally {
+            // Reset state for next download
+            downloadId = -1
+            currentModelName = null
+            isHandlingCompletion = false
+            Log.d(TAG, "📥 Completion handling finished, state reset for next download")
         }
     }
 
