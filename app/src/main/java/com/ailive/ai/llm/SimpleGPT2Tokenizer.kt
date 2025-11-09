@@ -228,7 +228,7 @@ class SimpleGPT2Tokenizer(private val context: Context) {
      * Encode text to token IDs using proper BPE algorithm
      */
     fun encode(text: String): LongArray {
-        Log.d(TAG, "🔤 Encoding text: \"${text.take(100)}${if (text.length > 100) "..." else ""}\"")
+        Log.i(TAG, "🔤 BPE Encoding text: \"${text.take(100)}${if (text.length > 100) "..." else ""}\"")
 
         val tokens = mutableListOf<Long>()
 
@@ -236,28 +236,46 @@ class SimpleGPT2Tokenizer(private val context: Context) {
         val pattern = Regex("""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
         val words = pattern.findAll(text).map { it.value }.toList()
 
+        Log.i(TAG, "   Regex split into ${words.size} words: ${words.take(5)}")
+
         for (word in words) {
+            Log.d(TAG, "   Processing word: '$word'")
+
             // Convert word to bytes, then to unicode chars using byte encoder
             val tokenBytes = word.toByteArray(Charsets.UTF_8)
+            Log.d(TAG, "     Bytes: ${tokenBytes.take(10).map { it.toInt() and 0xFF }}")
+
             val encodedWord = tokenBytes.map {
-                byteEncoder[it.toInt() and 0xFF] ?: ""
+                val byte = it.toInt() and 0xFF
+                val encoded = byteEncoder[byte]
+                if (encoded == null) {
+                    Log.w(TAG, "     ⚠️  Missing byte encoder for byte $byte")
+                }
+                encoded ?: ""
             }.joinToString("")
 
+            Log.d(TAG, "     Byte-encoded: '$encodedWord'")
+
             // Apply BPE to get the final token representation
-            val bpeTokens = bpe(encodedWord).split(" ")
+            val bpeResult = bpe(encodedWord)
+            Log.d(TAG, "     BPE result: '$bpeResult'")
+
+            val bpeTokens = bpeResult.split(" ")
+            Log.d(TAG, "     BPE tokens: $bpeTokens")
 
             for (bpeToken in bpeTokens) {
                 val tokenId = vocab[bpeToken]
                 if (tokenId != null) {
                     tokens.add(tokenId.toLong())
+                    Log.d(TAG, "       Token '$bpeToken' → ID $tokenId")
                 } else {
-                    Log.w(TAG, "⚠️  Unknown BPE token: '$bpeToken'")
+                    Log.w(TAG, "       ⚠️  Unknown BPE token: '$bpeToken'")
                 }
             }
         }
 
-        Log.d(TAG, "✓ Encoded to ${tokens.size} tokens using proper BPE")
-        Log.d(TAG, "   First 10 token IDs: ${tokens.take(10).joinToString()}")
+        Log.i(TAG, "✅ BPE encoded to ${tokens.size} tokens")
+        Log.i(TAG, "   Token IDs: ${tokens.joinToString()}")
 
         return tokens.toLongArray()
     }
