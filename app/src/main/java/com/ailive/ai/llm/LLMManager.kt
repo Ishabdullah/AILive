@@ -3,7 +3,6 @@ package com.ailive.ai.llm
 import android.content.Context
 import android.util.Log
 import ai.onnxruntime.*
-import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -63,8 +62,8 @@ class LLMManager(private val context: Context) {
     // Model download manager
     private val modelDownloadManager = ModelDownloadManager(context)
 
-    // HuggingFace tokenizer (proper BPE tokenization)
-    private var tokenizer: HuggingFaceTokenizer? = null
+    // Android-compatible GPT-2 tokenizer (no native dependencies)
+    private var tokenizer: SimpleGPT2Tokenizer? = null
 
     // Current model path and info
     private var currentModelPath: String? = null
@@ -195,23 +194,19 @@ class LLMManager(private val context: Context) {
             // Create session
             ortSession = ortEnv?.createSession(modelFile.absolutePath, sessionOptions)
 
-            // Load HuggingFace tokenizer from assets
-            Log.i(TAG, "📖 Loading tokenizer...")
-            val tokenizerFile = File(context.filesDir, "tokenizer.json")
+            // Load simple Android-compatible tokenizer
+            Log.i(TAG, "📖 Loading Android-compatible tokenizer...")
+            tokenizer = SimpleGPT2Tokenizer(context)
+            val tokenizerLoaded = tokenizer?.initialize() ?: false
 
-            // Copy tokenizer from assets to filesDir if not exists
-            if (!tokenizerFile.exists()) {
-                context.assets.open("tokenizer.json").use { input ->
-                    tokenizerFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                Log.i(TAG, "   Copied tokenizer.json to ${tokenizerFile.absolutePath}")
+            if (!tokenizerLoaded) {
+                Log.e(TAG, "❌ Failed to load tokenizer")
+                return false
             }
 
-            // Initialize DJL tokenizer
-            tokenizer = HuggingFaceTokenizer.newInstance(tokenizerFile.toPath())
             Log.i(TAG, "✅ Tokenizer loaded successfully")
+            Log.i(TAG, "   Vocab size: ${tokenizer?.getVocabSize()}")
+            Log.i(TAG, "   EOS token: ${tokenizer?.getEosTokenId()}")
 
             true
         } catch (e: Exception) {
@@ -317,21 +312,20 @@ Assistant:"""
     }
 
     /**
-     * Tokenize text using HuggingFace BPE tokenizer
+     * Tokenize text using Android-compatible GPT-2 tokenizer
      */
     private fun tokenize(text: String): LongArray {
         val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
         Log.d(TAG, "Tokenizing: ${text.take(100)}...")
-        val encoding = tok.encode(text)
-        val ids = encoding.ids
+        val ids = tok.encode(text)
 
         Log.d(TAG, "Token count: ${ids.size}, First 10 tokens: ${ids.take(10).joinToString()}")
         return ids
     }
 
     /**
-     * Decode token IDs back to text using HuggingFace tokenizer
+     * Decode token IDs back to text using Android-compatible tokenizer
      */
     private fun decode(ids: LongArray): String {
         val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
