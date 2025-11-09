@@ -242,18 +242,22 @@ class MainActivity : AppCompatActivity() {
 
         // Storage permissions:
         // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
-        // This requires READ_EXTERNAL_STORAGE permission on Android 10-12
-        // (Android 13+ uses READ_MEDIA_* permissions instead, but we'll handle that later)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            // Android 12 and below - need READ to access Downloads folder
+        // Android 13+ uses granular READ_MEDIA_* permissions
+        // Android 10-12 uses READ_EXTERNAL_STORAGE
+        // Android 9- uses WRITE_EXTERNAL_STORAGE
+        if (Build.VERSION.SDK_INT >= Build.VERSION.CODES.TIRAMISU) {
+            // Android 13+ - need granular media permissions to read model files
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION.CODES.Q) {
+            // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            // Android 9 and below - also need WRITE to download to Downloads
+        } else {
+            // Android 9 and below - need both READ and WRITE
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
             permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
-        // Note: For Android 13+ (API 33+), we'd need READ_MEDIA_* permissions
-        // but Downloads folder access still works with READ_EXTERNAL_STORAGE for now
 
         // Check current permission status
         val missing = permissionsToRequest.filter {
