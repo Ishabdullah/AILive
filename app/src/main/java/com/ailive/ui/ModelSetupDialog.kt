@@ -184,7 +184,7 @@ class ModelSetupDialog(
 
         // Update progress every second
         progressHandler = Handler(Looper.getMainLooper())
-        updateBatchDownloadProgress("", 0, 6)
+        updateBatchDownloadProgress("", 0, 8)
     }
 
     /**
