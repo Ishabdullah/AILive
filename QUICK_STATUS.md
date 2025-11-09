@@ -14,12 +14,16 @@
 4. **ONNX Runtime** - Upgraded to 1.19.2 (supports IR v10) ✅
 5. **VisionPreprocessor** - Perfect implementation ✅
 6. **App-Private Storage** - Android 13+ scoped storage compliance ✅
+7. **NNAPI Disabled** - Fixed ArgMax(13) incompatibility ✅
+8. **Download Optimization** - Fixed glitchy behavior (no duplicate callbacks) ✅
 
 ## 🔄 What's In Progress
 
-**NOW:** Rebuild & test with app-private storage fix (Commit: `c0d418e`)
-- Android 13+: Models stored in `/Android/data/com.ailive/files/Download/` (NO permissions needed)
-- Android 12-: Models stored in `/storage/emulated/0/Download/` (requires permission)
+**NOW:** Test with optimized downloads + CPU execution (Commit: `cab5862`)
+- Fixed: Multiple parallel initializations
+- Fixed: Tiny models (C/D) validation
+- Fixed: Download callback duplicates
+- Fixed: BroadcastReceiver cleanup
 
 ## ❌ What's Not Done Yet
 
@@ -122,4 +126,4 @@ adb logcat | grep -E "QwenVLTokenizer|LLMManager|ModelDownloadManager"
 4. Check this file - Quick overview
 
 **Branch:** `claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ`
-**Latest commit:** `c0d418e` (App-private storage fix for Android 13+)
+**Latest commit:** `cab5862` (Download optimization + NNAPI fix)
