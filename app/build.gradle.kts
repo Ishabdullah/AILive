@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.ailive"
-        minSdk = 26
+        minSdk = 33  // Android 13+ required for llama.cpp Android module
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
