@@ -303,4 +303,83 @@ LLMManager: ✅ Generation complete in X.Xs
 
 ---
 
-**NEXT ACTION:** Build APK with ONNX Runtime 1.19.2 and test text-only mode
+## 📱 Test Session 2: App-Private Storage Fix (Android 13+)
+
+**Date:** 2025-11-09
+**Status:** READY FOR TESTING
+**Commit:** `c0d418e` - App-private storage for Android 13+
+
+### Changes Made:
+1. ✅ Added `getModelsDir()` function to ModelDownloadManager.kt
+   - Android 13+: `/Android/data/com.ailive/files/Download/` (app-private, NO permissions needed)
+   - Android 12-: `/storage/emulated/0/Download/` (public, requires permission)
+
+2. ✅ Updated QwenVLTokenizer to accept optional `modelsDir` parameter
+
+3. ✅ Updated LLMManager to pass models directory to tokenizer
+
+### Why This Fix:
+- Android 13-16 `READ_MEDIA_*` permissions ONLY work for actual media files (photos/videos/audio)
+- Model files (.onnx, .json, .txt, .bin) are NOT media files
+- App-private external storage requires NO permissions (scoped storage compliant)
+
+### Build & Install Instructions:
+
+**IMPORTANT:** You must uninstall the old app first (fresh install required for permission changes)
+
+```bash
+# 1. Uninstall old app (REQUIRED!)
+adb uninstall com.ailive
+
+# 2. Build new APK
+./gradlew clean assembleDebug
+
+# 3. Install new APK
+adb install app/build/outputs/apk/debug/app-debug.apk
+
+# 4. Monitor logs during first run
+adb logcat | grep -E 'QwenVLTokenizer|LLMManager|ModelDownloadManager'
+```
+
+### Expected Logs (Success):
+```
+ModelDownloadManager: 📁 Models directory: /storage/emulated/0/Android/data/com.ailive/files/Download
+ModelDownloadManager: 📁 Download destination: App-private storage (Android 13+)
+QwenVLTokenizer: 📖 Loading Qwen2-VL tokenizer from /storage/emulated/0/Android/data/com.ailive/files/Download/...
+QwenVLTokenizer: ✅ Loaded 151643 vocabulary tokens
+QwenVLTokenizer: ✅ Loaded 64012 BPE merges with ranks
+QwenVLTokenizer: ✅ Tokenizer initialized successfully in XXXms
+LLMManager: ✅ Tokenizer loaded successfully
+LLMManager: 📂 Loading text decoder: QwenVL_E_q4f16.onnx (950MB)
+LLMManager: ✅ Text decoder loaded successfully
+```
+
+### Tests to Run:
+1. ✅ Launch app - check "Download Models" shows 0/8 files
+2. ✅ Tap "Download Models" - verify downloads start
+3. ✅ Check Downloads notification - all 8 files download to app-private storage
+4. ✅ Check initialization logs - tokenizer loads successfully
+5. ✅ Send message: "Hello" - verify NOT a fallback response
+6. ✅ Send message: "What is 2+2?" - verify mathematical response
+7. ✅ Check logcat - NO permission errors, NO IR version errors
+
+### Success Criteria:
+- [ ] No "Permission denied" errors
+- [ ] Tokenizer loads from `/Android/data/com.ailive/files/Download/`
+- [ ] All 8 files download successfully
+- [ ] Text responses are generated (not fallback)
+- [ ] No IR version errors
+- [ ] No OOM crashes
+
+### If Successful:
+Move to vision pipeline implementation (Phases 1-5)
+
+### If Failed:
+- Check logcat for specific errors
+- Verify Android version (Settings > About Phone > Software Information)
+- Verify models directory path in logs
+- Check file permissions in app-private storage
+
+---
+
+**NEXT ACTION:** User needs to uninstall, rebuild, reinstall, and test
