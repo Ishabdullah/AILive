@@ -233,29 +233,33 @@ app/src/main/java/com/ailive/ai/llm/
 
 ## Usage Examples
 
-### Example 1: Text-Only Chat (Backward Compatible)
+### Example 1: Text-Only Chat (Camera OFF - Saves Resources)
 
 ```kotlin
 // PersonalityEngine or any component
+// Camera is OFF → text-only mode (skips vision encoder)
 val response = llmManager.generate(
     prompt = "Hello, how are you?",
     agentName = "AILive"
+    // No image parameter → vision encoder not loaded/used
 )
 // Output: "I'm doing well, thank you for asking! How can I help you today?"
+// Resource usage: ~2GB RAM, no GPU for vision
 ```
 
-### Example 2: Visual Question Answering
+### Example 2: Visual Question Answering (Camera ON - Full Vision)
 
 ```kotlin
-// User shows camera to AI
+// User turns camera ON → full vision mode
 val cameraImage: Bitmap = cameraManager.captureFrame()
 
 val response = llmManager.generate(
     prompt = "What objects do you see?",
-    image = cameraImage,
+    image = cameraImage,  // ← Vision encoder activated!
     agentName = "AILive"
 )
 // Output: "I see a laptop, a coffee mug, and a notebook on a desk."
+// Resource usage: ~3.5GB RAM, GPU for vision encoding (~30-40s one-time)
 ```
 
 ### Example 3: Image Captioning
@@ -318,22 +322,51 @@ override suspend fun execute(params: Map<String, Any>): ToolResult {
 
 ---
 
-## Performance Expectations
+## Performance Expectations & Resource Management
 
-**Inference Time** (on mid-range Android):
-- Text-only: ~2.5s per token (~100s for 40 tokens)
-- Vision + text: ~4-5s per token (~160-200s for 40 tokens)
-  - Vision encoding: ~30-40s (one-time per image)
-  - Text generation: ~2.5s per token (same as before)
+### Smart Resource Allocation
 
-**Memory Usage**:
-- Text-only: ~2GB RAM
-- Vision + text: ~3-3.5GB RAM (vision encoder adds ~1GB)
+**Camera OFF (Text-Only Mode)**:
+- ✅ Vision encoder NOT loaded into memory
+- ✅ Only text decoder used
+- ✅ Saves ~1GB RAM
+- ✅ Faster inference (~2.5s/token)
+- ✅ Lower GPU usage
 
-**Recommendations**:
-- Use MAX_LENGTH = 40 for mobile
-- Cache vision embeddings for repeated questions about same image
-- Consider smaller responses for vision queries (20-30 tokens)
+**Camera ON (Vision Mode)**:
+- 🎨 Vision encoder loaded on-demand
+- 🎨 Full multimodal capabilities
+- 🎨 Uses ~3.5GB RAM total
+- 🎨 Vision encoding: ~30-40s (one-time per image)
+- 🎨 Text generation: ~2.5s/token (same as text-only)
+
+### Inference Time (on mid-range Android)
+
+**Text-only** (camera OFF):
+- ~2.5s per token
+- 40 tokens = ~100s total response time
+- Memory: ~2GB RAM
+
+**Vision + text** (camera ON):
+- Vision encoding: ~30-40s (one-time per image)
+- Text generation: ~2.5s per token
+- 40 tokens = ~30-40s (vision) + ~100s (text) = ~130-140s total
+- Memory: ~3-3.5GB RAM
+
+### Memory Usage Breakdown
+
+| Mode | Vision Encoder | Text Decoder | Total RAM | GPU Usage |
+|------|----------------|--------------|-----------|-----------|
+| Camera OFF | Not loaded | 2GB | ~2GB | Low |
+| Camera ON | 1-1.5GB | 2GB | ~3-3.5GB | High (vision) |
+
+### Optimization Strategies
+
+1. **Lazy Loading**: Vision encoder only loaded when `image != null`
+2. **Model Caching**: Vision embeddings cached for repeated queries about same image
+3. **Conditional Processing**: Skip vision preprocessing entirely when camera OFF
+4. **Memory Management**: Unload vision encoder after 5 minutes of non-use
+5. **Response Length**: Consider MAX_LENGTH = 30 for vision queries to save time
 
 ---
 
