@@ -90,6 +90,11 @@ class ModelDownloadManager(private val context: Context) {
     private var currentModelName: String? = null  // Track current download model name
     private var completionCheckScheduled = false  // Prevent multiple manual checks
 
+    // Polling mechanism for download status (fallback if BroadcastReceiver doesn't fire)
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var statusCheckRunnable: Runnable? = null
+    private val POLL_INTERVAL_MS = 5000L  // Check every 5 seconds
+
     /**
      * Check if Qwen2-VL model files exist in Downloads folder (all required files)
      */
@@ -322,6 +327,9 @@ class ModelDownloadManager(private val context: Context) {
             Log.i(TAG, "✅ Download queued with ID: $downloadId")
             Log.i(TAG, "   Destination: Downloads/$modelName")
 
+            // Start polling download status as fallback (in case BroadcastReceiver doesn't fire)
+            startPollingDownloadStatus()
+
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to start download", e)
             // Unregister receiver on failure
@@ -358,10 +366,98 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * Start polling download status (fallback if BroadcastReceiver doesn't fire)
+     */
+    private fun startPollingDownloadStatus() {
+        // Cancel any existing polling
+        stopPollingDownloadStatus()
+
+        statusCheckRunnable = object : Runnable {
+            override fun run() {
+                checkDownloadStatus()
+                // Schedule next check
+                handler.postDelayed(this, POLL_INTERVAL_MS)
+            }
+        }
+
+        // Start polling after initial delay
+        handler.postDelayed(statusCheckRunnable!!, POLL_INTERVAL_MS)
+        Log.d(TAG, "📊 Started polling download status (every ${POLL_INTERVAL_MS / 1000}s)")
+    }
+
+    /**
+     * Stop polling download status
+     */
+    private fun stopPollingDownloadStatus() {
+        statusCheckRunnable?.let {
+            handler.removeCallbacks(it)
+            statusCheckRunnable = null
+            Log.d(TAG, "📊 Stopped polling download status")
+        }
+    }
+
+    /**
+     * Check current download status (called by polling mechanism)
+     */
+    private fun checkDownloadStatus() {
+        if (downloadId == -1L) {
+            stopPollingDownloadStatus()
+            return
+        }
+
+        try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            downloadManager.query(query)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(
+                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
+                    )
+
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            Log.i(TAG, "📊 Polling detected: Download SUCCESS")
+                            stopPollingDownloadStatus()
+                            // Trigger completion handler
+                            currentModelName?.let { handleDownloadComplete(it) }
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            Log.e(TAG, "📊 Polling detected: Download FAILED")
+                            stopPollingDownloadStatus()
+                            currentModelName?.let { handleDownloadComplete(it) }
+                        }
+                        DownloadManager.STATUS_RUNNING,
+                        DownloadManager.STATUS_PENDING -> {
+                            // Still downloading - keep polling
+                            val bytesDownloaded = cursor.getLong(
+                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                            )
+                            val totalBytes = cursor.getLong(
+                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                            )
+                            if (totalBytes > 0) {
+                                val progress = (bytesDownloaded * 100) / totalBytes
+                                Log.d(TAG, "📊 Download progress: $progress% (${bytesDownloaded / 1024 / 1024}MB / ${totalBytes / 1024 / 1024}MB)")
+                            }
+                        }
+                        DownloadManager.STATUS_PAUSED -> {
+                            Log.w(TAG, "📊 Download PAUSED")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking download status", e)
+        }
+    }
+
+    /**
      * Handle download completion - verify file in Downloads folder
      */
     private fun handleDownloadComplete(modelName: String) {
         Log.i(TAG, "📥 handleDownloadComplete called for: $modelName")
+
+        // Stop polling (in case called from BroadcastReceiver)
+        stopPollingDownloadStatus()
 
         try {
             val query = DownloadManager.Query().setFilterById(downloadId)
