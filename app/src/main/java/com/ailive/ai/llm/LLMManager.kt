@@ -196,13 +196,10 @@ class LLMManager(private val context: Context) {
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             sessionOptions.setIntraOpNumThreads(4)
 
-            // OPTIMIZATION: Enable NNAPI for GPU/NPU acceleration
-            try {
-                sessionOptions.addNnapi()
-                Log.i(TAG, "✅ NNAPI GPU acceleration enabled")
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠️ NNAPI not available, using CPU")
-            }
+            // NOTE: NNAPI disabled - ArgMax(13) operation not supported by NNAPI
+            // The Qwen2-VL model uses ArgMax opset 13 which requires CPU execution provider
+            // Using CPU-only execution for full operation compatibility
+            Log.i(TAG, "✅ Using CPU execution provider (NNAPI disabled for compatibility)")
 
             // Create session for text decoder
             ortSession = ortEnv?.createSession(modelEPath, sessionOptions)
