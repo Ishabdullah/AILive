@@ -30,14 +30,14 @@ class LLMManager(private val context: Context) {
     companion object {
         private const val TAG = "LLMManager"
 
-        // OPTIMIZATION: Reduced to 15 for fast on-device generation
-        // At ~2.5s/token, 15 tokens = ~37s response time (acceptable for mobile)
-        // Short answers only: 10-12 words maximum
-        private const val MAX_LENGTH = 15
+        // OPTIMIZATION: Reduced to 10 for fastest on-device generation
+        // At ~2.5s/token, 10 tokens = ~25s response time (good for mobile)
+        // Ultra-short answers only: 6-8 words maximum
+        private const val MAX_LENGTH = 10
 
-        // OPTIMIZATION: Higher temperature (0.9) for more varied responses
-        // Previously 0.7 was causing some repetition
-        private const val TEMPERATURE = 0.9f
+        // OPTIMIZATION: Lower temperature for faster, more deterministic responses
+        // Lower temp = faster sampling with less randomness
+        private const val TEMPERATURE = 0.7f
 
         private const val TOP_P = 0.9f
 
@@ -248,15 +248,20 @@ class LLMManager(private val context: Context) {
         }
 
         try {
+            val startTime = System.currentTimeMillis()
+
             // Create chat prompt with agent personality
             val chatPrompt = createChatPrompt(prompt, agentName)
-            Log.d(TAG, "🔍 Generating response for: ${prompt.take(50)}...")
+            Log.i(TAG, "🚀 Starting generation for: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
 
             // Use ONNX Runtime
-            Log.d(TAG, "🔷 Generating with ONNX Runtime...")
+            Log.i(TAG, "🔷 Using ONNX Runtime (NNAPI GPU acceleration)")
             val response = generateONNX(chatPrompt)
 
-            Log.d(TAG, "✨ Generated: ${response.take(50)}...")
+            val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
+            Log.i(TAG, "✅ Generation complete in ${totalTime}s")
+            Log.i(TAG, "   Response: \"${response.take(100)}${if (response.length > 100) "..." else ""}\"")
+
             return@withContext response.trim().ifEmpty {
                 "I'm processing your request. Please try again."
             }
@@ -309,10 +314,11 @@ A:"""
     private fun tokenize(text: String): LongArray {
         val tok = tokenizer ?: throw IllegalStateException("Tokenizer not initialized")
 
-        Log.d(TAG, "Tokenizing: ${text.take(100)}...")
+        Log.i(TAG, "📝 Tokenizing prompt: \"${text.take(100)}${if (text.length > 100) "..." else ""}\"")
         val ids = tok.encode(text)
 
-        Log.d(TAG, "Token count: ${ids.size}, First 10 tokens: ${ids.take(10).joinToString()}")
+        Log.i(TAG, "   ✓ Input tokens: ${ids.size} (optimized from ~800 tokens)")
+        Log.d(TAG, "   First 10 token IDs: ${ids.take(10).joinToString()}")
         return ids
     }
 
@@ -341,15 +347,17 @@ A:"""
     private fun runInference(inputIds: LongArray): LongArray {
         val session = ortSession ?: throw IllegalStateException("Session not initialized")
 
-        Log.d(TAG, "🔍 Starting inference with ${inputIds.size} input tokens")
-        Log.d(TAG, "   Input tokens: ${inputIds.take(10).joinToString()}")
+        Log.i(TAG, "🎯 Starting autoregressive generation")
+        Log.i(TAG, "   Input: ${inputIds.size} tokens | Max output: $MAX_LENGTH tokens")
 
+        val inferenceStartTime = System.currentTimeMillis()
         val generatedIds = mutableListOf<Long>()
         val currentSequence = inputIds.toMutableList()
 
         try {
             // Autoregressive generation loop
             for (step in 0 until MAX_LENGTH) {
+                val stepStartTime = System.currentTimeMillis()
                 var inputTensor: OnnxTensor? = null
                 var attentionMaskTensor: OnnxTensor? = null
                 var outputs: OrtSession.Result? = null
@@ -416,13 +424,17 @@ A:"""
                     generatedIds.add(nextTokenId)
                     currentSequence.add(nextTokenId)
 
-                    if (step < 5 || step % 20 == 0) {
-                        Log.d(TAG, "Step $step: Generated token $nextTokenId")
+                    val stepTime = (System.currentTimeMillis() - stepStartTime) / 1000.0
+
+                    // Log progress every 5 tokens
+                    if (step % 5 == 0 || step < 3) {
+                        val progress = ((step + 1) * 100) / MAX_LENGTH
+                        Log.i(TAG, "   Token ${step + 1}/$MAX_LENGTH ($progress%) - ${stepTime}s - ID: $nextTokenId")
                     }
 
                     // Check for GPT-2 EOS token (50256)
                     if (nextTokenId == GPT2_EOS_TOKEN) {
-                        Log.d(TAG, "✓ GPT-2 EOS token detected at step $step, stopping generation")
+                        Log.i(TAG, "✓ EOS token detected at step $step - generation complete")
                         break
                     }
 
@@ -434,8 +446,15 @@ A:"""
                 }
             }
 
-            Log.d(TAG, "✓ Generated ${generatedIds.size} tokens total")
-            Log.d(TAG, "   Generated token IDs: ${generatedIds.take(20).joinToString()}")
+            val totalInferenceTime = (System.currentTimeMillis() - inferenceStartTime) / 1000.0
+            val tokensPerSecond = if (totalInferenceTime > 0) generatedIds.size / totalInferenceTime else 0.0
+
+            Log.i(TAG, "✅ Generation complete:")
+            Log.i(TAG, "   Tokens generated: ${generatedIds.size}")
+            Log.i(TAG, "   Total time: ${totalInferenceTime}s")
+            Log.i(TAG, "   Speed: %.2f tokens/sec".format(tokensPerSecond))
+            Log.d(TAG, "   Token IDs: ${generatedIds.take(20).joinToString()}")
+
             return generatedIds.toLongArray()
 
         } catch (e: Exception) {
