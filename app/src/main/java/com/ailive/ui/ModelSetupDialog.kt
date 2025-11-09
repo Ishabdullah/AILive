@@ -101,7 +101,7 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "GPT-2 ONNX (~653MB) - Standard ONNX ops only"
+            "Qwen2-VL-2B (~3.7GB) - Vision + Text AI (6 files)"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
@@ -109,17 +109,112 @@ class ModelSetupDialog(
             .setTitle("Select AI Model to Download")
             .setItems(models) { _, which ->
                 when (which) {
-                    0 -> downloadModel(
-                        ModelDownloadManager.GPT2_URL,
-                        ModelDownloadManager.GPT2_NAME,
-                        onComplete
-                    )
+                    0 -> downloadQwenVLModel(onComplete)
                 }
             }
             .setNegativeButton("Cancel") { _, _ ->
                 onComplete()
             }
             .show()
+    }
+
+    /**
+     * Download all Qwen2-VL model files with progress tracking
+     */
+    private fun downloadQwenVLModel(onComplete: () -> Unit) {
+        Log.i(TAG, "Starting Qwen2-VL batch download (6 files)")
+        Toast.makeText(activity, "Downloading Qwen2-VL model...", Toast.LENGTH_SHORT).show()
+
+        isProcessingDownload = false  // Reset state
+        var currentFileName = ""
+        var currentFileNum = 0
+        var totalFiles = 6
+
+        modelDownloadManager.downloadQwenVLModel(
+            onProgress = { fileName, fileNum, total ->
+                activity.runOnUiThread {
+                    currentFileName = fileName
+                    currentFileNum = fileNum
+                    totalFiles = total
+                    updateBatchDownloadProgress(fileName, fileNum, total)
+                }
+            },
+            onComplete = { success, errorMessage ->
+                activity.runOnUiThread {
+                    // Dismiss progress dialog when callback is invoked
+                    downloadDialog?.dismiss()
+                    progressHandler?.removeCallbacksAndMessages(null)
+                    isProcessingDownload = false
+
+                    if (success) {
+                        Log.i(TAG, "Qwen2-VL download complete (all 6 files)")
+                        Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        markSetupComplete()
+                        onComplete()
+                    } else {
+                        Log.e(TAG, "Qwen2-VL download failed: $errorMessage")
+                        Toast.makeText(activity, "Download failed: $errorMessage", Toast.LENGTH_LONG).show()
+                        // Allow user to try again
+                        showFirstRunDialog(onComplete)
+                    }
+                }
+            }
+        )
+
+        // Show progress dialog
+        showBatchDownloadProgressDialog()
+    }
+
+    /**
+     * Show batch download progress dialog (for multiple files)
+     */
+    private fun showBatchDownloadProgressDialog() {
+        val message = "Downloading Qwen2-VL model files...\n\nThis will download 6 files (~3.7GB total).\n\nPlease wait, this may take several minutes."
+
+        downloadDialog = AlertDialog.Builder(activity)
+            .setTitle("Downloading Qwen2-VL")
+            .setMessage(message)
+            .setCancelable(false)
+            .setNegativeButton("Cancel") { _, _ ->
+                modelDownloadManager.cancelDownload()
+            }
+            .create()
+
+        downloadDialog?.show()
+
+        // Update progress every second
+        progressHandler = Handler(Looper.getMainLooper())
+        updateBatchDownloadProgress("", 0, 6)
+    }
+
+    /**
+     * Update batch download progress (shows which file is downloading)
+     */
+    private fun updateBatchDownloadProgress(fileName: String, fileNum: Int, totalFiles: Int) {
+        val progress = modelDownloadManager.getDownloadProgress()
+
+        val message = if (progress != null && fileName.isNotEmpty()) {
+            val (downloaded, total) = progress
+            val percent = if (total > 0) {
+                ((downloaded.toDouble() / total) * 100).toInt()
+            } else 0
+
+            val downloadedMB = downloaded / 1024 / 1024
+            val totalMB = total / 1024 / 1024
+
+            "Downloading file $fileNum/$totalFiles:\n$fileName\n\n" +
+                    "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
+                    "Please wait..."
+        } else {
+            "Downloading Qwen2-VL model files...\n\nFile $fileNum/$totalFiles\n\nPlease wait..."
+        }
+
+        downloadDialog?.setMessage(message)
+
+        // Schedule next update in 1 second
+        progressHandler?.postDelayed({
+            updateBatchDownloadProgress(fileName, fileNum, totalFiles)
+        }, 1000)
     }
 
     /**

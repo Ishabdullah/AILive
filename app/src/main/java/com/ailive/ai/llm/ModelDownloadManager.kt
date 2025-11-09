@@ -213,15 +213,18 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Download a model from HuggingFace (ONNX-only)
+     * Download a single model file from HuggingFace (ONNX/BIN)
      *
-     * @param modelUrl URL to download from (defaults to GPT-2 ONNX)
+     * Used internally by downloadQwenVLModel() for batch downloads.
+     * For new downloads, use downloadQwenVLModel() instead.
+     *
+     * @param modelUrl URL to download from
      * @param modelName Name to save as
      * @param onComplete Callback with (success, errorMessage)
      */
     fun downloadModel(
-        modelUrl: String = GPT2_URL,
-        modelName: String = GPT2_NAME,
+        modelUrl: String,
+        modelName: String,
         onComplete: (Boolean, String) -> Unit
     ) {
         Log.i(TAG, "📥 Starting download: $modelName")
