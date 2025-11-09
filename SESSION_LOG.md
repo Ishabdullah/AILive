@@ -382,4 +382,79 @@ Move to vision pipeline implementation (Phases 1-5)
 
 ---
 
-**NEXT ACTION:** User needs to uninstall, rebuild, reinstall, and test
+## 📱 Test Session 3: NNAPI Incompatibility Fix
+
+**Date:** 2025-11-09
+**Status:** READY FOR TESTING
+**Commit:** `4f1e9c2` - Disable NNAPI for ArgMax(13) compatibility
+
+### Test Results from Previous Build:
+
+#### ✅ What Worked:
+1. **✅ App-private storage** - Files downloaded to correct location
+   - Path: `/storage/emulated/0/Android/data/com.ailive/files/Download/`
+   - All 8 files verified (QwenVL_A 1269MB, B 223MB, C 0MB, D 0MB, E 950MB, embeddings 445MB, vocab 2MB, merges 1MB)
+
+2. **✅ Tokenizer loaded** - NO permission errors!
+   ```
+   ✅ Loaded 151643 vocabulary tokens
+   ✅ Loaded 151386 BPE merges with ranks
+   ✅ Tokenizer initialized successfully in 1322ms
+   ```
+
+#### ❌ What Failed:
+**NNAPI ArgMax(13) Incompatibility:**
+```
+❌ ONNX initialization failed
+ai.onnxruntime.OrtException: Error code - ORT_NOT_IMPLEMENTED
+Could not find an implementation for ArgMax(13) node with name '/ArgMax'
+```
+
+**Root Cause:**
+- Qwen2-VL model uses `ArgMax` operation (ONNX opset 13)
+- NNAPI execution provider doesn't support ArgMax(13)
+- NNAPI is designed for mobile GPU/NPU but has limited operation support
+
+**Solution:** Disable NNAPI, use CPU-only execution provider
+- CPU provider supports ALL ONNX operations including ArgMax(13)
+- Trade-off: Slightly slower inference, but full compatibility
+
+### Changes Made:
+1. ✅ Removed `sessionOptions.addNnapi()` call in LLMManager.kt:199-205
+2. ✅ Added explanation comment about ArgMax(13) incompatibility
+3. ✅ Updated log message to indicate CPU execution provider
+
+### Expected Logs (Success):
+```
+LLMManager: ✅ Using CPU execution provider (NNAPI disabled for compatibility)
+LLMManager: 📂 Loading text decoder: QwenVL_E_q4f16.onnx (950MB)
+LLMManager: ✅ Text decoder loaded successfully
+LLMManager: ✅ Qwen2-VL initialized successfully
+```
+
+### Build & Test:
+```bash
+# Rebuild with NNAPI disabled
+./gradlew clean assembleDebug
+
+# Install (no need to uninstall this time)
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# Monitor logs
+adb logcat | grep -E "LLMManager|QwenVLTokenizer"
+
+# Test text inference
+# - Launch app
+# - Send message: "Hello"
+# - Should get generated response (not fallback)
+```
+
+### Success Criteria:
+- [x] Tokenizer loads successfully
+- [ ] Text decoder loads successfully (no ArgMax error)
+- [ ] Text inference works
+- [ ] No fallback responses
+
+---
+
+**NEXT ACTION:** User needs to rebuild and test with CPU-only execution
