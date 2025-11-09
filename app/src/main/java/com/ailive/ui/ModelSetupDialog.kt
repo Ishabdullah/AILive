@@ -77,9 +77,8 @@ class ModelSetupDialog(
             .setMessage(
                 "To get started, AILive needs an AI model for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download GPT-2 ONNX (~653MB, compatible with standard ONNX Runtime)\n" +
-                "• Import an ONNX model from your device\n\n" +
-                "IMPORTANT: Only models with standard ONNX operators are supported.\n" +
+                "• Download Qwen2-VL GGUF (~986MB, vision + text AI)\n" +
+                "• Import a GGUF/ONNX model from your device\n\n" +
                 "All models run 100% on your device - no internet needed after download."
             )
             .setPositiveButton("Download Model") { _, _ ->
@@ -97,7 +96,7 @@ class ModelSetupDialog(
     }
 
     /**
-     * Show model selection dialog with recommendations (ONNX-only)
+     * Show model selection dialog with recommendations (GGUF models)
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
@@ -337,12 +336,12 @@ class ModelSetupDialog(
      * Show file picker to import model from device
      * BUGFIX Phase 7.5: Use ActivityResultLauncher instead of deprecated startActivityForResult
      * BUGFIX Phase 7.6: Store onComplete callback so it can be invoked after import
-     * Phase 7.10: ONNX-only version
+     * Phase 9.0: GGUF/ONNX support
      */
     private fun showFilePickerDialog(onComplete: () -> Unit) {
         Toast.makeText(
             activity,
-            "Select an .onnx model file",
+            "Select a model file (.gguf, .onnx, .bin)",
             Toast.LENGTH_SHORT
         ).show()
 
