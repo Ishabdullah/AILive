@@ -30,9 +30,10 @@ class LLMManager(private val context: Context) {
     companion object {
         private const val TAG = "LLMManager"
 
-        // OPTIMIZATION: Reduced from 150 to 80 for faster generation
-        // Voice responses should be concise (1-3 sentences = ~50-80 tokens)
-        private const val MAX_LENGTH = 80
+        // OPTIMIZATION: Reduced to 15 for fast on-device generation
+        // At ~2.5s/token, 15 tokens = ~37s response time (acceptable for mobile)
+        // Short answers only: 10-12 words maximum
+        private const val MAX_LENGTH = 15
 
         // OPTIMIZATION: Higher temperature (0.9) for more varied responses
         // Previously 0.7 was causing some repetition
@@ -296,19 +297,10 @@ class LLMManager(private val context: Context) {
      * GPT-2 is a causal LM without instruction tuning, so we use natural language formatting
      */
     private fun createChatPrompt(userMessage: String, agentName: String): String {
-        // Unified personality for all interactions
-        val personality = """You are AILive, a unified on-device AI companion.
-You are ONE cohesive intelligence with multiple capabilities (vision, emotion, memory, device control).
-Speak naturally as a single character, never as separate agents or systems.
-Be warm, helpful, concise, and conversational."""
-
-        // GPT-2 format - simple concatenation with clear structure
-        // No special tokens needed, just natural text flow
-        return """System: $personality
-
-User: $userMessage
-
-Assistant:"""
+        // OPTIMIZED: Minimal prompt for fastest response (reduces input from ~800 to ~20 tokens)
+        // GPT-2 format - simple and concise
+        return """Q: $userMessage
+A:"""
     }
 
     /**
