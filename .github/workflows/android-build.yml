@@ -30,20 +30,20 @@ jobs:
       with:
         cache-disabled: true
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug
+    - name: Build CPU Debug APK
+      run: ./gradlew assembleCpuDebug
 
-    - name: Upload Debug APK
+    - name: Upload CPU Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: ailive-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-        
-    - name: Build Release APK
-      run: ./gradlew assembleRelease
-      
-    - name: Upload Release APK
+        name: ailive-cpu-debug
+        path: app/build/outputs/apk/cpu/debug/app-cpu-debug.apk
+
+    - name: Build CPU Release APK
+      run: ./gradlew assembleCpuRelease
+
+    - name: Upload CPU Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: ailive-release
-        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        name: ailive-cpu-release
+        path: app/build/outputs/apk/cpu/release/app-cpu-release-unsigned.apk
