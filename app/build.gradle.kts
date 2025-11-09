@@ -107,8 +107,8 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // ONNX Runtime for LLM inference (Phase 2.6)
-    // Updated to 1.20.1 to support ONNX IR version 10 (required for Qwen2-VL)
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.1")
+    // Updated to 1.19.2 to support ONNX IR version 10 (required for Qwen2-VL)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
 
     // Hugging Face Tokenizers for proper ONNX model tokenization
     implementation("ai.djl.huggingface:tokenizers:0.29.0")
