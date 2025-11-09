@@ -13,9 +13,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Storage permissions for importing/downloading models -->
-    <!-- Only needed for Android 9 and below - SAF and app-specific storage used on Android 10+ -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- READ_EXTERNAL_STORAGE needed for accessing Downloads folder (all Android versions) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <!-- WRITE needed for downloading to Downloads folder (Android 9 and below) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
