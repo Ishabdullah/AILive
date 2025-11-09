@@ -30,10 +30,10 @@ class LLMManager(private val context: Context) {
     companion object {
         private const val TAG = "LLMManager"
 
-        // OPTIMIZATION: Reduced to 10 for fastest on-device generation
-        // At ~2.5s/token, 10 tokens = ~25s response time (good for mobile)
-        // Ultra-short answers only: 6-8 words maximum
-        private const val MAX_LENGTH = 10
+        // OPTIMIZATION: Reduced to 5 for fastest on-device generation
+        // At ~2.5s/token, 5 tokens = ~12s response time (excellent for mobile)
+        // Minimal answers only: 3-5 words maximum
+        private const val MAX_LENGTH = 5
 
         // OPTIMIZATION: Lower temperature for faster, more deterministic responses
         // Lower temp = faster sampling with less randomness
