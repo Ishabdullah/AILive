@@ -13,10 +13,11 @@
 
 #### 1. Build Configuration (Phase 1)
 **File**: `external/llama.cpp/examples/llama.android/llama/build.gradle.kts`
-- ✅ OpenCL enabled: `-DGGML_OPENCL=ON`
+- ✅ OpenCL enabled: `-DGGML_OPENCL=ON` (when `ENABLE_GPU=true`)
 - ✅ Embedded kernels: `-DGGML_OPENCL_EMBED_KERNELS=ON`
 - ✅ Adreno optimizations: `-DGGML_OPENCL_USE_ADRENO_KERNELS=ON`
-- **Status**: Will compile with OpenCL support
+- ✅ Conditional compilation: GPU via env var, CPU fallback for CI
+- **Status**: Will compile with OpenCL when `ENABLE_GPU=true` is set
 
 #### 2. Native GPU Detection (Phase 2)
 **File**: `external/llama.cpp/examples/llama.android/llama/src/main/cpp/llama-android.cpp`
@@ -227,7 +228,10 @@ chmod +x scripts/setup_opencl.sh
 # Clean previous build
 ./gradlew clean
 
-# Build with OpenCL support
+# Build with GPU support (OpenCL enabled)
+ENABLE_GPU=true ./gradlew assembleDebug
+
+# Or build without GPU (CPU-only, for CI/testing)
 ./gradlew assembleDebug
 ```
 
@@ -379,11 +383,14 @@ git checkout v1.0-stable
 # 1. Pull latest code
 git pull origin claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ
 
-# 2. Setup OpenCL
+# 2. Setup OpenCL (only needed for GPU builds)
 ./scripts/setup_opencl.sh
 
-# 3. Build
-./gradlew assembleDebug
+# 3. Build with GPU support
+ENABLE_GPU=true ./gradlew assembleDebug
+
+# Or build CPU-only (no OpenCL setup needed)
+# ./gradlew assembleDebug
 
 # 4. Install
 adb install app/build/outputs/apk/debug/app-debug.apk
