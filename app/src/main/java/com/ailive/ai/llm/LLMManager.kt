@@ -81,9 +81,9 @@ class LLMManager(private val context: Context) {
      * Initialize Qwen2-VL multimodal model
      * Called once on app startup in background thread
      *
-     * Checks for all 6 required Qwen2-VL files in Downloads folder:
+     * Checks for all 8 required Qwen2-VL files in Downloads folder:
      * - vocab.json, merges.txt (tokenizer)
-     * - QwenVL_A_q4f16.onnx, QwenVL_B_q4f16.onnx, QwenVL_E_q4f16.onnx (models)
+     * - QwenVL_A_q4f16.onnx, QwenVL_B_q4f16.onnx, QwenVL_C_q4f16.onnx, QwenVL_D_q4f16.onnx, QwenVL_E_q4f16.onnx (5 ONNX models)
      * - embeddings_bf16.bin (token embeddings)
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {

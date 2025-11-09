@@ -152,7 +152,7 @@ BEFORE (GPT-2):                  AFTER (Qwen2-VL):
    ```
 7. Grant required permissions (camera, microphone, storage)
 8. **First Launch:** App will prompt to download Qwen2-VL-2B model (~3.7GB)
-   - Downloads 6 files: 3 ONNX models + embeddings + tokenizer files
+   - Downloads 8 files: 5 ONNX models (A, B, C, D, E) + embeddings + tokenizer files (vocab + merges)
    - Files stored in Downloads folder (persist after app uninstall!)
    - Progress shown for each file
 9. **Wait ~15-20 seconds** for model initialization after download
