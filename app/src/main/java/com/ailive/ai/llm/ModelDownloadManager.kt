@@ -564,14 +564,32 @@ class ModelDownloadManager(private val context: Context) {
                                     val sizeStr = if (sizeMB > 0) "${sizeMB}MB" else "${sizeKB}KB"
                                     Log.i(TAG, "✅ File verified in Downloads: ${modelFile.absolutePath}")
                                     Log.i(TAG, "   Size: $sizeStr")
+
+                                    // Reset state BEFORE callback (callback may trigger next download)
+                                    downloadId = -1
+                                    currentModelName = null
+                                    isHandlingCompletion = false
+
                                     callback?.invoke(true, "")
                                 } else {
                                     Log.e(TAG, "❌ File missing or too small in Downloads!")
                                     Log.e(TAG, "   Expected at least ${minSize / 1024}KB, got ${modelFile.length() / 1024}KB")
+
+                                    // Reset state BEFORE callback
+                                    downloadId = -1
+                                    currentModelName = null
+                                    isHandlingCompletion = false
+
                                     callback?.invoke(false, "Download verification failed")
                                 }
                             } else {
                                 Log.e(TAG, "❌ URI is null!")
+
+                                // Reset state BEFORE callback
+                                downloadId = -1
+                                currentModelName = null
+                                isHandlingCompletion = false
+
                                 callback?.invoke(false, "Download URI is null")
                             }
                         }
@@ -581,27 +599,50 @@ class ModelDownloadManager(private val context: Context) {
                             )
                             val errorMessage = getDownloadErrorMessage(reason)
                             Log.e(TAG, "❌ Download failed with reason: $reason - $errorMessage")
+
+                            // Reset state BEFORE callback
+                            downloadId = -1
+                            currentModelName = null
+                            isHandlingCompletion = false
+
                             callback?.invoke(false, errorMessage)
                         }
                         else -> {
                             Log.w(TAG, "⚠️ Download status: $status")
+
+                            // Reset state BEFORE callback
+                            downloadId = -1
+                            currentModelName = null
+                            isHandlingCompletion = false
+
                             callback?.invoke(false, "Unexpected download status: $status")
                         }
                     }
                 } else {
                     Log.e(TAG, "❌ Cursor is empty!")
+
+                    // Reset state BEFORE callback
+                    downloadId = -1
+                    currentModelName = null
+                    isHandlingCompletion = false
+
                     callback?.invoke(false, "Could not query download status")
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling download completion", e)
-            callback?.invoke(false, "Error: ${e.message}")
-        } finally {
-            // Reset state for next download
+
+            // Reset state BEFORE callback
             downloadId = -1
             currentModelName = null
             isHandlingCompletion = false
-            Log.d(TAG, "📥 Completion handling finished, state reset for next download")
+
+            callback?.invoke(false, "Error: ${e.message}")
+        } finally {
+            // Only reset the guard flag in finally (state reset happens before callbacks now)
+            // This prevents duplicate calls but allows batch downloads to proceed
+            isHandlingCompletion = false
+            Log.d(TAG, "📥 Completion handling finished")
         }
     }
 
