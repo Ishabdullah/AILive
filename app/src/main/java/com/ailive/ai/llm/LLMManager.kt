@@ -191,15 +191,19 @@ class LLMManager(private val context: Context) {
 
             Log.i(TAG, "📂 Loading text decoder: ${modelEFile.name} (${modelEFile.length() / 1024 / 1024}MB)")
 
-            // Create session options with GPU acceleration
+            // Create session options - match Python inference script configuration
             sessionOptions = OrtSession.SessionOptions()
+
+            // Use ALL optimization levels (matches Python: ORT_ENABLE_ALL)
             sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+
+            // Use 4 threads for CPU inference
             sessionOptions.setIntraOpNumThreads(4)
 
-            // NOTE: NNAPI disabled - ArgMax(13) operation not supported by NNAPI
-            // The Qwen2-VL model uses ArgMax opset 13 which requires CPU execution provider
-            // Using CPU-only execution for full operation compatibility
-            Log.i(TAG, "✅ Using CPU execution provider (NNAPI disabled for compatibility)")
+            // NOTE: No execution providers added - defaults to CPU (full operator support)
+            // NNAPI has limited operator support and doesn't support ArgMax opset 13
+            Log.i(TAG, "✅ Using default CPU execution provider")
+            Log.i(TAG, "   Optimization: ALL_OPT, Threads: 4")
 
             // Create session for text decoder
             ortSession = ortEnv?.createSession(modelEPath, sessionOptions)
