@@ -101,7 +101,7 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "Qwen2-VL-2B (~3.7GB) - Vision + Text AI (8 files)"
+            "Qwen2-VL-2B (~986MB) - Vision + Text AI GGUF"
         )
 
         // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
@@ -119,16 +119,16 @@ class ModelSetupDialog(
     }
 
     /**
-     * Download all Qwen2-VL model files with progress tracking
+     * Download Qwen2-VL GGUF model with progress tracking
      */
     private fun downloadQwenVLModel(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting Qwen2-VL batch download (8 files)")
+        Log.i(TAG, "Starting Qwen2-VL GGUF download")
         Toast.makeText(activity, "Downloading Qwen2-VL model...", Toast.LENGTH_SHORT).show()
 
         isProcessingDownload = false  // Reset state
         var currentFileName = ""
         var currentFileNum = 0
-        var totalFiles = 8
+        var totalFiles = 1
 
         modelDownloadManager.downloadQwenVLModel(
             onProgress = { fileName, fileNum, total ->
@@ -147,7 +147,7 @@ class ModelSetupDialog(
                     isProcessingDownload = false
 
                     if (success) {
-                        Log.i(TAG, "Qwen2-VL download complete (all 8 files)")
+                        Log.i(TAG, "Qwen2-VL GGUF download complete")
                         Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
                         markSetupComplete()
                         onComplete()
@@ -169,7 +169,7 @@ class ModelSetupDialog(
      * Show batch download progress dialog (for multiple files)
      */
     private fun showBatchDownloadProgressDialog() {
-        val message = "Downloading Qwen2-VL model files...\n\nThis will download 8 files (~3.7GB total).\n\nPlease wait, this may take several minutes."
+        val message = "Downloading Qwen2-VL model file...\n\nThis will download 1 file (~986MB).\n\nPlease wait, this may take several minutes."
 
         downloadDialog = AlertDialog.Builder(activity)
             .setTitle("Downloading Qwen2-VL")
@@ -184,7 +184,7 @@ class ModelSetupDialog(
 
         // Update progress every second
         progressHandler = Handler(Looper.getMainLooper())
-        updateBatchDownloadProgress("", 0, 8)
+        updateBatchDownloadProgress("", 0, 1)
     }
 
     /**
@@ -206,7 +206,7 @@ class ModelSetupDialog(
                     "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
                     "Please wait..."
         } else {
-            "Downloading Qwen2-VL model files...\n\nFile $fileNum/$totalFiles\n\nPlease wait..."
+            "Downloading Qwen2-VL model file...\n\nFile $fileNum/$totalFiles\n\nPlease wait..."
         }
 
         downloadDialog?.setMessage(message)
