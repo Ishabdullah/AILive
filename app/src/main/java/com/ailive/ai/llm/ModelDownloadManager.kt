@@ -32,27 +32,43 @@ class ModelDownloadManager(private val context: Context) {
     companion object {
         private const val TAG = "ModelDownloadManager"
 
-        // GPT-2 ONNX models (compatible with standard ONNX Runtime)
-        // Using Optimum-exported models which use standard ONNX ops only
-        // These are proven to work with ONNX Runtime on Android
+        // Qwen2-VL-2B-Instruct ONNX models (Q4F16 quantized for mobile)
+        // Vision-Language Model: Can understand both images and text
+        // Perfect for conversational AI with camera input
 
-        // GPT-2 Base model (decoder only, no KV cache)
-        const val GPT2_NAME = "gpt2-decoder.onnx"
-        const val GPT2_URL = "https://huggingface.co/optimum/gpt2/resolve/main/decoder_model.onnx"
+        // Base URL for Qwen2-VL-2B-Instruct-ONNX-Q4-F16
+        private const val QWEN_VL_BASE_URL = "https://huggingface.co/pdufour/Qwen2-VL-2B-Instruct-ONNX-Q4-F16/resolve/main"
 
-        // Note: GPT-2 is used instead of TinyLlama/SmolLM2 because:
-        // - SmolLM2 uses custom Microsoft RotaryEmbedding op (not in standard Android ONNX Runtime)
-        // - TinyLlama ONNX exports may also use custom ops
-        // - GPT-2 from Optimum uses only standard ONNX ops
-        // - Proven to work with ONNX Runtime 1.16.0 on Android
+        // Model files (Q4F16 quantized - ~3.7GB total)
+        const val QWEN_VL_MODEL_A = "QwenVL_A_q4f16.onnx"
+        const val QWEN_VL_MODEL_B = "QwenVL_B_q4f16.onnx"
+        const val QWEN_VL_MODEL_E = "QwenVL_E_q4f16.onnx"
+        const val QWEN_VL_EMBEDDINGS = "embeddings_bf16.bin"
+
+        // URLs for each model file
+        const val QWEN_VL_URL_A = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_A"
+        const val QWEN_VL_URL_B = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_B"
+        const val QWEN_VL_URL_E = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_E"
+        const val QWEN_VL_URL_EMBEDDINGS = "$QWEN_VL_BASE_URL/$QWEN_VL_EMBEDDINGS"
+
+        // Tokenizer files
+        const val QWEN_VL_VOCAB = "vocab.json"
+        const val QWEN_VL_MERGES = "merges.txt"
+        const val QWEN_VL_URL_VOCAB = "$QWEN_VL_BASE_URL/$QWEN_VL_VOCAB"
+        const val QWEN_VL_URL_MERGES = "$QWEN_VL_BASE_URL/$QWEN_VL_MERGES"
+
+        // Model info:
+        // - 2B parameters (instruction-tuned for conversation)
+        // - Multimodal: image + text input → text output
+        // - Supports VQA (visual question answering), image captioning
+        // - Q4F16 quantization: 4-bit weights, fp16 activations
+        // - Total size: ~3.7GB (manageable for modern Android devices)
         //
-        // File: decoder_model.onnx (653 MB, FP32)
-        // Alternative: decoder_with_past_model.onnx (with KV caching, but more complex)
-        //
-        // Chat format: Simple text format (no special tokens needed)
-        //
-        // Alternative smaller models:
-        // - DistilGPT-2: https://huggingface.co/optimum/distilgpt2/resolve/main/decoder_model.onnx
+        // File sizes:
+        // - QwenVL_A_q4f16.onnx: 1.33 GB
+        // - QwenVL_B_q4f16.onnx: 234 MB
+        // - QwenVL_E_q4f16.onnx: 997 MB
+        // - embeddings_bf16.bin: 467 MB
 
         private const val MODELS_DIR = "models"
 
@@ -68,41 +84,132 @@ class ModelDownloadManager(private val context: Context) {
     private var completionCheckScheduled = false  // Prevent multiple manual checks
 
     /**
-     * Check if a model file exists in app storage
-     * If modelName is not specified, checks if ANY model exists
+     * Check if Qwen2-VL model files exist in Downloads folder (all required files)
+     */
+    fun isQwenVLModelAvailable(): Boolean {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val requiredFiles = listOf(
+            QWEN_VL_MODEL_A,
+            QWEN_VL_MODEL_B,
+            QWEN_VL_MODEL_E,
+            QWEN_VL_EMBEDDINGS,
+            QWEN_VL_VOCAB,
+            QWEN_VL_MERGES
+        )
+
+        var allExist = true
+        requiredFiles.forEach { fileName ->
+            val file = File(downloadsDir, fileName)
+            if (!file.exists()) {
+                Log.i(TAG, "❌ Missing required file in Downloads: $fileName")
+                allExist = false
+            } else {
+                Log.d(TAG, "✓ Found in Downloads: $fileName (${file.length() / 1024 / 1024}MB)")
+            }
+        }
+
+        if (allExist) {
+            Log.i(TAG, "✅ All Qwen2-VL model files present in Downloads")
+        }
+
+        return allExist
+    }
+
+    /**
+     * Check if a model file exists in Downloads folder
+     * If modelName is not specified, checks if Qwen2-VL model exists
      */
     fun isModelAvailable(modelName: String? = null): Boolean {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+
         // If specific model requested, check for it
         if (modelName != null) {
-            val modelFile = File(context.filesDir, "$MODELS_DIR/$modelName")
+            val modelFile = File(downloadsDir, modelName)
             val exists = modelFile.exists()
             if (exists) {
-                Log.i(TAG, "✅ Model found: ${modelFile.absolutePath} (${modelFile.length() / 1024 / 1024}MB)")
+                Log.i(TAG, "✅ Model found in Downloads: ${modelFile.absolutePath} (${modelFile.length() / 1024 / 1024}MB)")
             } else {
-                Log.i(TAG, "❌ Model not found: ${modelFile.absolutePath}")
+                Log.i(TAG, "❌ Model not found in Downloads: ${modelFile.absolutePath}")
             }
             return exists
         }
 
-        // Otherwise, check if ANY model exists
-        val availableModels = getAvailableModels()
-        if (availableModels.isNotEmpty()) {
-            Log.i(TAG, "✅ Found ${availableModels.size} model(s):")
-            availableModels.forEach { model ->
-                Log.i(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
-            }
-            return true
-        } else {
-            Log.i(TAG, "❌ No models found in ${context.filesDir}/$MODELS_DIR")
-            return false
-        }
+        // Otherwise, check if Qwen2-VL model exists
+        return isQwenVLModelAvailable()
     }
 
     /**
-     * Get the path to a model file
+     * Get the path to a model file in Downloads folder
      */
-    fun getModelPath(modelName: String = GPT2_NAME): String {
-        return File(context.filesDir, "$MODELS_DIR/$modelName").absolutePath
+    fun getModelPath(modelName: String = QWEN_VL_MODEL_A): String {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        return File(downloadsDir, modelName).absolutePath
+    }
+
+    /**
+     * Get the Downloads directory path (where models are stored)
+     */
+    fun getModelsDirectory(): String {
+        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+    }
+
+    /**
+     * Get list of available ONNX model files in Downloads folder
+     */
+    fun getAvailableModelsInDownloads(): List<File> {
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) return emptyList()
+
+        return downloadsDir.listFiles()?.filter {
+            it.isFile && (it.name.endsWith(".onnx", ignoreCase = true) || it.name.endsWith(".bin", ignoreCase = true))
+        }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+
+    /**
+     * Download all Qwen2-VL model files (batch download)
+     * Downloads: 3 model files, embeddings, vocab, merges
+     * Total: ~3.7GB
+     */
+    fun downloadQwenVLModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
+        Log.i(TAG, "📥 Starting Qwen2-VL model batch download...")
+
+        val filesToDownload = listOf(
+            Pair(QWEN_VL_URL_VOCAB, QWEN_VL_VOCAB),
+            Pair(QWEN_VL_URL_MERGES, QWEN_VL_MERGES),
+            Pair(QWEN_VL_URL_EMBEDDINGS, QWEN_VL_EMBEDDINGS),
+            Pair(QWEN_VL_URL_B, QWEN_VL_MODEL_B),
+            Pair(QWEN_VL_URL_E, QWEN_VL_MODEL_E),
+            Pair(QWEN_VL_URL_A, QWEN_VL_MODEL_A)
+        )
+
+        var currentFileIndex = 0
+
+        fun downloadNext() {
+            if (currentFileIndex >= filesToDownload.size) {
+                Log.i(TAG, "✅ All Qwen2-VL files downloaded successfully!")
+                onComplete(true, "")
+                return
+            }
+
+            val (url, fileName) = filesToDownload[currentFileIndex]
+            val fileNum = currentFileIndex + 1
+            val totalFiles = filesToDownload.size
+
+            Log.i(TAG, "📥 Downloading file $fileNum/$totalFiles: $fileName")
+            onProgress(fileName, fileNum, totalFiles)
+
+            downloadModel(url, fileName) { success, error ->
+                if (success) {
+                    currentFileIndex++
+                    downloadNext()
+                } else {
+                    Log.e(TAG, "❌ Failed to download $fileName: $error")
+                    onComplete(false, "Failed to download $fileName: $error")
+                }
+            }
+        }
+
+        downloadNext()
     }
 
     /**
@@ -222,7 +329,7 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Handle download completion - move file to app storage
+     * Handle download completion - verify file in Downloads folder
      */
     private fun handleDownloadComplete(modelName: String) {
         Log.i(TAG, "📥 handleDownloadComplete called for: $modelName")
@@ -244,8 +351,18 @@ class ModelDownloadManager(private val context: Context) {
                             Log.i(TAG, "✅ Download complete: $uriString")
 
                             if (uriString != null) {
-                                // Move file from Downloads to app storage
-                                moveDownloadedFile(Uri.parse(uriString), modelName)
+                                // Verify file exists in Downloads folder
+                                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                val modelFile = File(downloadsDir, modelName)
+
+                                if (modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES) {
+                                    Log.i(TAG, "✅ File verified in Downloads: ${modelFile.absolutePath}")
+                                    Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
+                                    downloadCompleteCallback?.invoke(true, "")
+                                } else {
+                                    Log.e(TAG, "❌ File missing or too small in Downloads!")
+                                    downloadCompleteCallback?.invoke(false, "Download verification failed")
+                                }
                             } else {
                                 Log.e(TAG, "❌ URI is null!")
                                 downloadCompleteCallback?.invoke(false, "Download URI is null")
@@ -275,91 +392,9 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
-    /**
-     * Move downloaded file from Downloads to app's private storage
-     */
-    private fun moveDownloadedFile(sourceUri: Uri, modelName: String) {
-        Log.i(TAG, "📂 moveDownloadedFile called")
-        Log.i(TAG, "   Source URI: $sourceUri")
-        Log.i(TAG, "   Model name: $modelName")
-
-        try {
-            // Create models directory in app's private storage
-            val modelsDir = File(context.filesDir, MODELS_DIR)
-            if (!modelsDir.exists()) {
-                val created = modelsDir.mkdirs()
-                Log.i(TAG, "   Models dir created: $created at ${modelsDir.absolutePath}")
-            } else {
-                Log.i(TAG, "   Models dir exists at ${modelsDir.absolutePath}")
-            }
-
-            val destFile = File(modelsDir, modelName)
-            Log.i(TAG, "📁 Copying file to: ${destFile.absolutePath}")
-
-            // Open input stream from Downloads
-            val inputStream = context.contentResolver.openInputStream(sourceUri)
-            if (inputStream == null) {
-                Log.e(TAG, "❌ Could not open input stream from URI: $sourceUri")
-                downloadCompleteCallback?.invoke(false, "Could not read downloaded file")
-                return
-            }
-
-            // Copy file to app's private storage
-            inputStream.use { input ->
-                FileOutputStream(destFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalBytes = 0L
-
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytes += bytesRead
-
-                        // Log progress every 50MB
-                        if (totalBytes % (50 * 1024 * 1024) == 0L) {
-                            Log.d(TAG, "   Copied: ${totalBytes / 1024 / 1024}MB...")
-                        }
-                    }
-
-                    Log.i(TAG, "✅ File copied successfully: ${totalBytes / 1024 / 1024}MB")
-                    Log.i(TAG, "   Final size: ${destFile.length() / 1024 / 1024}MB")
-                    Log.i(TAG, "   Destination: ${destFile.absolutePath}")
-                }
-            }
-
-            // Validate file size
-            if (destFile.length() < MIN_MODEL_SIZE_BYTES) {
-                Log.e(TAG, "❌ Downloaded file is too small (${destFile.length()} bytes)")
-                destFile.delete()
-                downloadCompleteCallback?.invoke(false, "Downloaded file is corrupted or incomplete. Please try again.")
-                return
-            }
-
-            // Delete original download file from Downloads folder
-            try {
-                val downloadsFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), modelName)
-                if (downloadsFile.exists() && downloadsFile.delete()) {
-                    Log.i(TAG, "🗑️ Deleted original download from Downloads folder")
-                } else {
-                    Log.w(TAG, "⚠️ Could not delete original download (may not exist or no permission)")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not delete original download: ${e.message}")
-            }
-
-            Log.i(TAG, "✅ Invoking success callback")
-            downloadCompleteCallback?.invoke(true, "")
-
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to copy file", e)
-            Log.e(TAG, "   Exception: ${e.javaClass.simpleName}: ${e.message}")
-            e.printStackTrace()
-            downloadCompleteCallback?.invoke(false, "Failed to save file: ${e.message}")
-        }
-    }
 
     /**
-     * Import a model from user's storage (file picker) - ONNX-only
+     * Import a model from user's storage (file picker) to Downloads folder - ONNX-only
      *
      * @param uri URI of the file selected by user
      * @param onComplete Callback with (success, errorMessage)
@@ -369,7 +404,7 @@ class ModelDownloadManager(private val context: Context) {
         onComplete: (Boolean, String) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
-            var fileName = GPT2_NAME
+            var fileName = QWEN_VL_MODEL_A
 
             // Get original filename
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -379,30 +414,31 @@ class ModelDownloadManager(private val context: Context) {
                 }
             }
 
-            Log.i(TAG, "📥 Importing model from storage: $fileName")
+            Log.i(TAG, "📥 Importing model to Downloads: $fileName")
 
-            // Validate model format - ONNX only (TEMPORARY)
-            val isValidFormat = fileName.endsWith(".onnx", ignoreCase = true)
+            // Validate model format - ONNX/BIN files
+            val isValidFormat = fileName.endsWith(".onnx", ignoreCase = true) ||
+                                fileName.endsWith(".bin", ignoreCase = true)
 
             if (!isValidFormat) {
                 Log.e(TAG, "❌ Invalid model format: $fileName")
                 withContext(Dispatchers.Main) {
-                    onComplete(false, "Invalid model format.\n\nThis version only supports .onnx format.\n\nGGUF support coming in future update.")
+                    onComplete(false, "Invalid model format.\n\nSupported formats: .onnx, .bin")
                 }
                 return@withContext
             }
 
-            Log.i(TAG, "✓ Valid ONNX model detected")
+            Log.i(TAG, "✓ Valid model file detected")
 
-            // Ensure models directory exists
-            val modelsDir = File(context.filesDir, MODELS_DIR)
-            if (!modelsDir.exists()) {
-                modelsDir.mkdirs()
+            // Ensure Downloads directory exists
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!downloadsDir.exists()) {
+                downloadsDir.mkdirs()
             }
 
-            val destFile = File(modelsDir, fileName)
+            val destFile = File(downloadsDir, fileName)
 
-            // Copy file
+            // Copy file to Downloads
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(destFile).use { output ->
                     val buffer = ByteArray(8192)
@@ -525,30 +561,26 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Get list of available models in storage (ONNX-only)
+     * Get list of available ONNX models in Downloads folder (legacy method)
      */
     fun getAvailableModels(): List<File> {
-        val modelsDir = File(context.filesDir, MODELS_DIR)
-        if (!modelsDir.exists()) return emptyList()
-
-        // ONNX-only filter
-        return modelsDir.listFiles()?.filter {
-            it.isFile && it.name.endsWith(".onnx", ignoreCase = true)
-        } ?: emptyList()
+        return getAvailableModelsInDownloads()
     }
 
     /**
-     * Delete a model file
+     * Delete a model file from Downloads folder
      */
     fun deleteModel(modelName: String): Boolean {
-        val modelFile = File(context.filesDir, "$MODELS_DIR/$modelName")
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val modelFile = File(downloadsDir, modelName)
         return if (modelFile.exists()) {
             val deleted = modelFile.delete()
             if (deleted) {
-                Log.i(TAG, "🗑️ Deleted model: $modelName")
+                Log.i(TAG, "🗑️ Deleted model from Downloads: $modelName")
             }
             deleted
         } else {
+            Log.w(TAG, "⚠️ Model not found in Downloads: $modelName")
             false
         }
     }

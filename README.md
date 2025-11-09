@@ -73,29 +73,28 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ## 🚀 Quick Start
 
-### ✅ Recent Fixes & Optimizations (2025-11-09)
+### ✅ Recent Updates (2025-11-09)
 
-**Latest: CRITICAL SAMPLING FIX - Multinomial Sampling! 🎉**
-- 🔥 **ROOT CAUSE #2 FOUND:** LLMManager was using greedy sampling (argmax) instead of probabilistic sampling!
-- 🔥 **FIXED:** Implemented proper multinomial/categorical sampling from probability distribution
-- ⚡ **Why it matters:** Greedy sampling always picks highest probability → identical outputs every time!
-- ✅ **Now using:** Temperature-scaled softmax + multinomial sampling for varied responses
-- ✅ **Previous fixes:**
-  - Proper BPE tokenization with GPT-2's exact byte encoder
-  - Removed 596-token personality prompt + "Q: A:" format
-- ⚡ MAX_LENGTH: **40 tokens** (30-35 word responses)
-- ✅ **Full pipeline:** User input → BPE → GPT-2 → Multinomial sampling → VARIED text completions
+**Latest: UPGRADED TO QWEN2-VL-2B VISION MODEL! 🎉**
+- 🔥 **NEW MODEL:** Qwen2-VL-2B-Instruct (Q4F16 quantized, ~3.7GB)
+- 🎨 **VISION CAPABILITIES:** Multimodal AI that can see and understand images!
+- 💬 **INSTRUCTION-TUNED:** Proper conversational AI (unlike GPT-2 base)
+- 📱 **MOBILE-OPTIMIZED:** Q4F16 quantization for efficient on-device inference
+- 💾 **PERSISTENT DOWNLOADS:** Models stored in Downloads folder - survive app uninstalls!
+- ✅ **FEATURES:**
+  - Visual Question Answering (VQA)
+  - Image captioning and description
+  - Context-aware conversation with vision understanding
+  - 2B parameters for better conversational quality
+- ⚡ **Full pipeline:** Camera/text input → Qwen tokenizer → Vision encoder → Text decoder → Smart responses
 
-**Major LLM System Overhaul (2025-11-08)**
-- ✅ Fixed Android tokenizer compatibility (replaced DJL with pure Kotlin)
-- ✅ Fixed chat template (now uses GPT-2 format)
-- ✅ Completely rewrote autoregressive generation
-- ✅ Fixed token sampling and logits extraction
-- ✅ Added comprehensive error logging throughout pipeline
+**Previous GPT-2 Fixes (Now Superseded)**
+- ✅ Fixed BPE tokenization with GPT-2's exact byte encoder
+- ✅ Implemented multinomial sampling instead of greedy argmax
+- ✅ Proper autoregressive generation with temperature scaling
 
-**See:** [GPT2_TROUBLESHOOTING.md](GPT2_TROUBLESHOOTING.md) for performance expectations
-**See:** [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for complete technical analysis
-**See:** [LLM_INITIALIZATION_FIX.md](LLM_INITIALIZATION_FIX.md) for initialization race condition fix
+**See:** [QWEN2VL_GUIDE.md](QWEN2VL_GUIDE.md) for vision model usage
+**See:** [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for technical analysis
 
 ### Download Pre-built APK
 
@@ -109,10 +108,13 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
    adb install app-debug.apk
    ```
 7. Grant required permissions (camera, microphone, storage)
-8. **First Launch:** App will prompt to download GPT-2 model (653MB)
-9. **Wait ~10 seconds** for model initialization after download
+8. **First Launch:** App will prompt to download Qwen2-VL-2B model (~3.7GB)
+   - Downloads 6 files: 3 ONNX models + embeddings + tokenizer files
+   - Files stored in Downloads folder (persist after app uninstall!)
+   - Progress shown for each file
+9. **Wait ~15-20 seconds** for model initialization after download
 10. **Voice notification** will confirm when AI is ready: "Language model loaded..."
-11. Start chatting! Try "Hello" or "What can you do?"
+11. Start chatting! Try "Hello" or ask about images: "What do you see?"
 
 ### Build from Source
 
@@ -139,14 +141,17 @@ adb logcat | grep "AILive"
 
 **Core Intelligence**
 - ✅ PersonalityEngine unified orchestration (606 lines)
-- ✅ LLMManager for on-device inference with GPT-2 (400+ lines)
+- ✅ LLMManager for on-device inference with Qwen2-VL-2B (400+ lines)
   - ONNX Runtime with NNAPI GPU acceleration
-  - Proper autoregressive generation
-  - ChatML format support
-  - HuggingFace tokenizer integration
+  - Multimodal vision-language processing
+  - Q4F16 quantization for mobile efficiency
+  - Proper autoregressive generation with temperature sampling
+  - Chat format with <|im_start|> and <|im_end|> tokens
+  - QwenVL custom BPE tokenizer (450+ lines)
 - ✅ TTSManager for voice output (308 lines)
 - ✅ MessageBus event coordination (232 lines)
 - ✅ State management system
+- ✅ Vision preprocessing for camera input integration
 
 **6 Specialized Tools**
 - ✅ PatternAnalysisTool - Behavior patterns and predictions
