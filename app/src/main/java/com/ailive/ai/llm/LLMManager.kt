@@ -332,6 +332,15 @@ class LLMManager(private val context: Context) {
                     )
                 }
             }
+        } catch (e: UnsatisfiedLinkError) {
+            // Native function not available (old build or GPU code not compiled)
+            Log.w(TAG, "GPU detection function not available, using CPU fallback")
+            GPUInfo(
+                isAvailable = false,
+                backend = "CPU",
+                deviceName = "CPU",
+                fallbackReason = "Native GPU detection not available (old build)"
+            )
         } catch (e: Exception) {
             Log.e(TAG, "GPU detection failed, falling back to CPU", e)
             GPUInfo(
