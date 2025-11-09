@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.OpenableColumns
 import android.util.Log
@@ -96,10 +97,39 @@ class ModelDownloadManager(private val context: Context) {
     private val POLL_INTERVAL_MS = 5000L  // Check every 5 seconds
 
     /**
-     * Check if Qwen2-VL model files exist in Downloads folder (all required files)
+     * Get the directory where model files are stored.
+     *
+     * Android 13+ (API 33+): App-private external storage (no permissions needed)
+     *   Path: /Android/data/com.ailive/files/Download/
+     *   Files deleted when app uninstalled
+     *
+     * Android 12- (API 32-): Public Downloads folder (requires READ_EXTERNAL_STORAGE)
+     *   Path: /storage/emulated/0/Download/
+     *   Files persist after app uninstall
+     */
+    private fun getModelsDir(): File {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+: Use app-private external storage (scoped storage compliant)
+            val appPrivateDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            appPrivateDir ?: context.filesDir.also {
+                Log.w(TAG, "⚠️ External storage not available, using internal storage")
+            }
+        } else {
+            // Android 12-: Use public Downloads (legacy behavior)
+            getModelsDir()
+        }.also { dir ->
+            if (!dir.exists()) {
+                dir.mkdirs()
+                Log.i(TAG, "📁 Created models directory: ${dir.absolutePath}")
+            }
+        }
+    }
+
+    /**
+     * Check if Qwen2-VL model files exist in models folder (all required files)
      */
     fun isQwenVLModelAvailable(): Boolean {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = getModelsDir()
         val requiredFiles = listOf(
             QWEN_VL_MODEL_A,
             QWEN_VL_MODEL_B,
@@ -134,7 +164,7 @@ class ModelDownloadManager(private val context: Context) {
      * If modelName is not specified, checks if Qwen2-VL model exists
      */
     fun isModelAvailable(modelName: String? = null): Boolean {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = getModelsDir()
 
         // If specific model requested, check for it
         if (modelName != null) {
@@ -156,7 +186,7 @@ class ModelDownloadManager(private val context: Context) {
      * Get the path to a model file in Downloads folder
      */
     fun getModelPath(modelName: String = QWEN_VL_MODEL_A): String {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = getModelsDir()
         return File(downloadsDir, modelName).absolutePath
     }
 
@@ -164,14 +194,14 @@ class ModelDownloadManager(private val context: Context) {
      * Get the Downloads directory path (where models are stored)
      */
     fun getModelsDirectory(): String {
-        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        return getModelsDir().absolutePath
     }
 
     /**
      * Get list of available ONNX model files in Downloads folder
      */
     fun getAvailableModelsInDownloads(): List<File> {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = getModelsDir()
         if (!downloadsDir.exists()) return emptyList()
 
         return downloadsDir.listFiles()?.filter {
@@ -251,7 +281,7 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "   URL: $modelUrl")
 
         // Check if file already exists in Downloads
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = getModelsDir()
         val existingFile = File(downloadsDir, modelName)
         if (existingFile.exists()) {
             val fileSizeMB = existingFile.length() / 1024 / 1024
@@ -311,8 +341,7 @@ class ModelDownloadManager(private val context: Context) {
         }
 
         try {
-            // Download to public Downloads folder (like SmolChat does)
-            // This approach is more reliable than setDestinationInExternalFilesDir
+            // Download location depends on Android version (scoped storage compliance)
             val request = DownloadManager.Request(modelUrl.toUri())
                 .setTitle("AILive Model Download")
                 .setDescription("Downloading $modelName...")
@@ -321,11 +350,25 @@ class ModelDownloadManager(private val context: Context) {
                     DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
                 )
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, modelName)
+
+            // Set download destination based on Android version
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Android 13+: Download to app-private external storage (no permissions needed)
+                request.setDestinationInExternalFilesDir(
+                    context,
+                    Environment.DIRECTORY_DOWNLOADS,
+                    modelName
+                )
+                Log.i(TAG, "📁 Download destination: App-private storage (Android 13+)")
+            } else {
+                // Android 12-: Download to public Downloads folder (requires permission)
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, modelName)
+                Log.i(TAG, "📁 Download destination: Public Downloads (Android 12-)")
+            }
 
             downloadId = downloadManager.enqueue(request)
             Log.i(TAG, "✅ Download queued with ID: $downloadId")
-            Log.i(TAG, "   Destination: Downloads/$modelName")
+            Log.i(TAG, "   Destination: ${getModelsDir().absolutePath}/$modelName")
 
             // Start polling download status as fallback (in case BroadcastReceiver doesn't fire)
             startPollingDownloadStatus()
@@ -477,7 +520,7 @@ class ModelDownloadManager(private val context: Context) {
 
                             if (uriString != null) {
                                 // Verify file exists in Downloads folder
-                                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                val downloadsDir = getModelsDir()
                                 val modelFile = File(downloadsDir, modelName)
 
                                 if (modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES) {
@@ -556,7 +599,7 @@ class ModelDownloadManager(private val context: Context) {
             Log.i(TAG, "✓ Valid model file detected")
 
             // Ensure Downloads directory exists
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val downloadsDir = getModelsDir()
             if (!downloadsDir.exists()) {
                 downloadsDir.mkdirs()
             }
@@ -696,7 +739,7 @@ class ModelDownloadManager(private val context: Context) {
      * Delete a model file from Downloads folder
      */
     fun deleteModel(modelName: String): Boolean {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, modelName)
         return if (modelFile.exists()) {
             val deleted = modelFile.delete()

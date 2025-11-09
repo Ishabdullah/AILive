@@ -170,10 +170,11 @@ class LLMManager(private val context: Context) {
             // Create ONNX Runtime environment
             ortEnv = OrtEnvironment.getEnvironment()
 
-            // Load Qwen2-VL tokenizer first (from Downloads folder)
+            // Load Qwen2-VL tokenizer first (from models folder)
             Log.i(TAG, "📖 Loading Qwen2-VL tokenizer...")
             tokenizer = QwenVLTokenizer()
-            val tokenizerLoaded = tokenizer?.initialize() ?: false
+            val modelsDir = File(modelDownloadManager.getModelsDirectory())
+            val tokenizerLoaded = tokenizer?.initialize(modelsDir) ?: false
 
             if (!tokenizerLoaded) {
                 Log.e(TAG, "❌ Failed to load Qwen2-VL tokenizer")
