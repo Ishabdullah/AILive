@@ -54,13 +54,18 @@ class LLMManager(private val context: Context) {
     }
 
     // ONNX Runtime sessions (3 models for Qwen2-VL)
-    private var ortSession: OrtSession? = null  // Will hold text decoder (E model)
+    private var ortSession: OrtSession? = null  // Text decoder (E model)
+    private var visionEncoderSession: OrtSession? = null  // Vision encoder (B model) - lazy loaded
     private var ortEnv: OrtEnvironment? = null
 
     // Initialization state tracking
     private var isInitialized = false
     private var isInitializing = false
     private var initializationError: String? = null
+
+    // Vision encoder state tracking (lazy loading)
+    private var isVisionEncoderLoaded = false
+    private var isVisionEncoderLoading = false
 
     // Model download manager
     private val modelDownloadManager = ModelDownloadManager(context)
@@ -223,6 +228,85 @@ class LLMManager(private val context: Context) {
     }
 
     /**
+     * Lazy-load vision encoder when image is provided
+     * Called on-demand when generate() receives an image parameter
+     *
+     * This saves ~1GB RAM when camera is OFF (text-only mode)
+     */
+    private suspend fun loadVisionEncoder(): Boolean = withContext(Dispatchers.IO) {
+        // Check if already loaded
+        if (isVisionEncoderLoaded) {
+            Log.d(TAG, "Vision encoder already loaded")
+            return@withContext true
+        }
+
+        // Prevent concurrent loading
+        if (isVisionEncoderLoading) {
+            Log.w(TAG, "Vision encoder loading in progress")
+            return@withContext false
+        }
+
+        isVisionEncoderLoading = true
+
+        return@withContext try {
+            Log.i(TAG, "🎨 Loading vision encoder (camera ON - first time)...")
+            Log.i(TAG, "⏱️  This may take 30-40 seconds for vision preprocessing...")
+
+            // Get vision encoder model path
+            val modelBPath = modelDownloadManager.getModelPath(ModelDownloadManager.QWEN_VL_MODEL_B)
+            val modelBFile = File(modelBPath)
+
+            if (!modelBFile.exists()) {
+                Log.e(TAG, "❌ Vision encoder file not found: ${modelBFile.name}")
+                isVisionEncoderLoading = false
+                return@withContext false
+            }
+
+            Log.i(TAG, "📂 Loading vision encoder: ${modelBFile.name} (${modelBFile.length() / 1024 / 1024}MB)")
+
+            // Create session options
+            val sessionOptions = OrtSession.SessionOptions()
+            sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+            sessionOptions.setIntraOpNumThreads(4)
+
+            // Enable NNAPI for vision encoder (GPU acceleration)
+            try {
+                sessionOptions.addNnapi()
+                Log.i(TAG, "✅ NNAPI GPU acceleration enabled for vision encoder")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ NNAPI not available for vision, using CPU")
+            }
+
+            // Create vision encoder session
+            visionEncoderSession = ortEnv?.createSession(modelBPath, sessionOptions)
+
+            isVisionEncoderLoaded = true
+            isVisionEncoderLoading = false
+
+            Log.i(TAG, "✅ Vision encoder loaded successfully!")
+            Log.i(TAG, "   Model: QwenVL_B_q4f16.onnx")
+            Log.i(TAG, "   Size: ${modelBFile.length() / 1024 / 1024}MB")
+            Log.i(TAG, "🎉 Vision capabilities now active!")
+
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to load vision encoder", e)
+            e.printStackTrace()
+            isVisionEncoderLoading = false
+
+            // Clean up on failure
+            try {
+                visionEncoderSession?.close()
+                visionEncoderSession = null
+            } catch (ex: Exception) {
+                Log.w(TAG, "Error closing vision encoder during cleanup: ${ex.message}")
+            }
+
+            false
+        }
+    }
+
+    /**
      * Generate text response using Qwen2-VL (multimodal)
      *
      * @param prompt The input text prompt
@@ -247,13 +331,26 @@ class LLMManager(private val context: Context) {
         try {
             val startTime = System.currentTimeMillis()
 
+            // Lazy-load vision encoder if image is provided (camera ON)
+            if (image != null && !isVisionEncoderLoaded) {
+                Log.i(TAG, "📸 Image provided - loading vision encoder...")
+                val visionLoaded = loadVisionEncoder()
+                if (!visionLoaded) {
+                    Log.w(TAG, "⚠️ Failed to load vision encoder, falling back to text-only")
+                    // Continue with text-only generation
+                }
+            }
+
+            // Log generation mode
+            val mode = if (image != null) "Vision + Text" else "Text-only"
+            Log.i(TAG, "🚀 Starting generation ($mode): \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
+
             // Create chat prompt with agent personality
             val chatPrompt = createChatPrompt(prompt, agentName)
-            Log.i(TAG, "🚀 Starting generation for: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
 
             // Use ONNX Runtime
             Log.i(TAG, "🔷 Using ONNX Runtime (NNAPI GPU acceleration)")
-            val response = generateONNX(chatPrompt)
+            val response = generateONNX(chatPrompt, image)
 
             val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
             Log.i(TAG, "✅ Generation complete in ${totalTime}s")
@@ -271,17 +368,27 @@ class LLMManager(private val context: Context) {
     }
 
     /**
-     * Generate using ONNX Runtime (primary inference engine)
+     * Generate using ONNX Runtime (multimodal inference)
+     *
+     * @param chatPrompt The formatted chat prompt
+     * @param image Optional image for vision understanding
      */
-    private fun generateONNX(chatPrompt: String): String {
+    private fun generateONNX(chatPrompt: String, image: Bitmap?): String {
         if (ortSession == null) {
             throw IllegalStateException("ONNX session not initialized")
+        }
+
+        // If image is provided, preprocess it for vision encoder
+        // TODO: Add vision preprocessing in next task
+        if (image != null && isVisionEncoderLoaded) {
+            Log.d(TAG, "🎨 Vision mode: preprocessing image...")
+            // Vision preprocessing will be added in next task
         }
 
         // Tokenize input
         val inputIds = tokenize(chatPrompt)
 
-        // Run inference
+        // Run inference (vision features will be integrated in next task)
         val outputIds = runInference(inputIds)
 
         // Decode output
@@ -583,21 +690,30 @@ class LLMManager(private val context: Context) {
     }
 
     /**
-     * Cleanup resources
+     * Cleanup resources (text decoder + vision encoder if loaded)
      */
     fun close() {
         try {
             ortSession?.close()
             ortSession = null
-            Log.d(TAG, "Session closed")
+            Log.d(TAG, "Text decoder session closed")
         } catch (e: Exception) {
-            Log.w(TAG, "Error closing session: ${e.message}")
+            Log.w(TAG, "Error closing text decoder: ${e.message}")
+        }
+
+        try {
+            visionEncoderSession?.close()
+            visionEncoderSession = null
+            isVisionEncoderLoaded = false
+            Log.d(TAG, "Vision encoder session closed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing vision encoder: ${e.message}")
         }
 
         try {
             ortEnv?.close()
             ortEnv = null
-            Log.d(TAG, "Environment closed")
+            Log.d(TAG, "ONNX environment closed")
         } catch (e: Exception) {
             Log.w(TAG, "Error closing environment: ${e.message}")
         }
@@ -613,6 +729,6 @@ class LLMManager(private val context: Context) {
         isInitialized = false
         currentModelPath = null
         currentModelName = null
-        Log.i(TAG, "🔒 ONNX Runtime resources released")
+        Log.i(TAG, "🔒 ONNX Runtime resources released (text + vision)")
     }
 }
