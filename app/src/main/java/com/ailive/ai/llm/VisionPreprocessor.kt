@@ -19,20 +19,21 @@ object VisionPreprocessor {
 
     private const val TAG = "VisionPreprocessor"
 
-    // Qwen2-VL vision encoder expects 224x224 images
-    private const val TARGET_SIZE = 224
+    // Qwen2-VL vision encoder expects 960x960 images (from official ONNX export)
+    private const val TARGET_SIZE = 960
 
-    // ImageNet normalization parameters (standard for vision models)
-    private val MEAN = floatArrayOf(0.485f, 0.485f, 0.456f)  // R, G, B
-    private val STD = floatArrayOf(0.229f, 0.224f, 0.225f)   // R, G, B
+    // Qwen2-VL uses [0,1] normalization, not ImageNet stats
+    // From infer.py: image_array / 255.0
+    // No mean/std subtraction needed for Qwen2-VL!
 
     /**
      * Preprocess Bitmap for Qwen2-VL vision encoder
      *
-     * Steps:
-     * 1. Resize to 224x224
-     * 2. Normalize RGB values using ImageNet stats
-     * 3. Convert to NCHW format (batch, channels, height, width)
+     * Steps (from official ONNX export infer.py):
+     * 1. Resize to 960x960
+     * 2. Convert to RGB
+     * 3. Normalize to [0,1] by dividing by 255
+     * 4. Convert to NCHW format (batch, channels, height, width)
      *
      * @param image Input bitmap (any size)
      * @return Float buffer in NCHW format, ready for ONNX input
@@ -41,7 +42,7 @@ object VisionPreprocessor {
         val startTime = System.currentTimeMillis()
         Log.i(TAG, "🖼️  Preprocessing image: ${image.width}x${image.height}")
 
-        // Step 1: Resize to 224x224
+        // Step 1: Resize to 960x960
         val resized = resizeImage(image, TARGET_SIZE, TARGET_SIZE)
         Log.d(TAG, "   ✓ Resized to ${resized.width}x${resized.height}")
 
@@ -49,11 +50,11 @@ object VisionPreprocessor {
         val pixels = IntArray(TARGET_SIZE * TARGET_SIZE)
         resized.getPixels(pixels, 0, TARGET_SIZE, 0, 0, TARGET_SIZE, TARGET_SIZE)
 
-        // Step 3: Normalize and convert to NCHW format
+        // Step 3: Normalize to [0,1] and convert to NCHW format
         val bufferSize = 3 * TARGET_SIZE * TARGET_SIZE  // 3 channels (RGB)
         val buffer = FloatBuffer.allocate(bufferSize)
 
-        // NCHW format: [batch=1, channels=3, height=224, width=224]
+        // NCHW format: [batch=1, channels=3, height=960, width=960]
         // Layout: all R values, then all G values, then all B values
         for (c in 0 until 3) {  // Channels: R=0, G=1, B=2
             for (y in 0 until TARGET_SIZE) {
@@ -68,8 +69,8 @@ object VisionPreprocessor {
                         else -> 0
                     }
 
-                    // Normalize: (value / 255.0 - mean) / std
-                    val normalized = ((value / 255.0f) - MEAN[c]) / STD[c]
+                    // Qwen2-VL normalization: simple division by 255 (no mean/std)
+                    val normalized = value / 255.0f
                     buffer.put(normalized)
                 }
             }
@@ -80,7 +81,7 @@ object VisionPreprocessor {
         val preprocessTime = (System.currentTimeMillis() - startTime) / 1000.0
         Log.i(TAG, "✅ Image preprocessed in ${preprocessTime}s")
         Log.d(TAG, "   Output shape: [1, 3, $TARGET_SIZE, $TARGET_SIZE]")
-        Log.d(TAG, "   Buffer size: $bufferSize floats")
+        Log.d(TAG, "   Buffer size: $bufferSize floats (${bufferSize * 4 / 1024 / 1024}MB)")
 
         return buffer
     }
