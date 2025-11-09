@@ -36,8 +36,9 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 ┌─────────────────────────────────────────────────────────┐
 │                    Tool Registry                         │
 │   analyze_sentiment | control_device | retrieve_memory  │
-│   analyze_vision | analyze_patterns | track_feedback    │
+│   analyze_vision* | analyze_patterns | track_feedback   │
 │   Total: ~2,200 lines across 6 tools                    │
+│   *analyze_vision uses Qwen2-VL (no separate model!)    │
 └─────────────────────────────────────────────────────────┘
                           ↕
 ┌─────────────────────────────────────────────────────────┐
@@ -47,7 +48,9 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
                           ↕
 ┌──────────────────────────────────────────────────────────┐
 │                  Core Systems                             │
-│   LLMManager | TTSManager | CameraManager | StateManager│
+│  LLMManager (Qwen2-VL: TEXT + VISION) | TTSManager      │
+│  CameraManager | StateManager                           │
+│  ↑ ONE unified multimodal model for all AI tasks        │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -59,15 +62,31 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 | **track_feedback** | 399 | User feedback tracking, satisfaction analysis | ✅ Active |
 | **retrieve_memory** | 274 | On-device memory storage & JSON-based search | ✅ Active |
 | **control_device** | 287 | Android device control (flashlight, notifications) | ✅ Active |
-| **analyze_vision** | ~180 | Computer vision & image analysis framework | ✅ Active |
+| **analyze_vision** | ~180 | **Uses Qwen2-VL (no separate vision model!)** | ✅ Active |
 | **analyze_sentiment** | ~160 | Emotion/sentiment detection from text | ✅ Active |
 
 **Total Tool Code**: ~1,744 lines of substantial implementations (not stubs)
+
+### 🎯 Unified Multimodal Architecture
+
+**Key Simplification**: Qwen2-VL is a **single unified model** for BOTH text and vision!
+
+**Before (GPT-2 Era)**:
+- ❌ GPT-2 for text (~653MB)
+- ❌ Separate vision model needed (~500MB+)
+- ❌ Two models = 2x complexity, 2x memory, 2x initialization
+
+**After (Qwen2-VL Era)**:
+- ✅ **ONE model** handles text AND vision (~3.7GB total)
+- ✅ `analyze_vision` tool uses same LLM (no separate model!)
+- ✅ Simpler architecture, unified inference pipeline
+- ✅ Better context: Vision and text share same reasoning
 
 **Architecture Note**: Some tools (SentimentAnalysisTool, DeviceControlTool, MemoryRetrievalTool) use legacy AI agents (EmotionAI, MotorAI, MemoryAI) as backend engines. This hybrid approach provides:
 - Unified interface through PersonalityEngine
 - Battle-tested capabilities from legacy agents
 - Consistent UX without requiring complete rewrites
+- **NEW:** `analyze_vision` now powered by Qwen2-VL's native vision capabilities
 
 ---
 
@@ -75,26 +94,50 @@ AILive features a **PersonalityEngine** (606 lines) that provides unified intell
 
 ### ✅ Recent Updates (2025-11-09)
 
-**Latest: UPGRADED TO QWEN2-VL-2B VISION MODEL! 🎉**
-- 🔥 **NEW MODEL:** Qwen2-VL-2B-Instruct (Q4F16 quantized, ~3.7GB)
-- 🎨 **VISION CAPABILITIES:** Multimodal AI that can see and understand images!
+**Latest: UNIFIED MULTIMODAL AI - ONE MODEL FOR TEXT + VISION! 🎉**
+
+**🔥 Revolutionary Change**: Replaced separate text/vision models with **ONE unified multimodal model**!
+
+**Qwen2-VL-2B-Instruct Benefits**:
+- 🎯 **UNIFIED ARCHITECTURE:** ONE model handles BOTH text conversations AND vision
+- 🎨 **NO SEPARATE VISION MODEL:** `analyze_vision` tool uses the same LLM!
 - 💬 **INSTRUCTION-TUNED:** Proper conversational AI (unlike GPT-2 base)
-- 📱 **MOBILE-OPTIMIZED:** Q4F16 quantization for efficient on-device inference
-- 💾 **PERSISTENT DOWNLOADS:** Models stored in Downloads folder - survive app uninstalls!
-- ✅ **FEATURES:**
-  - Visual Question Answering (VQA)
-  - Image captioning and description
-  - Context-aware conversation with vision understanding
-  - 2B parameters for better conversational quality
-- ⚡ **Full pipeline:** Camera/text input → Qwen tokenizer → Vision encoder → Text decoder → Smart responses
+- 🧠 **BETTER CONTEXT:** Vision and text share same reasoning engine
+- 📱 **MOBILE-OPTIMIZED:** Q4F16 quantization (~3.7GB total)
+- 💾 **PERSISTENT:** Models in Downloads folder - survive app uninstalls!
 
-**Previous GPT-2 Fixes (Now Superseded)**
-- ✅ Fixed BPE tokenization with GPT-2's exact byte encoder
-- ✅ Implemented multinomial sampling instead of greedy argmax
-- ✅ Proper autoregressive generation with temperature scaling
+**Architectural Simplification**:
+```
+BEFORE (GPT-2):                  AFTER (Qwen2-VL):
+┌──────────────┐                 ┌──────────────────┐
+│   GPT-2      │                 │   Qwen2-VL-2B    │
+│   (text)     │ 653MB           │  (text+vision)   │
+└──────────────┘                 │                  │
+                                 │  ✅ Chat         │
+┌──────────────┐                 │  ✅ VQA          │
+│ Vision Model │                 │  ✅ Captioning   │
+│  (separate)  │ 500MB+          │  ✅ Reasoning    │
+└──────────────┘                 └──────────────────┘
+= 1.2GB+ (2 models)             = 3.7GB (1 model)
+= 2x complexity                  = Unified, simpler!
+```
 
-**See:** [QWEN2VL_GUIDE.md](QWEN2VL_GUIDE.md) for vision model usage
-**See:** [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) for technical analysis
+**Capabilities**:
+- ✅ **Smart Resource Management:**
+  - Camera OFF: Text-only mode (skips vision encoder, saves GPU/RAM)
+  - Camera ON: Full vision+text mode (activates vision encoder)
+- ✅ Visual Question Answering (VQA)
+- ✅ Image captioning and description
+- ✅ Context-aware vision + text reasoning
+- ✅ 2B parameters (16x larger than GPT-2)
+
+**Pipeline**:
+- **Text-only**: User input → Qwen tokenizer → Text decoder → Response (fast, low resources)
+- **Vision+text**: Camera → Vision encoder → User input → Qwen tokenizer → Cross-attention decoder → Response
+
+**Documentation**:
+- [VISION_CHAT_ARCHITECTURE.md](VISION_CHAT_ARCHITECTURE.md) - Integration architecture
+- [DIAGNOSTIC_REPORT.md](DIAGNOSTIC_REPORT.md) - Technical analysis
 
 ### Download Pre-built APK
 
@@ -141,17 +184,19 @@ adb logcat | grep "AILive"
 
 **Core Intelligence**
 - ✅ PersonalityEngine unified orchestration (606 lines)
-- ✅ LLMManager for on-device inference with Qwen2-VL-2B (400+ lines)
+- ✅ **LLMManager - Unified Multimodal AI Engine** (400+ lines)
+  - **Single model for text AND vision** (Qwen2-VL-2B)
   - ONNX Runtime with NNAPI GPU acceleration
-  - Multimodal vision-language processing
-  - Q4F16 quantization for mobile efficiency
-  - Proper autoregressive generation with temperature sampling
-  - Chat format with <|im_start|> and <|im_end|> tokens
+  - Vision-language encoder-decoder architecture
+  - Q4F16 quantization for mobile efficiency (~3.7GB)
+  - Proper autoregressive generation with multinomial sampling
+  - Chat format with `<|im_start|>` and `<|im_end|>` tokens
   - QwenVL custom BPE tokenizer (450+ lines)
+  - **Replaces need for separate vision model!**
 - ✅ TTSManager for voice output (308 lines)
 - ✅ MessageBus event coordination (232 lines)
 - ✅ State management system
-- ✅ Vision preprocessing for camera input integration
+- ✅ CameraManager integration for vision input
 
 **6 Specialized Tools**
 - ✅ PatternAnalysisTool - Behavior patterns and predictions
