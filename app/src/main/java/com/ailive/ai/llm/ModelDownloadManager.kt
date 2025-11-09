@@ -33,57 +33,41 @@ class ModelDownloadManager(private val context: Context) {
     companion object {
         private const val TAG = "ModelDownloadManager"
 
-        // Qwen2-VL-2B-Instruct ONNX models (Q4F16 quantized for mobile)
+        // Qwen2-VL-2B-Instruct GGUF model (Q4_K_M quantized for mobile)
         // Vision-Language Model: Can understand both images and text
         // Perfect for conversational AI with camera input
+        // Switched from ONNX to GGUF for better Android compatibility
 
-        // Base URL for Qwen2-VL-2B-Instruct-ONNX-Q4-F16
-        private const val QWEN_VL_BASE_URL = "https://huggingface.co/pdufour/Qwen2-VL-2B-Instruct-ONNX-Q4-F16/resolve/main"
+        // Base URL for Qwen2-VL-2B-Instruct GGUF (bartowski quantization)
+        private const val QWEN_VL_BASE_URL = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main"
 
-        // Model files (Q4F16 quantized - ~3.7GB total)
-        // A: Output projection (1.33GB), B: Vision encoder (234MB)
-        // C: Batch size computation (6KB), D: Vision-text fusion (25KB)
-        // E: Text decoder (997MB)
-        const val QWEN_VL_MODEL_A = "QwenVL_A_q4f16.onnx"
-        const val QWEN_VL_MODEL_B = "QwenVL_B_q4f16.onnx"
-        const val QWEN_VL_MODEL_C = "QwenVL_C_q4f16.onnx"
-        const val QWEN_VL_MODEL_D = "QwenVL_D_q4f16.onnx"
-        const val QWEN_VL_MODEL_E = "QwenVL_E_q4f16.onnx"
-        const val QWEN_VL_EMBEDDINGS = "embeddings_bf16.bin"
+        // Main model file (Q4_K_M quantization - balanced quality/size)
+        // Single file - much simpler than 8-file ONNX approach!
+        const val QWEN_VL_MODEL_GGUF = "Qwen2-VL-2B-Instruct-Q4_K_M.gguf"
+        const val QWEN_VL_MODEL_URL = "$QWEN_VL_BASE_URL/$QWEN_VL_MODEL_GGUF"
 
-        // URLs for each model file
-        const val QWEN_VL_URL_A = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_A"
-        const val QWEN_VL_URL_B = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_B"
-        const val QWEN_VL_URL_C = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_C"
-        const val QWEN_VL_URL_D = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_D"
-        const val QWEN_VL_URL_E = "$QWEN_VL_BASE_URL/onnx/$QWEN_VL_MODEL_E"
-        const val QWEN_VL_URL_EMBEDDINGS = "$QWEN_VL_BASE_URL/$QWEN_VL_EMBEDDINGS"
-
-        // Tokenizer files
-        const val QWEN_VL_VOCAB = "vocab.json"
-        const val QWEN_VL_MERGES = "merges.txt"
-        const val QWEN_VL_URL_VOCAB = "$QWEN_VL_BASE_URL/$QWEN_VL_VOCAB"
-        const val QWEN_VL_URL_MERGES = "$QWEN_VL_BASE_URL/$QWEN_VL_MERGES"
+        // Multimodal projection file (required for vision support)
+        // TODO: Add when implementing vision - for now, text-only
+        const val QWEN_VL_MMPROJ = "mmproj-Qwen2-VL-2B-Instruct-f32.gguf"
+        const val QWEN_VL_MMPROJ_URL = "$QWEN_VL_BASE_URL/$QWEN_VL_MMPROJ"
 
         // Model info:
         // - 2B parameters (instruction-tuned for conversation)
-        // - Multimodal: image + text input → text output
-        // - Supports VQA (visual question answering), image captioning
-        // - Q4F16 quantization: 4-bit weights, fp16 activations
-        // - Total size: ~3.7GB (manageable for modern Android devices)
+        // - GGUF format: Better mobile support than ONNX
+        // - Q4_K_M quantization: 4-bit with medium quality
+        // - Single file: 986MB (vs 3.7GB for ONNX)
+        // - Built-in tokenizer (no separate vocab files needed)
         //
-        // File sizes:
-        // - QwenVL_A_q4f16.onnx: 1.33 GB
-        // - QwenVL_B_q4f16.onnx: 234 MB
-        // - QwenVL_E_q4f16.onnx: 997 MB
-        // - embeddings_bf16.bin: 467 MB
+        // Quantization quality ladder (from bartowski):
+        // Q2_K: 676MB (lowest quality)
+        // Q4_K_M: 986MB (recommended for mobile - good balance)
+        // Q5_K_M: 1.13GB (higher quality)
+        // Q6_K: 1.27GB (very high quality)
 
         private const val MODELS_DIR = "models"
 
-        // Minimum valid model size (1MB) - models smaller than this are likely corrupted
-        // Exception: Models C and D are tiny (6KB and 25KB) - they're valid
-        private const val MIN_MODEL_SIZE_BYTES = 1024 * 1024L
-        private const val MIN_TINY_MODEL_SIZE_BYTES = 1024L  // 1KB for tiny models (C/D)
+        // Minimum valid model size
+        private const val MIN_MODEL_SIZE_BYTES = 100 * 1024 * 1024L  // 100MB (GGUF models are large)
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -129,37 +113,28 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Check if Qwen2-VL model files exist in models folder (all required files)
+     * Check if Qwen2-VL GGUF model exists in models folder
+     * Much simpler than ONNX - just one file!
      */
     fun isQwenVLModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
-        val requiredFiles = listOf(
-            QWEN_VL_MODEL_A,
-            QWEN_VL_MODEL_B,
-            QWEN_VL_MODEL_C,
-            QWEN_VL_MODEL_D,
-            QWEN_VL_MODEL_E,
-            QWEN_VL_EMBEDDINGS,
-            QWEN_VL_VOCAB,
-            QWEN_VL_MERGES
-        )
+        val modelFile = File(downloadsDir, QWEN_VL_MODEL_GGUF)
 
-        var allExist = true
-        requiredFiles.forEach { fileName ->
-            val file = File(downloadsDir, fileName)
-            if (!file.exists()) {
-                Log.i(TAG, "❌ Missing required file in Downloads: $fileName")
-                allExist = false
-            } else {
-                Log.d(TAG, "✓ Found in Downloads: $fileName (${file.length() / 1024 / 1024}MB)")
-            }
+        if (!modelFile.exists()) {
+            Log.i(TAG, "❌ Missing required file: $QWEN_VL_MODEL_GGUF")
+            return false
         }
 
-        if (allExist) {
-            Log.i(TAG, "✅ All Qwen2-VL model files present in Downloads")
+        val sizeMB = modelFile.length() / 1024 / 1024
+        Log.d(TAG, "✓ Found GGUF model: $QWEN_VL_MODEL_GGUF (${sizeMB}MB)")
+
+        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
+            Log.e(TAG, "❌ Model file too small (${sizeMB}MB), likely corrupted")
+            return false
         }
 
-        return allExist
+        Log.i(TAG, "✅ Qwen2-VL GGUF model available (${sizeMB}MB)")
+        return true
     }
 
     /**
@@ -188,7 +163,7 @@ class ModelDownloadManager(private val context: Context) {
     /**
      * Get the path to a model file in Downloads folder
      */
-    fun getModelPath(modelName: String = QWEN_VL_MODEL_A): String {
+    fun getModelPath(modelName: String = QWEN_VL_MODEL_GGUF): String {
         val downloadsDir = getModelsDir()
         return File(downloadsDir, modelName).absolutePath
     }
@@ -201,68 +176,40 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Get list of available ONNX model files in Downloads folder
+     * Get list of available GGUF model files in Downloads folder
      */
     fun getAvailableModelsInDownloads(): List<File> {
         val downloadsDir = getModelsDir()
         if (!downloadsDir.exists()) return emptyList()
 
         return downloadsDir.listFiles()?.filter {
-            it.isFile && (it.name.endsWith(".onnx", ignoreCase = true) || it.name.endsWith(".bin", ignoreCase = true))
+            it.isFile && it.name.endsWith(".gguf", ignoreCase = true)
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
 
     /**
-     * Download all Qwen2-VL model files (batch download)
-     * Downloads: 5 ONNX models (A,B,C,D,E), embeddings, vocab, merges
-     * Total: ~3.7GB
-     *
-     * Pipeline: Image → A → B → C → D → E → Output
+     * Download Qwen2-VL GGUF model
+     * Much simpler than ONNX - just ONE file!
+     * Size: 986MB (Q4_K_M quantization)
      */
     fun downloadQwenVLModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
-        Log.i(TAG, "📥 Starting Qwen2-VL model batch download (8 files)...")
+        Log.i(TAG, "📥 Starting Qwen2-VL GGUF model download...")
+        Log.i(TAG, "   Model: $QWEN_VL_MODEL_GGUF (986MB)")
+        Log.i(TAG, "   Quantization: Q4_K_M (balanced quality/size)")
 
-        val filesToDownload = listOf(
-            // Download small files first (tokenizer + tiny models)
-            Pair(QWEN_VL_URL_VOCAB, QWEN_VL_VOCAB),        // 2.78 MB
-            Pair(QWEN_VL_URL_MERGES, QWEN_VL_MERGES),      // 1.67 MB
-            Pair(QWEN_VL_URL_C, QWEN_VL_MODEL_C),          // 6 KB (batch size)
-            Pair(QWEN_VL_URL_D, QWEN_VL_MODEL_D),          // 25 KB (vision-text fusion)
-            // Then medium/large files
-            Pair(QWEN_VL_URL_B, QWEN_VL_MODEL_B),          // 234 MB (vision encoder)
-            Pair(QWEN_VL_URL_EMBEDDINGS, QWEN_VL_EMBEDDINGS), // 467 MB
-            Pair(QWEN_VL_URL_E, QWEN_VL_MODEL_E),          // 997 MB (text decoder)
-            Pair(QWEN_VL_URL_A, QWEN_VL_MODEL_A)           // 1.33 GB (output projection)
-        )
+        // Report progress (file 1 of 1)
+        onProgress(QWEN_VL_MODEL_GGUF, 1, 1)
 
-        var currentFileIndex = 0
-
-        fun downloadNext() {
-            if (currentFileIndex >= filesToDownload.size) {
-                Log.i(TAG, "✅ All Qwen2-VL files downloaded successfully!")
+        // Download the single GGUF file
+        downloadModel(QWEN_VL_MODEL_URL, QWEN_VL_MODEL_GGUF) { success, error ->
+            if (success) {
+                Log.i(TAG, "✅ Qwen2-VL GGUF model downloaded successfully!")
                 onComplete(true, "")
-                return
-            }
-
-            val (url, fileName) = filesToDownload[currentFileIndex]
-            val fileNum = currentFileIndex + 1
-            val totalFiles = filesToDownload.size
-
-            Log.i(TAG, "📥 Downloading file $fileNum/$totalFiles: $fileName")
-            onProgress(fileName, fileNum, totalFiles)
-
-            downloadModel(url, fileName) { success, error ->
-                if (success) {
-                    currentFileIndex++
-                    downloadNext()
-                } else {
-                    Log.e(TAG, "❌ Failed to download $fileName: $error")
-                    onComplete(false, "Failed to download $fileName: $error")
-                }
+            } else {
+                Log.e(TAG, "❌ Failed to download GGUF model: $error")
+                onComplete(false, "Failed to download model: $error")
             }
         }
-
-        downloadNext()
     }
 
     /**
@@ -551,19 +498,11 @@ class ModelDownloadManager(private val context: Context) {
                                 val downloadsDir = getModelsDir()
                                 val modelFile = File(downloadsDir, modelName)
 
-                                // Tiny models (C/D) are legitimately small (6KB and 25KB)
-                                val minSize = if (modelName == QWEN_VL_MODEL_C || modelName == QWEN_VL_MODEL_D) {
-                                    MIN_TINY_MODEL_SIZE_BYTES
-                                } else {
-                                    MIN_MODEL_SIZE_BYTES
-                                }
-
-                                if (modelFile.exists() && modelFile.length() >= minSize) {
+                                // GGUF models are always large (hundreds of MB)
+                                if (modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES) {
                                     val sizeMB = modelFile.length() / 1024 / 1024
-                                    val sizeKB = modelFile.length() / 1024
-                                    val sizeStr = if (sizeMB > 0) "${sizeMB}MB" else "${sizeKB}KB"
                                     Log.i(TAG, "✅ File verified in Downloads: ${modelFile.absolutePath}")
-                                    Log.i(TAG, "   Size: $sizeStr")
+                                    Log.i(TAG, "   Size: ${sizeMB}MB")
 
                                     // Reset state BEFORE callback (callback may trigger next download)
                                     downloadId = -1
@@ -572,8 +511,9 @@ class ModelDownloadManager(private val context: Context) {
 
                                     callback?.invoke(true, "")
                                 } else {
+                                    val sizeMB = modelFile.length() / 1024 / 1024
                                     Log.e(TAG, "❌ File missing or too small in Downloads!")
-                                    Log.e(TAG, "   Expected at least ${minSize / 1024}KB, got ${modelFile.length() / 1024}KB")
+                                    Log.e(TAG, "   Expected at least ${MIN_MODEL_SIZE_BYTES / 1024 / 1024}MB, got ${sizeMB}MB")
 
                                     // Reset state BEFORE callback
                                     downloadId = -1
