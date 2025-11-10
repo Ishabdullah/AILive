@@ -48,11 +48,22 @@ data class InferenceStats(
 /**
  * Performance Monitor
  * Tracks and aggregates performance metrics over time
+ *
+ * Memory Management (v1.1 Week 4):
+ * - Keeps only the last 100 inference stats to prevent unbounded growth
+ * - Synchronized methods ensure thread-safe access
+ * - Old stats are automatically pruned when limit is reached
  */
 class PerformanceMonitor {
     private val stats = mutableListOf<InferenceStats>()
-    private val maxStatsSize = 100  // Keep last 100 inferences
 
+    // v1.1 Week 4: Memory optimization - limit history to prevent memory growth
+    private val maxStatsSize = 100  // Keep last 100 inferences (~12KB max)
+
+    /**
+     * Records inference statistics and prunes old data
+     * Thread-safe operation with automatic memory management
+     */
     @Synchronized
     fun recordInference(tokens: Int, durationMs: Long, backend: String) {
         val tokensPerSecond = if (durationMs > 0) {
@@ -63,7 +74,7 @@ class PerformanceMonitor {
 
         stats.add(InferenceStats(tokensPerSecond, tokens, durationMs, backend))
 
-        // Keep only recent stats
+        // v1.1 Week 4: Automatic memory management - remove oldest stat
         if (stats.size > maxStatsSize) {
             stats.removeAt(0)
         }
@@ -98,7 +109,7 @@ class PerformanceMonitor {
 /**
  * LLMManager - On-device LLM inference using official llama.cpp Android
  * Phase 9.0: Qwen2-VL-2B-Instruct GGUF with native llama.cpp
- * v1.1: GPU acceleration with OpenCL + performance tracking
+ * v1.1: GPU acceleration with OpenCL + performance tracking + optimizations
  *
  * Capabilities:
  * - Text-only conversation (current implementation)
@@ -106,10 +117,17 @@ class PerformanceMonitor {
  * - GPU acceleration (OpenCL for Adreno 750)
  * - Automatic CPU fallback if GPU unavailable
  * - Performance monitoring and statistics
+ * - Streaming token generation via Kotlin Flow
  *
  * Model: Qwen2-VL-2B-Instruct Q4_K_M GGUF (~986MB)
  * - Single GGUF file with built-in tokenizer
  * - Q4_K_M quantization: 4-bit with medium quality
+ *
+ * Performance Optimizations (v1.1 Week 4):
+ * - Context size: 4096 tokens (up from 2048) - longer conversations
+ * - Batch size: 1024 (up from 512) - better throughput
+ * - Memory management: Automatic pruning of old stats
+ * - Thread-safe operations with synchronized methods
  *
  * Benefits:
  * - Native ARM64 libraries (no UnsatisfiedLinkError)
@@ -122,7 +140,8 @@ class PerformanceMonitor {
  * @author AILive Team
  * @since Phase 2.6
  * @updated Phase 9.0 - Using official llama.cpp Android bindings
- * @updated v1.1 - GPU acceleration with OpenCL
+ * @updated v1.1 Week 3 - Streaming display & UI improvements
+ * @updated v1.1 Week 4 - Performance optimizations & cleanup
  */
 class LLMManager(private val context: Context) {
 
