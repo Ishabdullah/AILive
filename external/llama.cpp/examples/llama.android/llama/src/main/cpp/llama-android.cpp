@@ -126,7 +126,9 @@ Java_android_llama_cpp_LLamaAndroid_new_1context(JNIEnv *env, jobject, jlong jmo
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.n_ctx           = 2048;
+    // v1.1 Week 4 Optimization: Increased context from 2048 to 4096 tokens
+    // Allows longer conversations and better context retention
+    ctx_params.n_ctx           = 4096;
     ctx_params.n_threads       = n_threads;
     ctx_params.n_threads_batch = n_threads;
 

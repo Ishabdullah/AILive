@@ -139,10 +139,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
-    // TensorFlow Lite for vision models
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // REMOVED (v1.1 Week 4 Cleanup): TensorFlow Lite dependencies
+    // No longer needed - using llama.cpp for all inference
+    // implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    // implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    // implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // llama.cpp for LLM inference (Phase 9.0 - Official Android module)
     // Official llama.cpp Android bindings from examples/llama.android
