@@ -152,6 +152,9 @@ class LLMManager(private val context: Context) {
     // Official llama.cpp Android instance (singleton)
     private val llamaAndroid = LLamaAndroid.instance()
 
+    // Model configuration settings (loaded from SharedPreferences)
+    private var settings: ModelSettings = ModelSettings.load(context)
+
     // Initialization state tracking
     private var isInitialized = false
     private var isInitializing = false
@@ -341,14 +344,17 @@ class LLMManager(private val context: Context) {
         val startTime = System.currentTimeMillis()
         Log.i(TAG, "🚀 Starting streaming generation: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
 
+        // Reload settings in case they changed
+        settings = ModelSettings.load(context)
+
         // Create chat prompt
         val chatPrompt = createChatPrompt(prompt, agentName)
 
-        // Stream tokens directly from llama.cpp
+        // Stream tokens directly from llama.cpp with configured max tokens
         var tokenCount = 0
         val backend = gpuInfo?.backend ?: "CPU"
 
-        llamaAndroid.send(chatPrompt, formatChat = false)
+        llamaAndroid.send(chatPrompt, formatChat = false, maxTokens = settings.maxTokens)
             .catch { e ->
                 Log.e(TAG, "❌ Streaming generation error", e)
                 throw e
@@ -463,8 +469,11 @@ class LLMManager(private val context: Context) {
         var tokenCount = 0
         val startTime = System.currentTimeMillis()
 
-        // Use the official llama.cpp Android Flow API
-        llamaAndroid.send(prompt, formatChat = false)
+        // Reload settings in case they changed
+        settings = ModelSettings.load(context)
+
+        // Use the official llama.cpp Android Flow API with configured max tokens
+        llamaAndroid.send(prompt, formatChat = false, maxTokens = settings.maxTokens)
             .catch { e ->
                 Log.e(TAG, "❌ Generation error", e)
                 throw e
@@ -537,6 +546,21 @@ class LLMManager(private val context: Context) {
      * Get initialization error message if failed
      */
     fun getInitializationError(): String? = initializationError
+
+    /**
+     * Get current model settings
+     */
+    fun getSettings(): ModelSettings = settings
+
+    /**
+     * Reload settings from SharedPreferences
+     * Call this after user changes settings in ModelSettingsActivity
+     */
+    fun reloadSettings() {
+        settings = ModelSettings.load(context)
+        Log.i(TAG, "⚙️ Settings reloaded: max_tokens=${settings.maxTokens}, temp=${settings.temperature}")
+        Log.i(TAG, "   Estimated RAM: ${settings.estimateRamUsageMB()} MB")
+    }
 
     /**
      * Check if LLM is ready to use
