@@ -108,6 +108,22 @@
                 android:letterSpacing="0.2"
                 android:layout_marginBottom="12dp" />
 
+            <!-- Typing Indicator (animated, hidden by default) -->
+            <TextView
+                android:id="@+id/typingIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● AI is thinking..."
+                android:textColor="#00FFFF"
+                android:textSize="13sp"
+                android:textStyle="italic"
+                android:visibility="gone"
+                android:layout_marginBottom="8dp"
+                android:shadowColor="#00FFFF"
+                android:shadowDx="0"
+                android:shadowDy="0"
+                android:shadowRadius="8" />
+
             <!-- Response Text (scrollable) -->
             <ScrollView
                 android:id="@+id/responseScrollView"
@@ -185,17 +201,40 @@
             android:padding="16dp"
             android:layout_marginBottom="12dp" />
 
-        <!-- Send Button (neon style) -->
-        <Button
-            android:id="@+id/btnSendCommand"
+        <!-- Send and Cancel Buttons Row -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="SEND"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:textColor="#000000"
-            android:background="@drawable/button_neon"
-            android:layout_marginBottom="16dp" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <!-- Send Button (neon style) -->
+            <Button
+                android:id="@+id/btnSendCommand"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="SEND"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="#000000"
+                android:background="@drawable/button_neon"
+                android:layout_marginEnd="8dp" />
+
+            <!-- Cancel/Stop Button (red style, hidden by default) -->
+            <Button
+                android:id="@+id/btnCancelGeneration"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:text="⬛ STOP"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:background="#CCFF0000"
+                android:visibility="gone"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
 
         <!-- Toggle Buttons Row -->
         <LinearLayout
