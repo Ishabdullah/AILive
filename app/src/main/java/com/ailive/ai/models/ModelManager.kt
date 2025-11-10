@@ -3,25 +3,23 @@ package com.ailive.ai.models
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
-import org.tensorflow.lite.gpu.GpuDelegate
-import java.io.FileInputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
 
 /**
- * Manages TensorFlow Lite models for AILive
- * Handles image classification using MobileNetV2
+ * DEPRECATED - Legacy TensorFlow Lite model manager
+ *
+ * This class is deprecated as of v1.1 Week 4.
+ * TensorFlow Lite dependencies have been removed (~15MB APK reduction).
+ *
+ * AILive now uses llama.cpp exclusively for all inference:
+ * - LLM inference: LLMManager (llama.cpp with GGUF models)
+ * - Vision: Future llama.cpp vision models (llava, etc.)
+ *
+ * This stub remains for API compatibility but returns no-op results.
  */
+@Deprecated("Use llama.cpp-based inference instead. TensorFlow removed in v1.1.")
 class ModelManager(private val context: Context) {
     private val TAG = "ModelManager"
-    
-    private var interpreter: Interpreter? = null
-    private var gpuDelegate: GpuDelegate? = null
-    
+
     companion object {
         private const val MODEL_PATH = "models/mobilenet_v2.tflite"
         private const val LABELS_PATH = "models/labels.txt"
@@ -30,161 +28,57 @@ class ModelManager(private val context: Context) {
         private const val IMAGE_MEAN = 127.5f
         private const val IMAGE_STD = 127.5f
     }
-    
+
     private val labels: List<String> by lazy {
         try {
             context.assets.open(LABELS_PATH).bufferedReader().readLines()
         } catch (e: Exception) {
-            Log.w(TAG, "Labels file not found, using defaults")
+            Log.w(TAG, "Labels file not found (expected - TensorFlow removed)")
             listOf("Unknown")
         }
     }
-    
+
     /**
-     * Initialize the TensorFlow Lite interpreter
+     * No-op initialization (TensorFlow removed in v1.1)
      */
     fun initialize() {
-        try {
-            val options = Interpreter.Options()
-            
-            // Try to use GPU acceleration with default settings
-            val compatList = CompatibilityList()
-            if (compatList.isDelegateSupportedOnThisDevice) {
-                // Use default GPU delegate (no custom options to avoid API issues)
-                gpuDelegate = GpuDelegate()
-                options.addDelegate(gpuDelegate)
-                Log.i(TAG, "✓ GPU acceleration enabled (Adreno)")
-            } else {
-                options.setNumThreads(4)
-                Log.i(TAG, "Using CPU with 4 threads")
-            }
-            
-            val model = loadModelFile()
-            interpreter = Interpreter(model, options)
-            
-            Log.i(TAG, "✓ TensorFlow Lite initialized successfully")
-            Log.i(TAG, "  Model: MobileNetV2")
-            Log.i(TAG, "  Labels: ${labels.size} classes")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize TensorFlow Lite", e)
-            // Fallback to CPU if GPU fails
-            try {
-                Log.w(TAG, "Attempting CPU fallback...")
-                val options = Interpreter.Options().apply {
-                    setNumThreads(4)
-                }
-                val model = loadModelFile()
-                interpreter = Interpreter(model, options)
-                Log.i(TAG, "✓ TensorFlow Lite initialized (CPU mode)")
-            } catch (fallbackError: Exception) {
-                Log.e(TAG, "CPU fallback also failed", fallbackError)
-            }
-        }
+        Log.w(TAG, "⚠️  ModelManager is DEPRECATED")
+        Log.w(TAG, "   TensorFlow Lite removed in v1.1 Week 4 (~15MB saved)")
+        Log.w(TAG, "   Use LLMManager (llama.cpp) for all inference")
+        Log.i(TAG, "✓ Stub initialized (no-op)")
     }
-    
+
     /**
-     * Load model file from assets
-     */
-    private fun loadModelFile(): MappedByteBuffer {
-        val fileDescriptor = context.assets.openFd(MODEL_PATH)
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
-    }
-    
-    /**
-     * Classify an image
+     * Returns null (TensorFlow removed in v1.1)
      */
     fun classifyImage(bitmap: Bitmap): ClassificationResult? {
-        if (interpreter == null) {
-            Log.w(TAG, "Interpreter not initialized")
-            return null
-        }
-        
-        try {
-            val startTime = System.currentTimeMillis()
-            
-            val inputBuffer = preprocessImage(bitmap)
-            val outputArray = Array(1) { FloatArray(labels.size) }
-            
-            interpreter?.run(inputBuffer, outputArray)
-            
-            val results = outputArray[0].mapIndexed { index, confidence ->
-                val label = if (index < labels.size) labels[index] else "Unknown"
-                Pair(label, confidence)
-            }.sortedByDescending { it.second }.take(5)
-            
-            val inferenceTime = System.currentTimeMillis() - startTime
-            
-            Log.d(TAG, "Classification complete in ${inferenceTime}ms")
-            Log.d(TAG, "Top result: ${results[0].first} (${(results[0].second * 100).toInt()}%)")
-            
-            return ClassificationResult(
-                topLabel = results[0].first,
-                confidence = results[0].second,
-                allResults = results,
-                inferenceTimeMs = inferenceTime
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Classification failed", e)
-            return null
-        }
+        Log.d(TAG, "classifyImage() called on deprecated stub - returning null")
+        return null
     }
-    
+
     /**
-     * Preprocess image for model input
-     */
-    private fun preprocessImage(bitmap: Bitmap): ByteBuffer {
-        val imgData = ByteBuffer.allocateDirect(
-            4 * INPUT_SIZE * INPUT_SIZE * PIXEL_SIZE
-        )
-        imgData.order(ByteOrder.nativeOrder())
-        
-        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, INPUT_SIZE, INPUT_SIZE, true)
-        val intValues = IntArray(INPUT_SIZE * INPUT_SIZE)
-        scaledBitmap.getPixels(intValues, 0, scaledBitmap.width, 0, 0, scaledBitmap.width, scaledBitmap.height)
-        
-        var pixel = 0
-        for (i in 0 until INPUT_SIZE) {
-            for (j in 0 until INPUT_SIZE) {
-                val value = intValues[pixel++]
-                
-                // Normalize pixel values to [-1, 1]
-                imgData.putFloat(((value shr 16 and 0xFF) - IMAGE_MEAN) / IMAGE_STD)
-                imgData.putFloat(((value shr 8 and 0xFF) - IMAGE_MEAN) / IMAGE_STD)
-                imgData.putFloat(((value and 0xFF) - IMAGE_MEAN) / IMAGE_STD)
-            }
-        }
-        
-        return imgData
-    }
-    
-    /**
-     * Get model info
+     * Get deprecation info
      */
     fun getModelInfo(): String {
         return """
-            Model: MobileNetV2
-            Input size: ${INPUT_SIZE}x${INPUT_SIZE}
-            Classes: ${labels.size}
-            GPU: ${if (gpuDelegate != null) "Enabled" else "Disabled"}
+            [DEPRECATED] ModelManager stub (v1.1)
+            TensorFlow Lite: REMOVED (~15MB saved)
+            Use: LLMManager with llama.cpp instead
+            Status: No-op stub for API compatibility
         """.trimIndent()
     }
-    
+
     /**
-     * Release resources
+     * No-op cleanup
      */
     fun close() {
-        interpreter?.close()
-        gpuDelegate?.close()
-        Log.i(TAG, "ModelManager closed")
+        Log.d(TAG, "ModelManager stub closed (no-op)")
     }
 }
 
 /**
  * Classification result data class
+ * Maintained for API compatibility
  */
 data class ClassificationResult(
     val topLabel: String,
