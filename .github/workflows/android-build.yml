@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - 'claude/**'  # Build on all Claude Code branches
+      - 'New-Main-AILive-branch'  # Main development branch
+      - 'Claude-New-Main-AILive-branch'  # Claude working branch
   pull_request:
     branches: [ main ]
   workflow_dispatch:
