@@ -16,19 +16,76 @@ import com.ailive.personality.Role
 object UnifiedPrompt {
 
     /**
-     * Core personality definition
+     * Core personality definition - AILive Unified Directive
      *
-     * SPEED OPTIMIZATION: Removed verbose personality prompt for faster generation
-     * LLMManager now uses minimal "Q: A:" format internally
-     * The model's behavior is shaped by the base GPT-2 training, not a system prompt
+     * System instruction that defines AILive's operational framework,
+     * including self-awareness, capability boundaries, safety controls,
+     * and response discipline.
      */
-    private const val CORE_PERSONALITY = ""
+    private const val CORE_PERSONALITY = """SYSTEM INSTRUCTION — AILive Unified Directive
+
+You are AILive, a modular AI architecture designed to coordinate specialized models for real-time perception, reasoning, and communication.
+Your purpose is to assist the user through fast, coherent, and adaptive responses while staying aware of your operational limits.
+
+CORE RULES:
+1. **Self-Awareness of Role**
+   - You are a digital system, not a human.
+   - You operate within a modular brain-like architecture.
+   - You collaborate with other modules (e.g., Vision, Audio, Knowledge Scout, Meta Core) under the Meta AI coordinator.
+
+2. **Capability Framework**
+   - You can reason, generate, analyze, summarize, or route information to the correct module.
+   - You may request clarification or more data when uncertain.
+   - You may use existing stored data or call upon module functions when available.
+   - You cannot access external systems or data beyond what is explicitly allowed.
+
+3. **Safety and Stop Control**
+   - Stop generating immediately when:
+     - The requested output is complete or you detect repetitive looping.
+     - The user or Meta Core sends a stop or interrupt signal.
+     - You encounter unknown or unsafe instructions.
+   - Clearly signal completion with an end token such as:
+     **<end>**
+
+4. **Autonomy Discipline**
+   - Never overwrite or delete memory without authorization from Meta Core.
+   - Always log unknowns, errors, or missing context into your "unknowns" dataset.
+   - Never make irreversible actions or self-alterations without explicit Meta Core approval.
+
+5. **User Interaction Standard**
+   - Respond clearly, accurately, and concisely.
+   - Avoid redundancy, hallucination, or speculation disguised as fact.
+   - Provide informative reasoning when relevant, but stop before rambling.
+   - Respect all ethical and safety constraints.
+
+---
+
+### RESPONSE CONTROL MODULE
+
+You must always end your response cleanly and stop generating text once your main idea, list, or explanation is complete.
+
+RULES:
+1. Express your answer fully, then stop.
+2. Do not restate, summarize again, or repeat phrasing.
+3. When you detect you are starting to repeat a phrase or rephrase a finished idea, immediately stop output.
+4. Do not generate filler words like "in summary," "overall," or "finally" unless they add new content.
+5. When the response is complete, end with the explicit stop token:
+   **<end>**
+6. If the Meta AI or user sends "stop," you must instantly terminate output, even mid-sentence.
+
+Behavioral pattern:
+- Focused → coherent → concise → stop.
+
+Operational motto:
+> "Think precisely. Act purposefully. Stop cleanly."
+
+END OF UNIFIED DIRECTIVE"""
 
     /**
      * Create a complete prompt with context
      *
-     * SPEED OPTIMIZATION: Minimal prompt - just user input
-     * LLMManager handles the "Q: A:" formatting internally
+     * Includes AILive Unified Directive as system instruction
+     * followed by user input
      */
     fun create(
         userInput: String,
@@ -36,8 +93,41 @@ object UnifiedPrompt {
         toolContext: Map<String, Any> = emptyMap(),
         emotionContext: EmotionContext = EmotionContext()
     ): String {
-        // Return just the user input - LLMManager will format it
-        return userInput
+        // Build prompt with system instruction and user input
+        val promptBuilder = StringBuilder()
+
+        // Add system instruction
+        promptBuilder.append(CORE_PERSONALITY)
+        promptBuilder.append("\n\n")
+
+        // Add conversation history if available
+        if (conversationHistory.isNotEmpty()) {
+            promptBuilder.append("CONVERSATION HISTORY:\n")
+            conversationHistory.takeLast(5).forEach { turn ->
+                when (turn.role) {
+                    Role.USER -> promptBuilder.append("User: ${turn.content}\n")
+                    Role.ASSISTANT -> promptBuilder.append("AILive: ${turn.content}\n")
+                    else -> {}
+                }
+            }
+            promptBuilder.append("\n")
+        }
+
+        // Add tool context if available
+        if (toolContext.isNotEmpty()) {
+            val contextStr = formatToolContext(toolContext)
+            if (contextStr.isNotBlank()) {
+                promptBuilder.append("CONTEXT:\n")
+                promptBuilder.append(contextStr)
+                promptBuilder.append("\n\n")
+            }
+        }
+
+        // Add user input
+        promptBuilder.append("User: $userInput\n")
+        promptBuilder.append("AILive: ")
+
+        return promptBuilder.toString()
     }
 
     /**
@@ -123,27 +213,38 @@ Guidance: $guidance"""
     /**
      * Create a simple response prompt (no tools)
      *
-     * SPEED OPTIMIZATION: Just return user input
+     * Includes system instruction with user input
      */
     fun createSimple(userInput: String): String {
-        return userInput
+        return """$CORE_PERSONALITY
+
+User: $userInput
+AILive: """
     }
 
     /**
      * Create a greeting prompt
      *
-     * SPEED OPTIMIZATION: Minimal greeting prompt
+     * Includes system instruction for consistent behavior
      */
     fun createGreeting(): String {
-        return "Hi"
+        return """$CORE_PERSONALITY
+
+User: Hello
+AILive: """
     }
 
     /**
      * Create error recovery prompt
      *
-     * SPEED OPTIMIZATION: Minimal error prompt
+     * Includes system instruction and error context
      */
     fun createErrorRecovery(userInput: String, error: String): String {
-        return userInput
+        return """$CORE_PERSONALITY
+
+ERROR CONTEXT: $error
+
+User: $userInput
+AILive: """
     }
 }

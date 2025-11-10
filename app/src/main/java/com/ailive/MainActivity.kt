@@ -119,17 +119,18 @@ class MainActivity : AppCompatActivity() {
             val allGranted = results.values.all { it }
             if (allGranted) {
                 Log.i(TAG, "✓ All requested permissions granted (launcher)")
-                startModels()
+                // After permissions granted, check if model setup is needed
+                proceedAfterPermissions()
             } else {
                 Log.e(TAG, "✗ One or more permissions denied: $results")
                 runOnUiThread {
                     statusIndicator?.text = "● PERMISSION DENIED"
-                    classificationResult?.text = "Camera and microphone permissions required"
+                    classificationResult?.text = "Camera, microphone, and storage permissions required"
 
                     // Show explanation dialog with option to open settings
                     AlertDialog.Builder(this)
                         .setTitle("Permissions Required")
-                        .setMessage("AILive requires camera and microphone permissions to function.\n\nPlease grant these permissions in Settings to continue.")
+                        .setMessage("AILive requires camera, microphone, and storage permissions to function.\n\nPlease grant these permissions in Settings to continue.")
                         .setPositiveButton("Open Settings") { _, _ ->
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.fromParts("package", packageName, null)
@@ -190,6 +191,67 @@ class MainActivity : AppCompatActivity() {
         modelDownloadManager = ModelDownloadManager(this)
         modelSetupDialog = ModelSetupDialog(this, modelDownloadManager, filePickerLauncher)
 
+        // Request permissions FIRST before showing model setup dialog
+        requestInitialPermissions()
+    }
+
+    /**
+     * Build list of permissions based on Android version
+     */
+    private fun buildPermissionList(): List<String> {
+        val permissionsToRequest = mutableListOf<String>()
+        permissionsToRequest.add(Manifest.permission.CAMERA)
+        permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+
+        // Storage permissions:
+        // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
+        // Android 13+ uses granular READ_MEDIA_* permissions
+        // Android 10-12 uses READ_EXTERNAL_STORAGE
+        // Android 9- uses WRITE_EXTERNAL_STORAGE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ - need granular media permissions to read model files
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        } else {
+            // Android 9 and below - need both READ and WRITE
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+
+        return permissionsToRequest
+    }
+
+    /**
+     * Request all necessary permissions before proceeding with initialization
+     */
+    private fun requestInitialPermissions() {
+        val permissionsToRequest = buildPermissionList()
+
+        // Check current permission status
+        val missing = permissionsToRequest.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing.isEmpty()) {
+            Log.i(TAG, "✓ Permissions already granted")
+            proceedAfterPermissions()
+        } else {
+            Log.i(TAG, "Requesting permissions: $missing")
+            statusIndicator.text = "● REQUESTING PERMISSIONS..."
+            classificationResult.text = "Please allow camera, microphone, and storage access"
+            // Launch modern permission flow
+            permissionLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    /**
+     * Called after permissions are granted. Check if model setup is needed.
+     */
+    private fun proceedAfterPermissions() {
         // If model setup required, show dialog and defer init
         if (modelSetupDialog.isSetupNeeded()) {
             Log.i(TAG, "Model setup needed - showing dialog")
@@ -205,7 +267,7 @@ class MainActivity : AppCompatActivity() {
                 Log.i(TAG, "Model setup complete, continuing initialization")
                 continueInitialization()
             }
-            // stop further onCreate initialization until user completes model setup
+            // stop further initialization until user completes model setup
             return
         }
 
@@ -247,49 +309,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Build permission list dynamically (device-version-aware)
-        val permissionsToRequest = mutableListOf<String>()
-        permissionsToRequest.add(Manifest.permission.CAMERA)
-        permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
-
-        // Storage permissions:
-        // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
-        // Android 13+ uses granular READ_MEDIA_* permissions
-        // Android 10-12 uses READ_EXTERNAL_STORAGE
-        // Android 9- uses WRITE_EXTERNAL_STORAGE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ - need granular media permissions to read model files
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
-            // Android 9 and below - need both READ and WRITE
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
-
-        // Check current permission status
-        val missing = permissionsToRequest.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        runOnUiThread { statusIndicator.text = "● CHECKING PERMISSIONS..." }
-
-        if (missing.isEmpty()) {
-            Log.i(TAG, "✓ Permissions already granted")
-            startModels()
-        } else {
-            Log.i(TAG, "Requesting permissions: $missing")
-            runOnUiThread {
-                statusIndicator.text = "● REQUESTING PERMISSIONS..."
-                classificationResult.text = "Please allow camera, microphone, and storage access"
-            }
-            // Launch modern permission flow
-            permissionLauncher.launch(missing.toTypedArray())
-        }
+        // Permissions are now requested earlier in requestInitialPermissions()
+        // Proceed directly to starting models
+        Log.i(TAG, "✓ Permissions verified, starting models")
+        startModels()
     }
 
     private fun startModels() {
