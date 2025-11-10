@@ -56,12 +56,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var confidenceText: TextView
     private lateinit var inferenceTime: TextView
     private lateinit var statusIndicator: TextView
+    private lateinit var typingIndicator: TextView
 
     // Manual controls
     private lateinit var btnToggleMic: android.widget.Button
     private lateinit var btnToggleCamera: android.widget.Button
     private lateinit var editTextCommand: android.widget.EditText
     private lateinit var btnSendCommand: android.widget.Button
+    private lateinit var btnCancelGeneration: android.widget.Button
     private lateinit var btnToggleDashboard: FloatingActionButton
     private lateinit var dashboardContainer: FrameLayout
 
@@ -85,6 +87,9 @@ class MainActivity : AppCompatActivity() {
     private var isListeningForWakeWord = false
     private var isMicEnabled = false
     private var isCameraEnabled = false
+
+    // LLM generation control
+    private var generationJob: Job? = null
 
     companion object {
         private const val TAG_COMPANION = "MainActivity.Companion"
@@ -160,11 +165,13 @@ class MainActivity : AppCompatActivity() {
         confidenceText = findViewById(R.id.confidenceText)
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
+        typingIndicator = findViewById(R.id.typingIndicator)
 
         btnToggleMic = findViewById(R.id.btnToggleMic)
         btnToggleCamera = findViewById(R.id.btnToggleCamera)
         editTextCommand = findViewById(R.id.editTextCommand)
         btnSendCommand = findViewById(R.id.btnSendCommand)
+        btnCancelGeneration = findViewById(R.id.btnCancelGeneration)
         btnToggleDashboard = findViewById(R.id.btnToggleDashboard)
         dashboardContainer = findViewById(R.id.dashboardContainer)
 
@@ -625,6 +632,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        btnCancelGeneration.setOnClickListener {
+            Log.i(TAG, "🛑 User requested cancellation")
+            generationJob?.cancel()
+            runOnUiThread {
+                typingIndicator.visibility = View.GONE
+                btnCancelGeneration.visibility = View.GONE
+                btnSendCommand.isEnabled = true
+                classificationResult.text = "Generation cancelled by user"
+                statusIndicator.text = "● CANCELLED"
+            }
+        }
+
         editTextCommand.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
                 val command = editTextCommand.text.toString().trim()
@@ -657,16 +676,19 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Show thinking indicator
+        // Show thinking indicator, typing indicator, and cancel button
         runOnUiThread {
             statusIndicator.text = "● THINKING..."
             classificationResult.text = "⏳ Generating response..."
             confidenceText.text = ""
             inferenceTime.text = ""
+            typingIndicator.visibility = View.VISIBLE
+            btnCancelGeneration.visibility = View.VISIBLE
+            btnSendCommand.isEnabled = false
         }
 
-        // Stream response in real-time
-        lifecycleScope.launch {
+        // Stream response in real-time (store Job for cancellation)
+        generationJob = lifecycleScope.launch {
             try {
                 val responseBuilder = StringBuilder()
                 var tokenCount = 0
@@ -712,6 +734,9 @@ class MainActivity : AppCompatActivity() {
                     statusIndicator.text = "●"
                     confidenceText.text = "Completed"
                     inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | ${totalTime}ms"
+                    typingIndicator.visibility = View.GONE
+                    btnCancelGeneration.visibility = View.GONE
+                    btnSendCommand.isEnabled = true
                     Log.i(TAG, "✅ Streaming complete: $tokenCount tokens in ${totalTime}ms")
 
                     // Speak the response if TTS available
@@ -726,6 +751,9 @@ class MainActivity : AppCompatActivity() {
                     statusIndicator.text = "● ERROR"
                     classificationResult.text = "Error: ${e.message}"
                     inferenceTime.text = ""
+                    typingIndicator.visibility = View.GONE
+                    btnCancelGeneration.visibility = View.GONE
+                    btnSendCommand.isEnabled = true
                 }
             }
         }
