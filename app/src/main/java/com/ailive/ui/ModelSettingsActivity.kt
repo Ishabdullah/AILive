@@ -11,8 +11,10 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import com.ailive.R
 import com.ailive.ai.llm.ModelSettings
+import com.ailive.settings.AISettings
 
 /**
  * Model Settings Activity
@@ -49,6 +51,7 @@ class ModelSettingsActivity : AppCompatActivity() {
     private lateinit var labelMaxTokens: TextView
     private lateinit var sliderMaxTokens: SeekBar
     private lateinit var spinnerMirostat: Spinner
+    private lateinit var switchStreamingSpeech: SwitchCompat
 
     private lateinit var btnSave: Button
     private lateinit var btnReset: Button
@@ -56,6 +59,7 @@ class ModelSettingsActivity : AppCompatActivity() {
 
     // Current settings
     private var settings: ModelSettings = ModelSettings.getDefaults()
+    private lateinit var aiSettings: AISettings
     private var totalDeviceRamMB: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,6 +106,9 @@ class ModelSettingsActivity : AppCompatActivity() {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
 
+        // Streaming speech switch
+        switchStreamingSpeech = findViewById(R.id.switchStreamingSpeech)
+
         // Buttons
         btnSave = findViewById(R.id.btnSave)
         btnReset = findViewById(R.id.btnReset)
@@ -110,6 +117,7 @@ class ModelSettingsActivity : AppCompatActivity() {
 
     private fun loadSettings() {
         settings = ModelSettings.load(this)
+        aiSettings = AISettings(this)
     }
 
     private fun setupListeners() {
@@ -223,6 +231,16 @@ class ModelSettingsActivity : AppCompatActivity() {
         btnClose.setOnClickListener {
             finish()
         }
+
+        // Streaming speech toggle
+        switchStreamingSpeech.setOnCheckedChangeListener { _, isChecked ->
+            aiSettings.streamingSpeechEnabled = isChecked
+            Toast.makeText(
+                this,
+                "Streaming speech ${if (isChecked) "enabled" else "disabled"}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun updateUI() {
@@ -236,6 +254,7 @@ class ModelSettingsActivity : AppCompatActivity() {
         sliderCtxSize.progress = getSliderFromCtxSize(settings.ctxSize)
         sliderMaxTokens.progress = getSliderFromMaxTokens(settings.maxTokens)
         spinnerMirostat.setSelection(settings.mirostat)
+        switchStreamingSpeech.isChecked = aiSettings.streamingSpeechEnabled
 
         // Update labels
         labelTemperature.text = "Temperature: ${String.format("%.2f", settings.temperature)}"

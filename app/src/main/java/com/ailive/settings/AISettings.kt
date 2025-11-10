@@ -51,7 +51,24 @@ class AISettings(context: Context) {
     var isSetupComplete: Boolean
         get() = prefs.getBoolean("setup_complete", false)
         set(value) = prefs.edit().putBoolean("setup_complete", value).apply()
-    
+
+    // Streaming Speech - Real-time token-to-speech
+    var streamingSpeechEnabled: Boolean
+        get() = prefs.getBoolean("streaming_speech_enabled", true)  // Enabled by default
+        set(value) {
+            prefs.edit().putBoolean("streaming_speech_enabled", value).apply()
+            Log.i(TAG, "Streaming speech ${if (value) "enabled" else "disabled"}")
+        }
+
+    // Speech buffer delay (seconds) - how long to wait before speaking incomplete sentences
+    var speechBufferDelay: Float
+        get() = prefs.getFloat("speech_buffer_delay", 0.5f)
+        set(value) {
+            val clamped = value.coerceIn(0.1f, 2.0f)
+            prefs.edit().putFloat("speech_buffer_delay", clamped).apply()
+            Log.i(TAG, "Speech buffer delay set to: ${clamped}s")
+        }
+
     fun clear() {
         prefs.edit().clear().apply()
         Log.i(TAG, "Settings cleared")
