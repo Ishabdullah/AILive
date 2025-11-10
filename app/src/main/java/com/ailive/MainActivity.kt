@@ -733,17 +733,20 @@ class MainActivity : AppCompatActivity() {
             btnSendCommand.isEnabled = false
         }
 
-        // Stream response in real-time (store Job for cancellation)
+        // Stream response in real-time with incremental TTS (store Job for cancellation)
         generationJob = lifecycleScope.launch {
             try {
                 val responseBuilder = StringBuilder()
+                val sentenceBuffer = StringBuilder()
                 var tokenCount = 0
                 val startTime = System.currentTimeMillis()
+                val streamingSpeechEnabled = settings.streamingSpeechEnabled
 
                 aiLiveCore.llmManager.generateStreaming(command, agentName = "AILive")
                     .collect { token ->
                         tokenCount++
                         responseBuilder.append(token)
+                        sentenceBuffer.append(token)
 
                         // Update UI with streaming text
                         withContext(Dispatchers.Main) {
@@ -763,7 +766,29 @@ class MainActivity : AppCompatActivity() {
                                     0f
                                 }
                                 inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
-                                statusIndicator.text = "● GENERATING..."
+                                statusIndicator.text = "● 🔊 LIVE SPEAKING..."
+                            }
+
+                            // STREAMING TTS: Speak sentence as soon as it's complete
+                            if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                                val currentText = sentenceBuffer.toString()
+
+                                // Check if we have a complete sentence or phrase
+                                val shouldSpeak = currentText.endsWith(". ") ||
+                                                  currentText.endsWith("! ") ||
+                                                  currentText.endsWith("? ") ||
+                                                  currentText.endsWith(".\n") ||
+                                                  currentText.endsWith("!\n") ||
+                                                  currentText.endsWith("?\n") ||
+                                                  (currentText.length > 80 && token == " ")  // Long phrase, speak at word boundary
+
+                                if (shouldSpeak && currentText.length > 10) {
+                                    // Speak this sentence incrementally (queues, doesn't interrupt)
+                                    val sentenceToSpeak = currentText.trim()
+                                    Log.d(TAG, "🔊 Streaming TTS: Speaking sentence of ${sentenceToSpeak.length} chars")
+                                    aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
+                                    sentenceBuffer.clear()
+                                }
                             }
                         }
                     }
@@ -785,8 +810,15 @@ class MainActivity : AppCompatActivity() {
                     btnSendCommand.isEnabled = true
                     Log.i(TAG, "✅ Streaming complete: $tokenCount tokens in ${totalTime}ms")
 
-                    // Speak the response if TTS available
-                    if (::aiLiveCore.isInitialized) {
+                    // Speak any remaining buffered text
+                    if (streamingSpeechEnabled && ::aiLiveCore.isInitialized && sentenceBuffer.isNotEmpty()) {
+                        val remaining = sentenceBuffer.toString().trim()
+                        if (remaining.isNotEmpty()) {
+                            Log.d(TAG, "🔊 Speaking final buffer: ${remaining.length} chars")
+                            aiLiveCore.ttsManager.speakIncremental(remaining)
+                        }
+                    } else if (!streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                        // Fallback to batched TTS if streaming disabled
                         aiLiveCore.ttsManager.speak(responseBuilder.toString(), com.ailive.audio.TTSManager.Priority.NORMAL)
                     }
                 }
