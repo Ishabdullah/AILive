@@ -324,7 +324,7 @@
                 android:id="@+id/sliderCtxSize"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:max">15"
+                android:max="15"
                 android:progress="7"
                 android:progressTint="#FFAA00"
                 android:thumbTint="#FFAA00" />
