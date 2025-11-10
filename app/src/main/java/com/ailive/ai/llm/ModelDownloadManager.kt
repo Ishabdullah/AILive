@@ -103,7 +103,7 @@ class ModelDownloadManager(private val context: Context) {
             }
         } else {
             // Android 12-: Use public Downloads (legacy behavior)
-            getModelsDir()
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         }.also { dir ->
             if (!dir.exists()) {
                 dir.mkdirs()
