@@ -675,8 +675,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Reload settings when returning from settings activity
-        if (::ailiveCore.isInitialized) {
-            ailiveCore.llmManager.reloadSettings()
+        if (::aiLiveCore.isInitialized) {
+            aiLiveCore.llmManager.reloadSettings()
             Log.i(TAG, "⚙️ Settings reloaded on resume")
         }
     }
