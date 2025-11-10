@@ -45,7 +45,13 @@
         <activity
             android:name=".SetupActivity"
             android:exported="false" />
-        
+
+        <activity
+            android:name=".ui.ModelSettingsActivity"
+            android:exported="false"
+            android:label="Model Settings"
+            android:theme="@style/Theme.AILive" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

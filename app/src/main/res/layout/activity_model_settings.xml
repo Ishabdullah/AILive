@@ -1,0 +1,438 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/futuristic_background">
+
+    <!-- Gradient Overlay -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/gradient_overlay" />
+
+    <!-- Title Bar -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MODEL SETTINGS"
+        android:textColor="#00FFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif-light"
+        android:shadowColor="#00FFFF"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="15"
+        android:padding="16dp"
+        android:background="#15000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp" />
+
+    <!-- Close Button -->
+    <Button
+        android:id="@+id/btnClose"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:text="✕"
+        android:textSize="20sp"
+        android:textColor="#FFFFFF"
+        android:background="#80FF0000"
+        app:layout_constraintTop_toTopOf="@id/tvTitle"
+        app:layout_constraintBottom_toBottomOf="@id/tvTitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginEnd="16dp" />
+
+    <!-- RAM Usage Indicator Card -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardRamUsage"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        app:cardBackgroundColor="#CC000000"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="8dp"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tvRamTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="💾 Estimated RAM Usage"
+                android:textColor="#00FFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="5" />
+
+            <TextView
+                android:id="@+id/tvRamUsage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="3.1 GB / 6.0 GB"
+                android:textColor="#00FF00"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FF00"
+                android:shadowRadius="8"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:id="@+id/tvRamWarning"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#FFAA00"
+                android:textSize="12sp"
+                android:visibility="gone"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Scrollable Settings Panel -->
+    <ScrollView
+        android:id="@+id/scrollSettings"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_margin="16dp"
+        android:fillViewport="true"
+        app:layout_constraintTop_toBottomOf="@id/cardRamUsage"
+        app:layout_constraintBottom_toTopOf="@id/layoutButtons"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
+
+            <!-- Temperature Slider -->
+            <TextView
+                android:id="@+id/labelTemperature"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Temperature: 0.7"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Controls randomness (higher = more creative)"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderTemperature"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="190"
+                android:progress="60"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Top P Slider -->
+            <TextView
+                android:id="@+id/labelTopP"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Top P: 0.9"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nucleus sampling threshold (cumulative probability)"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderTopP"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="90"
+                android:progress="80"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Top K Slider -->
+            <TextView
+                android:id="@+id/labelTopK"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Top K: 40"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Number of top tokens to consider"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderTopK"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="99"
+                android:progress="39"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Repetition Penalty Slider -->
+            <TextView
+                android:id="@+id/labelRepetitionPenalty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Repetition Penalty: 1.18"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Penalty for repeating tokens (higher = less repetitive)"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderRepetitionPenalty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="50"
+                android:progress="18"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Presence Penalty Slider -->
+            <TextView
+                android:id="@+id/labelPresencePenalty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Presence Penalty: 0.6"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Penalty for using already-seen tokens"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderPresencePenalty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="200"
+                android:progress="60"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Frequency Penalty Slider -->
+            <TextView
+                android:id="@+id/labelFrequencyPenalty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Frequency Penalty: 0.3"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Penalty based on token frequency"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderFrequencyPenalty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="200"
+                android:progress="30"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Context Size Slider -->
+            <TextView
+                android:id="@+id/labelCtxSize"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Context Size: 4096 tokens"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚠️ Highest RAM impact - conversation memory"
+                android:textColor="#FFAA00"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderCtxSize"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max">15"
+                android:progress="7"
+                android:progressTint="#FFAA00"
+                android:thumbTint="#FFAA00" />
+
+            <!-- Max Tokens Slider -->
+            <TextView
+                android:id="@+id/labelMaxTokens"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Max Tokens: 512"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Maximum response length"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.appcompat.widget.AppCompatSeekBar
+                android:id="@+id/sliderMaxTokens"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="39"
+                android:progress="9"
+                android:progressTint="#00FFFF"
+                android:thumbTint="#00FFFF" />
+
+            <!-- Mirostat Spinner -->
+            <TextView
+                android:id="@+id/labelMirostat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mirostat Sampling"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Advanced sampling mode (0=disabled, 1=v1, 2=v2)"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="4dp" />
+
+            <Spinner
+                android:id="@+id/spinnerMirostat"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@drawable/input_field_background"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📖 Learn more about these settings"
+                android:textColor="#00CCFF"
+                android:textSize="12sp"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="16dp"
+                android:padding="12dp" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom Button Bar -->
+    <LinearLayout
+        android:id="@+id/layoutButtons"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_margin="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            android:id="@+id/btnReset"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="RESET"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="#80FF5500"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:text="SAVE"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#000000"
+            android:background="@drawable/button_neon"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

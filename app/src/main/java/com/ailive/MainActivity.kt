@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var editTextCommand: android.widget.EditText
     private lateinit var btnSendCommand: android.widget.Button
     private lateinit var btnCancelGeneration: android.widget.Button
+    private lateinit var btnSettings: android.widget.Button
     private lateinit var btnToggleDashboard: FloatingActionButton
     private lateinit var dashboardContainer: FrameLayout
 
@@ -172,11 +173,13 @@ class MainActivity : AppCompatActivity() {
         editTextCommand = findViewById(R.id.editTextCommand)
         btnSendCommand = findViewById(R.id.btnSendCommand)
         btnCancelGeneration = findViewById(R.id.btnCancelGeneration)
+        btnSettings = findViewById(R.id.btnSettings)
         btnToggleDashboard = findViewById(R.id.btnToggleDashboard)
         dashboardContainer = findViewById(R.id.dashboardContainer)
 
         setupManualControls()
         setupDashboard()
+        setupSettingsButton()
 
         appTitle.text = "${settings.aiName} (Vision + Audio)"
 
@@ -655,6 +658,26 @@ class MainActivity : AppCompatActivity() {
             } else {
                 false
             }
+        }
+    }
+
+    /**
+     * Setup settings button to launch Model Settings Activity
+     */
+    private fun setupSettingsButton() {
+        btnSettings.setOnClickListener {
+            Log.i(TAG, "⚙️ Opening Model Settings")
+            val intent = Intent(this, com.ailive.ui.ModelSettingsActivity::class.java)
+            startActivity(intent)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Reload settings when returning from settings activity
+        if (::ailiveCore.isInitialized) {
+            ailiveCore.llmManager.reloadSettings()
+            Log.i(TAG, "⚙️ Settings reloaded on resume")
         }
     }
 

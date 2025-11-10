@@ -36,7 +36,8 @@ class LLamaAndroid {
         }
     }.asCoroutineDispatcher()
 
-    private val nlen: Int = 512  // Increased from 64 for longer responses
+    // Default max tokens (can be overridden in send())
+    private var defaultMaxTokens: Int = 512  // v1.1: Increased from 64 for longer responses
 
     private external fun log_to_android()
     private external fun load_model(filename: String): Long
@@ -135,12 +136,21 @@ class LLamaAndroid {
         }
     }
 
-    fun send(message: String, formatChat: Boolean = false): Flow<String> = flow {
+    /**
+     * Generate text with streaming tokens
+     *
+     * @param message The prompt text
+     * @param formatChat Whether to format as chat (adds chat template)
+     * @param maxTokens Maximum number of tokens to generate (default: 512)
+     * @return Flow of generated tokens
+     */
+    fun send(message: String, formatChat: Boolean = false, maxTokens: Int = defaultMaxTokens): Flow<String> = flow {
         when (val state = threadLocalState.get()) {
             is State.Loaded -> {
-                val ncur = IntVar(completion_init(state.context, state.batch, message, formatChat, nlen))
-                while (ncur.value <= nlen) {
-                    val str = completion_loop(state.context, state.batch, state.sampler, nlen, ncur)
+                val effectiveMaxTokens = maxTokens.coerceIn(1, 2048)
+                val ncur = IntVar(completion_init(state.context, state.batch, message, formatChat, effectiveMaxTokens))
+                while (ncur.value <= effectiveMaxTokens) {
+                    val str = completion_loop(state.context, state.batch, state.sampler, effectiveMaxTokens, ncur)
                     if (str == null) {
                         break
                     }

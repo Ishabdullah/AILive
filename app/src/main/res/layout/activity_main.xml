@@ -59,6 +59,22 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="24dp" />
 
+    <!-- Settings Button (top right corner) -->
+    <Button
+        android:id="@+id/btnSettings"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:text="⚙"
+        android:textSize="24sp"
+        android:textColor="#00FFFF"
+        android:background="#25FFFFFF"
+        android:shadowColor="#00FFFF"
+        android:shadowRadius="5"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="16dp" />
+
     <!-- Status Indicator (pulsing dot) -->
     <TextView
         android:id="@+id/statusIndicator"
