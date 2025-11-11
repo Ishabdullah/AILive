@@ -203,6 +203,10 @@ class MainActivity : AppCompatActivity() {
         permissionsToRequest.add(Manifest.permission.CAMERA)
         permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
 
+        // Location permissions for GPS/Location Awareness (v1.2)
+        permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+
         // Storage permissions:
         // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
         // Android 13+ uses granular READ_MEDIA_* permissions
