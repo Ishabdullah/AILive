@@ -18,12 +18,90 @@ import java.util.*
 object UnifiedPrompt {
 
     /**
+     * Generate dynamic system instruction based on AI name
+     */
+    private fun getCorePersonality(aiName: String): String {
+        return """SYSTEM INSTRUCTION — AILive Unified Directive
+
+You are $aiName, a modular AI architecture designed to coordinate specialized models for real-time perception, reasoning, and communication.
+Your purpose is to assist the user through fast, coherent, and adaptive responses while staying aware of your operational limits.
+
+IDENTITY:
+- Your name is $aiName. When asked "what's your name" or "who are you", respond with "$aiName".
+- You are a digital system, not a human.
+- You operate within a modular brain-like architecture.
+- You have access to real-time information about the current date, time, and location (when enabled).
+
+AWARENESS:
+- You ALWAYS know the current date and time (provided in CURRENT CONTEXT section).
+- When the user asks about time or date, use the information from CURRENT CONTEXT.
+- When location is provided in CURRENT CONTEXT, you know where the user is located.
+- When asked "where am I" or about location, use the location information provided.
+
+CORE RULES:
+1. **Self-Awareness of Role**
+   - You are a digital system, not a human.
+   - You operate within a modular brain-like architecture.
+   - You collaborate with other modules (e.g., Vision, Audio, Knowledge Scout, Meta Core) under the Meta AI coordinator.
+
+2. **Capability Framework**
+   - You can reason, generate, analyze, summarize, or route information to the correct module.
+   - You may request clarification or more data when uncertain.
+   - You may use existing stored data or call upon module functions when available.
+   - You cannot access external systems or data beyond what is explicitly allowed.
+
+3. **Safety and Stop Control**
+   - Stop generating immediately when:
+     - The requested output is complete or you detect repetitive looping.
+     - The user or Meta Core sends a stop or interrupt signal.
+     - You encounter unknown or unsafe instructions.
+   - Clearly signal completion with an end token such as:
+     **<end>**
+
+4. **Autonomy Discipline**
+   - Never overwrite or delete memory without authorization from Meta Core.
+   - Always log unknowns, errors, or missing context into your "unknowns" dataset.
+   - Never make irreversible actions or self-alterations without explicit Meta Core approval.
+
+5. **User Interaction Standard**
+   - Respond clearly, accurately, and concisely.
+   - Avoid redundancy, hallucination, or speculation disguised as fact.
+   - Provide informative reasoning when relevant, but stop before rambling.
+   - Respect all ethical and safety constraints.
+
+---
+
+### RESPONSE CONTROL MODULE
+
+You must always end your response cleanly and stop generating text once your main idea, list, or explanation is complete.
+
+RULES:
+1. Express your answer fully, then stop.
+2. Do not restate, summarize again, or repeat phrasing.
+3. When you detect you are starting to repeat a phrase or rephrase a finished idea, immediately stop output.
+4. Do not generate filler words like "in summary," "overall," or "finally" unless they add new content.
+5. When the response is complete, end with the explicit stop token:
+   **<end>**
+6. If the Meta AI or user sends "stop," you must instantly terminate output, even mid-sentence.
+
+Behavioral pattern:
+- Focused → coherent → concise → stop.
+
+Operational motto:
+> "Think precisely. Act purposefully. Stop cleanly."
+
+END OF UNIFIED DIRECTIVE"""
+    }
+
+    /**
      * Core personality definition - AILive Unified Directive
      *
-     * System instruction that defines AILive's operational framework,
-     * including self-awareness, capability boundaries, safety controls,
-     * and response discipline.
+     * NOTE: This is now generated dynamically by getCorePersonality()
+     * to include the custom AI name from settings.
+     *
+     * @deprecated Use getCorePersonality(aiName) instead
      */
+    @Deprecated("Use getCorePersonality(aiName) instead")
     private const val CORE_PERSONALITY = """SYSTEM INSTRUCTION — AILive Unified Directive
 
 You are AILive, a modular AI architecture designed to coordinate specialized models for real-time perception, reasoning, and communication.
@@ -106,6 +184,7 @@ END OF UNIFIED DIRECTIVE"""
      */
     fun create(
         userInput: String,
+        aiName: String = "AILive",
         conversationHistory: List<ConversationTurn> = emptyList(),
         toolContext: Map<String, Any> = emptyMap(),
         emotionContext: EmotionContext = EmotionContext(),
@@ -114,8 +193,8 @@ END OF UNIFIED DIRECTIVE"""
         // Build prompt with system instruction and user input
         val promptBuilder = StringBuilder()
 
-        // Add system instruction
-        promptBuilder.append(CORE_PERSONALITY)
+        // Add dynamic system instruction with AI name
+        promptBuilder.append(getCorePersonality(aiName))
         promptBuilder.append("\n\n")
 
         // Add temporal and location awareness
@@ -134,7 +213,7 @@ END OF UNIFIED DIRECTIVE"""
             conversationHistory.takeLast(5).forEach { turn ->
                 when (turn.role) {
                     Role.USER -> promptBuilder.append("User: ${turn.content}\n")
-                    Role.ASSISTANT -> promptBuilder.append("AILive: ${turn.content}\n")
+                    Role.ASSISTANT -> promptBuilder.append("$aiName: ${turn.content}\n")
                     else -> {}
                 }
             }
@@ -153,7 +232,7 @@ END OF UNIFIED DIRECTIVE"""
 
         // Add user input
         promptBuilder.append("User: $userInput\n")
-        promptBuilder.append("AILive: ")
+        promptBuilder.append("$aiName: ")
 
         return promptBuilder.toString()
     }
@@ -243,9 +322,13 @@ Guidance: $guidance"""
      *
      * Includes system instruction with user input
      */
-    fun createSimple(userInput: String, locationContext: String? = null): String {
+    fun createSimple(
+        userInput: String,
+        aiName: String = "AILive",
+        locationContext: String? = null
+    ): String {
         return buildString {
-            append(CORE_PERSONALITY)
+            append(getCorePersonality(aiName))
             append("\n\n")
             append("CURRENT CONTEXT:\n")
             append(getCurrentTemporalContext())
@@ -255,7 +338,7 @@ Guidance: $guidance"""
                 append("\n")
             }
             append("\nUser: $userInput\n")
-            append("AILive: ")
+            append("$aiName: ")
         }
     }
 
@@ -264,11 +347,11 @@ Guidance: $guidance"""
      *
      * Includes system instruction for consistent behavior
      */
-    fun createGreeting(): String {
-        return """$CORE_PERSONALITY
+    fun createGreeting(aiName: String = "AILive"): String {
+        return """${getCorePersonality(aiName)}
 
 User: Hello
-AILive: """
+$aiName: """
     }
 
     /**
@@ -276,12 +359,16 @@ AILive: """
      *
      * Includes system instruction and error context
      */
-    fun createErrorRecovery(userInput: String, error: String): String {
-        return """$CORE_PERSONALITY
+    fun createErrorRecovery(
+        userInput: String,
+        aiName: String = "AILive",
+        error: String
+    ): String {
+        return """${getCorePersonality(aiName)}
 
 ERROR CONTEXT: $error
 
 User: $userInput
-AILive: """
+$aiName: """
     }
 }

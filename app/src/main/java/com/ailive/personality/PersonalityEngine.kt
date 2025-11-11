@@ -371,6 +371,7 @@ class PersonalityEngine(
         // Create optimized prompt (vision keywords removed)
         val prompt = UnifiedPrompt.create(
             userInput = input,
+            aiName = aiSettings.aiName,
             conversationHistory = conversationHistory.takeLast(10),
             toolContext = toolContext,
             emotionContext = currentEmotion,
