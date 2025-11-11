@@ -19,6 +19,7 @@ import com.ailive.personality.tools.SentimentAnalysisTool
 import com.ailive.personality.tools.DeviceControlTool
 import com.ailive.personality.tools.MemoryRetrievalTool
 import com.ailive.stats.StatisticsManager
+import com.ailive.memory.managers.UnifiedMemoryManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -47,6 +48,7 @@ class AILiveCore(
     // Context managers
     lateinit var locationManager: LocationManager  // GPS and geocoding
     lateinit var statisticsManager: StatisticsManager  // Usage statistics
+    lateinit var memoryManager: UnifiedMemoryManager  // Persistent memory system (v1.3)
 
     // Legacy agents (kept for backward compatibility during transition)
     private lateinit var motorAI: MotorAI
@@ -83,7 +85,18 @@ class AILiveCore(
             // Context managers
             locationManager = LocationManager(context)
             statisticsManager = StatisticsManager(context)
-            Log.i(TAG, "✓ Context managers initialized (location + statistics)")
+            memoryManager = UnifiedMemoryManager(context)
+            Log.i(TAG, "✓ Context managers initialized (location + statistics + memory)")
+
+            // Initialize memory system in background
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    memoryManager.initialize()
+                    Log.i(TAG, "✅ Memory system initialized")
+                } catch (e: Exception) {
+                    Log.e(TAG, "⚠️ Memory system initialization failed", e)
+                }
+            }
 
             // Initialize LLM in background (takes ~5-10 seconds)
             Log.i(TAG, "⏱️  Starting LLM initialization (5-10 seconds)...")
@@ -117,7 +130,8 @@ class AILiveCore(
                 messageBus = messageBus,
                 stateManager = stateManager,
                 llmManager = llmManager,
-                ttsManager = ttsManager
+                ttsManager = ttsManager,
+                memoryManager = memoryManager  // v1.3: Pass memory system
             )
 
             // Register tools with PersonalityEngine

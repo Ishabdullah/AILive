@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp") version "1.9.20-1.0.14"
 }
 
 android {
@@ -167,4 +168,9 @@ dependencies {
 
     // Phase 6.2: Data Visualization
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+
+    // Room Database for persistent memory (v1.3)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 }

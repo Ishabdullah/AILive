@@ -12,6 +12,7 @@ import com.ailive.personality.prompts.UnifiedPrompt
 import com.ailive.personality.tools.*
 import com.ailive.settings.AISettings
 import com.ailive.stats.StatisticsManager
+import com.ailive.memory.managers.UnifiedMemoryManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
@@ -45,7 +46,8 @@ class PersonalityEngine(
     private val messageBus: MessageBus,
     private val stateManager: StateManager,
     private val llmManager: LLMManager,
-    private val ttsManager: TTSManager
+    private val ttsManager: TTSManager,
+    private val memoryManager: UnifiedMemoryManager? = null  // v1.3: Persistent memory
 ) {
     private val TAG = "PersonalityEngine"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -199,7 +201,7 @@ class PersonalityEngine(
      * Generate streaming response with full context awareness
      *
      * This method creates a proper UnifiedPrompt with AI name, temporal context,
-     * location context, and conversation history before streaming to the LLM.
+     * location context, conversation history, and persistent memory before streaming to the LLM.
      *
      * Use this instead of calling llmManager.generateStreaming() directly!
      */
@@ -222,18 +224,48 @@ class PersonalityEngine(
                 null
             }
 
+            // Get memory context if available
+            val memoryContext = memoryManager?.let {
+                withContext(Dispatchers.IO) {
+                    try {
+                        it.generateContextForPrompt(
+                            userInput = input,
+                            includeProfile = true,
+                            includeRecentContext = true,
+                            includeFacts = true,
+                            maxContextLength = 800  // Keep under 1000 chars to avoid bloating prompt
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to generate memory context: ${e.message}")
+                        null
+                    }
+                }
+            }
+
+            if (memoryContext != null) {
+                Log.d(TAG, "✓ Generated memory context: ${memoryContext.length} chars")
+            }
+
             // Create optimized prompt with ALL context:
             // - AI custom name
             // - Current date and time (temporal awareness)
             // - GPS location (if enabled)
             // - Conversation history
+            // - Persistent memory (profile + facts + recent context)
             Log.d(TAG, "Building prompt with AI name='${aiSettings.aiName}'")
+
+            // Include memory context in tool context if available
+            val toolContext = if (memoryContext != null && memoryContext.isNotBlank()) {
+                mapOf("memory" to memoryContext)
+            } else {
+                emptyMap()
+            }
 
             val prompt = UnifiedPrompt.create(
                 userInput = input,
                 aiName = aiSettings.aiName,
                 conversationHistory = conversationHistory.takeLast(10),
-                toolContext = emptyMap(),  // No tool context for simple streaming
+                toolContext = toolContext,  // Include memory context
                 emotionContext = currentEmotion,
                 locationContext = locationContext
             )
@@ -565,6 +597,21 @@ class PersonalityEngine(
         // Keep only recent history
         if (conversationHistory.size > maxHistorySize) {
             conversationHistory.removeAt(0)
+        }
+
+        // Record in persistent memory system (v1.3)
+        memoryManager?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    it.recordConversationTurn(
+                        role = if (turn.role == Role.USER) "USER" else "ASSISTANT",
+                        content = turn.content
+                    )
+                    Log.d(TAG, "✓ Recorded ${turn.role} message in persistent memory")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to record ${turn.role} message in memory", e)
+                }
+            }
         }
     }
 

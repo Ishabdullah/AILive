@@ -5,6 +5,167 @@ All notable changes to AILive will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-11-11
+
+### Added - Persistent Memory System 🧠
+
+**Database Architecture 🗄️**
+- Room database with 4 core entities for comprehensive memory storage
+- ConversationEntity - Active conversation tracking with metadata
+- ConversationTurnEntity - Individual messages with foreign key relationships
+- LongTermFactEntity - Important facts with 12 categories (PERSONAL_INFO, PREFERENCES, RELATIONSHIPS, GOALS, HABITS, EVENTS, SKILLS, INTERESTS, LOCATION, WORK, HEALTH, OTHER)
+- UserProfileEntity - Singleton user profile with comprehensive fields
+- Type converters (Converters.kt) for complex types: List<String>, List<Float>, Map<String, String>, FactCategory
+- Foreign key relationships with cascade deletes for data integrity
+- Index optimization for fast queries on category, importance, timestamp
+
+**Memory Managers 🧠**
+- ConversationMemoryManager.kt (290+ lines) - Working memory management
+  - Start/resume conversations with auto-generated titles
+  - Track active conversations with bookmarking support
+  - Auto-archive conversations after 30 days
+  - Delete old conversations after 90 days
+  - Search conversations and messages
+  - Current conversation tracking via SharedPreferences
+- LongTermMemoryManager.kt (360+ lines) - Fact extraction and storage
+  - Auto-extract facts from conversations using pattern matching
+  - Detect names, preferences, goals, relationships from natural language
+  - Importance calculation (category-based + content-based)
+  - Fact verification tracking (confidence + verification count)
+  - Duplicate detection with similarity threshold
+  - Cleanup old low-importance facts (180 days)
+  - Statistics aggregation by category
+- UserProfileManager.kt (480+ lines) - User profile management
+  - Personal info: name, nickname, birthday, age, gender, location
+  - Preferences: favorite colors, foods, music, movies, sports teams, hobbies, interests
+  - Relationships: family members, friends, pets (with Map storage)
+  - Work & Education: occupation, company, education, skills
+  - Goals & Projects: current goals, active projects, achievements
+  - Communication preferences: style, preferred topics, avoid topics
+  - Profile completeness calculation (dynamic based on filled fields)
+  - Profile summary generation for AI context
+- UnifiedMemoryManager.kt (280+ lines) - Central orchestration
+  - Coordinates all memory managers
+  - Records conversation turns automatically
+  - Generates context for AI prompts (profile + recent + facts)
+  - Auto-extracts facts in background using coroutines
+  - Maintenance scheduling (archival, cleanup)
+  - Statistics aggregation across all memory types
+
+**Memory Layers 📚**
+- Working Memory - Current conversation (auto-archived after 30 days)
+- Short-term Memory - Last 7 days of conversations (searchable)
+- Long-term Memory - Important facts (importance-scored, 0.0-1.0)
+- User Profile - Personal data, preferences, relationships, goals
+
+**Intelligence Features 🤖**
+- Auto-learning from conversations (pattern-based fact extraction)
+  - Name detection: "My name is X", "Call me X", "I'm X"
+  - Preference detection: "I like/love/prefer X"
+  - Goal detection: "I want to X", "My goal is X"
+  - Relationship detection: "My [relation] is X"
+- Importance scoring system:
+  - PERSONAL_INFO: 0.9 base importance
+  - PREFERENCES: 0.6 base importance
+  - RELATIONSHIPS: 0.8 base importance
+  - GOALS: 0.7 base importance
+  - Content-based adjustments (length, specificity)
+- Fact verification tracking (confidence, verification count, last verified)
+- Automatic maintenance:
+  - Archive conversations older than 30 days
+  - Delete archived conversations older than 90 days
+  - Clean up low-importance facts (<0.3) older than 180 days
+  - Recalculate profile completeness
+- Profile completeness calculation (0.0-1.0 based on filled fields)
+
+**Integration ⚡**
+- AILiveCore.kt enhanced to initialize UnifiedMemoryManager
+- PersonalityEngine.kt integrated with memory system:
+  - Memory context included in all AI prompts
+  - Automatic conversation recording via addToHistory()
+  - generateStreamingResponse() includes memory context
+  - Memory context passed as tool context to UnifiedPrompt
+- Background coroutine processing for fact extraction
+- Non-blocking memory operations with error handling
+
+**Data Management 📊**
+- MemoryStatistics data class for system monitoring
+- Statistics aggregation: active conversations, total facts, average importance, profile completeness, facts by category
+- Time-based queries (last 7 days, 30 days, 90 days, 180 days)
+- Conversation bookmarking for important discussions
+- Profile summary generation (formatted text for AI context)
+- Search functionality across conversations, messages, and facts
+
+**Database Details**
+- Database name: ailive_memory_db
+- Version: 1
+- Export schema: true
+- Fallback to destructive migration (development mode)
+- In-memory database support for testing
+- Singleton pattern with thread-safe access
+- DAO interfaces with suspend functions and Flow support
+
+### Changed
+- build.gradle.kts updated with Room dependencies:
+  - androidx.room:room-runtime:2.6.1
+  - androidx.room:room-ktx:2.6.1
+  - androidx.room:room-compiler:2.6.1 (KSP)
+- AILiveCore.kt now initializes memoryManager alongside locationManager and statisticsManager
+- PersonalityEngine.kt constructor accepts optional UnifiedMemoryManager parameter
+- PersonalityEngine.addToHistory() now records to persistent memory automatically
+- PersonalityEngine.generateStreamingResponse() includes memory context in prompts
+- Context managers log includes memory: "location + statistics + memory"
+
+### Technical Details
+- **New Files:**
+  - MemoryDatabase.kt (77 lines) - Room database singleton
+  - Converters.kt (70 lines) - Type converters for complex types
+  - ConversationEntity.kt (45 lines) - Conversation metadata
+  - ConversationTurnEntity.kt (45 lines) - Individual messages
+  - LongTermFactEntity.kt (95 lines) - Fact storage with methods
+  - UserProfileEntity.kt (110 lines) - User profile with completeness
+  - ConversationDao.kt (125 lines) - Conversation queries
+  - LongTermFactDao.kt (155 lines) - Fact queries and statistics
+  - UserProfileDao.kt (95 lines) - Profile queries
+  - ConversationMemoryManager.kt (290 lines) - Working memory
+  - LongTermMemoryManager.kt (360 lines) - Fact extraction
+  - UserProfileManager.kt (480 lines) - Profile management
+  - UnifiedMemoryManager.kt (280 lines) - Central orchestration
+  - Total: ~2,230 lines of memory system code
+- **Enhanced Files:**
+  - AILiveCore.kt - Memory manager initialization
+  - PersonalityEngine.kt - Memory integration in prompts and history
+- **Dependencies:**
+  - Room 2.6.1 for SQL database with Kotlin coroutines support
+  - KSP 1.9.20-1.0.14 for annotation processing
+- **Performance:**
+  - Background coroutines for fact extraction (non-blocking)
+  - 5-minute location caching (from v1.2) + memory context caching
+  - Memory context generation: ~800 chars max to avoid prompt bloat
+  - Efficient queries with Room indexes and foreign keys
+  - Statistics tracking has negligible performance cost
+
+### Security & Privacy
+- All memory stored in app-private Room database
+- Database deleted on app uninstall
+- No cloud sync or external access
+- User profile is opt-in (auto-populated from conversations)
+- Memory context only included in prompts, never transmitted externally
+
+### Documentation
+- README.md updated with comprehensive v1.3 section
+- Version status updated: v1.3 (Production) - Persistent Memory Complete
+- Version timeline updated with v1.3 release date
+- Quick Stats updated with new features
+- CHANGELOG.md updated with v1.3 release notes
+
+### Future Enhancements (v1.4)
+- Memory Management UI (view, edit, delete memories)
+- Vector similarity search using embedding fields
+- Advanced semantic search with ML embeddings
+- Privacy controls and data export
+- Memory visualization in dashboard
+
 ## [1.2.0] - 2025-11-11
 
 ### Added - Personalization & Context Awareness ✨
