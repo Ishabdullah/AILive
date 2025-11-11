@@ -110,11 +110,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - androidx.room:room-runtime:2.6.1
   - androidx.room:room-ktx:2.6.1
   - androidx.room:room-compiler:2.6.1 (KSP)
+  - KSP plugin upgraded to 2.0.0-1.0.21 (compatible with Kotlin 2.0.0)
 - AILiveCore.kt now initializes memoryManager alongside locationManager and statisticsManager
 - PersonalityEngine.kt constructor accepts optional UnifiedMemoryManager parameter
 - PersonalityEngine.addToHistory() now records to persistent memory automatically
 - PersonalityEngine.generateStreamingResponse() includes memory context in prompts
 - Context managers log includes memory: "location + statistics + memory"
+
+### Fixed
+- **Build Issue**: KSP version incompatibility with Kotlin 2.0.0
+  - Upgraded KSP from 1.9.20-1.0.14 to 2.0.0-1.0.21
+  - Resolved KspTaskJvm.getChangedFiles() compilation errors
+  - Build now succeeds with Kotlin 2.0.0 and Room annotation processing
 
 ### Technical Details
 - **New Files:**
