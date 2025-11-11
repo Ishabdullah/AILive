@@ -7,8 +7,11 @@ import com.ailive.audio.TTSManager
 import com.ailive.core.messaging.*
 import com.ailive.core.state.StateManager
 import com.ailive.core.types.AgentType
+import com.ailive.location.LocationManager
 import com.ailive.personality.prompts.UnifiedPrompt
 import com.ailive.personality.tools.*
+import com.ailive.settings.AISettings
+import com.ailive.stats.StatisticsManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
 import java.util.UUID
@@ -48,6 +51,11 @@ class PersonalityEngine(
 
     // Tool registry
     private val toolRegistry = ToolRegistry()
+
+    // Context managers (lazy initialization)
+    private val locationManager by lazy { LocationManager(context) }
+    private val statisticsManager by lazy { StatisticsManager(context) }
+    private val aiSettings by lazy { AISettings(context) }
 
     // Conversation context
     private val conversationHistory = mutableListOf<ConversationTurn>()
@@ -340,6 +348,18 @@ class PersonalityEngine(
         // Build context from tool results
         val toolContext = buildToolContext(toolResults)
 
+        // Get location context if enabled
+        val locationContext = if (aiSettings.locationAwarenessEnabled) {
+            withContext(Dispatchers.IO) {
+                try {
+                    locationManager.getLocationContext(forceRefresh = false)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to get location context: ${e.message}")
+                    null
+                }
+            }
+        } else null
+
         // PHASE 4 OPTIMIZATION: LLM re-enabled with improvements
         // - Fixed prompt bias (removed vision keyword issue)
         // - NNAPI GPU acceleration enabled
@@ -353,14 +373,18 @@ class PersonalityEngine(
             userInput = input,
             conversationHistory = conversationHistory.takeLast(10),
             toolContext = toolContext,
-            emotionContext = currentEmotion
+            emotionContext = currentEmotion,
+            locationContext = locationContext
         )
 
         // Generate response with LLM (with fallback)
         val responseText = try {
             val startTime = System.currentTimeMillis()
-            val llmResponse = llmManager.generate(prompt, agentName = "AILive")
+            val llmResponse = llmManager.generate(prompt, agentName = aiSettings.aiName)
             val duration = System.currentTimeMillis() - startTime
+
+            // Track statistics
+            statisticsManager.recordResponseTime(duration)
 
             Log.i(TAG, "✨ LLM generated response in ${duration}ms")
 

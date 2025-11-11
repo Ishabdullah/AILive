@@ -5,6 +5,110 @@ All notable changes to AILive will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-11-11
+
+### Added - Personalization & Context Awareness ✨
+
+**Custom AI Name ✏️**
+- First-run setup dialog for naming your AI assistant
+- Persistent name storage across sessions via AISettings.kt
+- Automatic wake phrase generation ("Hey [YourAI]")
+- Name used throughout UI and all system prompts
+- ModelSetupDialog.kt enhanced with name customization flow
+
+**Temporal Awareness ⏱️**
+- Real-time date and time awareness in all AI interactions
+- UnifiedPrompt.kt provides temporal context automatically
+- Format: "Current Time: 3:45 PM on Tuesday, November 11, 2025"
+- Contextual time understanding for scheduling and time-based queries
+
+**GPS/Location Awareness 📍**
+- LocationManager.kt - New location tracking system (230+ lines)
+- Real-time GPS via FusedLocationProviderClient
+- Reverse geocoding (GPS coordinates → City, State, Country)
+- 5-minute location caching for battery efficiency
+- Privacy-respecting toggle in settings (opt-in)
+- Format: "You're currently in New York, NY, United States"
+- Integrated into PersonalityEngine for location-aware responses
+
+**Working Statistics 📊**
+- StatisticsManager.kt - New usage tracking system (180+ lines)
+- Track total conversations, messages, tokens processed
+- Average response time tracking (lifetime + recent 50)
+- Real-time memory usage monitoring
+- Session-level statistics with reset capability
+- Persistent storage via SharedPreferences
+- Infrastructure ready for dashboard visualization
+
+**Real-Time Streaming Speech 🗣️**
+- Token-to-speech streaming with 300-500ms latency
+- TTSManager.kt enhanced with speakIncremental() method
+- Sentence buffering for natural speech flow in MainActivity.kt
+- Incremental TTS using QUEUE_ADD mode for seamless continuation
+- Configurable buffer delay (0.1-2.0 seconds) in settings
+- Toggle in settings to enable/disable streaming speech
+- Smart sentence detection (periods, exclamation marks, question marks)
+
+**System Improvements**
+- AILive Unified Directive - Comprehensive system instruction (84 lines)
+  - Self-awareness of role and capabilities
+  - Safety and stop control mechanisms
+  - Autonomy discipline and response standards
+  - Response control module to prevent rambling
+- Fixed model loading failures by switching to app-private storage
+- Permission flow optimized - requests BEFORE model operations
+- Settings button moved to left side for better UX
+- Enhanced MainActivity permission handling with buildPermissionList()
+
+### Changed
+- UnifiedPrompt.kt now includes temporal and location context in all prompts
+- PersonalityEngine.kt integrated with LocationManager, StatisticsManager, AISettings
+- MainActivity.kt refactored permission flow for better user experience
+- Model storage migrated to app-private external storage (all Android versions)
+- activity_model_settings.xml updated with streaming speech and location toggles
+- ModelSettingsActivity.kt wired to new settings (streaming + location)
+
+### Fixed
+- **Critical:** ModelDownloadManager.kt infinite recursion bug (line 106)
+  - Was calling getModelsDir() from within itself on Android 12-
+  - Fixed by using proper Environment.getExternalStoragePublicDirectory()
+- **Critical:** Model loading failures with llama.cpp
+  - Root cause: Models in public Downloads couldn't be accessed by native code
+  - Solution: ALL Android versions now use app-private storage
+  - Models stored in getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+  - Compatible with scoped storage AND llama.cpp file access
+- Permission request timing - now happens before model setup, not after
+
+### Security
+- Models now stored in app-private storage for better security
+- Location sharing is opt-in, disabled by default
+- Permissions properly scoped and requested at appropriate times
+
+### Documentation
+- README.md updated to reflect v1.2 features and status
+- CHANGELOG.md updated with comprehensive v1.2 release notes
+- Updated version timeline (v1.2 Complete, v1.3 In Progress)
+- Quick Stats updated with new feature highlights
+
+### Technical Details
+- **New Files:**
+  - LocationManager.kt (230+ lines) - GPS and reverse geocoding
+  - StatisticsManager.kt (180+ lines) - Usage tracking and analytics
+- **Enhanced Files:**
+  - UnifiedPrompt.kt - Temporal context, location integration
+  - PersonalityEngine.kt - Context manager integration
+  - TTSManager.kt - Streaming speech support
+  - MainActivity.kt - Permission flow, streaming TTS buffering
+  - AISettings.kt - New settings (streaming, location, buffer delay)
+  - ModelDownloadManager.kt - Fixed storage path logic
+- **Dependencies:**
+  - Google Play Services Location for FusedLocationProviderClient
+  - Android Geocoder API for reverse geocoding
+- **Performance:**
+  - Location caching reduces battery impact
+  - Streaming speech adds <100ms overhead
+  - Statistics tracking has negligible performance cost
+
 ## [0.5.1] - 2025-10-29
 
 ### Added - Manual Control UI for Testing & Debugging 🎛️
