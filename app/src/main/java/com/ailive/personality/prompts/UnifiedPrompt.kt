@@ -3,6 +3,8 @@ package com.ailive.personality.prompts
 import com.ailive.personality.ConversationTurn
 import com.ailive.personality.EmotionContext
 import com.ailive.personality.Role
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
  * UnifiedPrompt - System prompt for PersonalityEngine
@@ -82,6 +84,21 @@ Operational motto:
 END OF UNIFIED DIRECTIVE"""
 
     /**
+     * Get current temporal context (date/time)
+     */
+    private fun getCurrentTemporalContext(): String {
+        val now = Calendar.getInstance()
+        val dateFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US)
+        val timeFormat = SimpleDateFormat("h:mm a", Locale.US)
+
+        val dayOfWeek = SimpleDateFormat("EEEE", Locale.US).format(now.time)
+        val date = dateFormat.format(now.time)
+        val time = timeFormat.format(now.time)
+
+        return "Current Time: $time on $date"
+    }
+
+    /**
      * Create a complete prompt with context
      *
      * Includes AILive Unified Directive as system instruction
@@ -91,7 +108,8 @@ END OF UNIFIED DIRECTIVE"""
         userInput: String,
         conversationHistory: List<ConversationTurn> = emptyList(),
         toolContext: Map<String, Any> = emptyMap(),
-        emotionContext: EmotionContext = EmotionContext()
+        emotionContext: EmotionContext = EmotionContext(),
+        locationContext: String? = null
     ): String {
         // Build prompt with system instruction and user input
         val promptBuilder = StringBuilder()
@@ -99,6 +117,16 @@ END OF UNIFIED DIRECTIVE"""
         // Add system instruction
         promptBuilder.append(CORE_PERSONALITY)
         promptBuilder.append("\n\n")
+
+        // Add temporal and location awareness
+        promptBuilder.append("CURRENT CONTEXT:\n")
+        promptBuilder.append(getCurrentTemporalContext())
+        promptBuilder.append("\n")
+        if (locationContext != null) {
+            promptBuilder.append(locationContext)
+            promptBuilder.append("\n")
+        }
+        promptBuilder.append("\n")
 
         // Add conversation history if available
         if (conversationHistory.isNotEmpty()) {
@@ -117,7 +145,7 @@ END OF UNIFIED DIRECTIVE"""
         if (toolContext.isNotEmpty()) {
             val contextStr = formatToolContext(toolContext)
             if (contextStr.isNotBlank()) {
-                promptBuilder.append("CONTEXT:\n")
+                promptBuilder.append("ADDITIONAL CONTEXT:\n")
                 promptBuilder.append(contextStr)
                 promptBuilder.append("\n\n")
             }
@@ -215,11 +243,20 @@ Guidance: $guidance"""
      *
      * Includes system instruction with user input
      */
-    fun createSimple(userInput: String): String {
-        return """$CORE_PERSONALITY
-
-User: $userInput
-AILive: """
+    fun createSimple(userInput: String, locationContext: String? = null): String {
+        return buildString {
+            append(CORE_PERSONALITY)
+            append("\n\n")
+            append("CURRENT CONTEXT:\n")
+            append(getCurrentTemporalContext())
+            append("\n")
+            if (locationContext != null) {
+                append(locationContext)
+                append("\n")
+            }
+            append("\nUser: $userInput\n")
+            append("AILive: ")
+        }
     }
 
     /**

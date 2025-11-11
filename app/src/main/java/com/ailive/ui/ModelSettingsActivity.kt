@@ -52,6 +52,7 @@ class ModelSettingsActivity : AppCompatActivity() {
     private lateinit var sliderMaxTokens: SeekBar
     private lateinit var spinnerMirostat: Spinner
     private lateinit var switchStreamingSpeech: SwitchCompat
+    private lateinit var switchLocationAwareness: SwitchCompat
 
     private lateinit var btnSave: Button
     private lateinit var btnReset: Button
@@ -108,6 +109,9 @@ class ModelSettingsActivity : AppCompatActivity() {
 
         // Streaming speech switch
         switchStreamingSpeech = findViewById(R.id.switchStreamingSpeech)
+
+        // Location awareness switch
+        switchLocationAwareness = findViewById(R.id.switchLocationAwareness)
 
         // Buttons
         btnSave = findViewById(R.id.btnSave)
@@ -241,6 +245,16 @@ class ModelSettingsActivity : AppCompatActivity() {
                 Toast.LENGTH_SHORT
             ).show()
         }
+
+        // Location awareness toggle
+        switchLocationAwareness.setOnCheckedChangeListener { _, isChecked ->
+            aiSettings.locationAwarenessEnabled = isChecked
+            Toast.makeText(
+                this,
+                "Location awareness ${if (isChecked) "enabled" else "disabled"}",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     private fun updateUI() {
@@ -255,6 +269,7 @@ class ModelSettingsActivity : AppCompatActivity() {
         sliderMaxTokens.progress = getSliderFromMaxTokens(settings.maxTokens)
         spinnerMirostat.setSelection(settings.mirostat)
         switchStreamingSpeech.isChecked = aiSettings.streamingSpeechEnabled
+        switchLocationAwareness.isChecked = aiSettings.locationAwarenessEnabled
 
         // Update labels
         labelTemperature.text = "Temperature: ${String.format("%.2f", settings.temperature)}"

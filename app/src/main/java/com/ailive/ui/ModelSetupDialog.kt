@@ -9,12 +9,14 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
+import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import com.ailive.R
 import com.ailive.ai.llm.ModelDownloadManager
+import com.ailive.settings.AISettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -46,6 +48,7 @@ class ModelSetupDialog(
     }
 
     private val prefs = activity.getSharedPreferences(PREF_NAME, Activity.MODE_PRIVATE)
+    private val aiSettings = AISettings(activity)
     private var downloadDialog: AlertDialog? = null
     private var progressHandler: Handler? = null
     private var isProcessingDownload = false  // Track if we're in file-move phase
@@ -66,6 +69,39 @@ class ModelSetupDialog(
         }
 
         return !modelAvailable  // Only need setup if NO models at all
+    }
+
+    /**
+     * Show AI name customization dialog (first-run)
+     */
+    fun showNameSetupDialog(onComplete: () -> Unit) {
+        val input = EditText(activity).apply {
+            hint = "Enter AI name (e.g., Jarvis, Friday, etc.)"
+            setText(aiSettings.aiName)
+            setSingleLine()
+        }
+
+        AlertDialog.Builder(activity)
+            .setTitle("✏️ Customize Your AI")
+            .setMessage("What would you like to name your AI assistant?")
+            .setView(input)
+            .setPositiveButton("Continue") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    aiSettings.aiName = name
+                    aiSettings.wakePhrase = "Hey $name"
+                    Log.i(TAG, "AI name set to: $name")
+                    Toast.makeText(activity, "AI named: $name", Toast.LENGTH_SHORT).show()
+                }
+                // Proceed to model setup
+                showFirstRunDialog(onComplete)
+            }
+            .setNegativeButton("Skip") { _, _ ->
+                // Use default name
+                showFirstRunDialog(onComplete)
+            }
+            .setCancelable(false)
+            .show()
     }
 
     /**
