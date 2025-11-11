@@ -125,12 +125,12 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "✗ One or more permissions denied: $results")
                 runOnUiThread {
                     statusIndicator?.text = "● PERMISSION DENIED"
-                    classificationResult?.text = "Camera and microphone permissions required"
+                    classificationResult?.text = "Permissions required for full functionality"
 
                     // Show explanation dialog with option to open settings
                     AlertDialog.Builder(this)
                         .setTitle("Permissions Required")
-                        .setMessage("AILive requires camera and microphone permissions to function. Storage permissions are needed to import custom models.\n\nPlease grant these permissions in Settings to continue.")
+                        .setMessage("AILive needs:\n• Camera & Microphone - for voice/video interaction\n• Location - for contextual awareness\n• Storage - to import custom models\n\nPlease grant these permissions to continue.")
                         .setPositiveButton("Open Settings") { _, _ ->
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.fromParts("package", packageName, null)
@@ -242,7 +242,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             Log.i(TAG, "Requesting permissions: $missing")
             statusIndicator.text = "● REQUESTING PERMISSIONS..."
-            classificationResult.text = "Please allow camera and microphone access (storage for importing custom models)"
+            classificationResult.text = "Please allow camera, microphone, location, and storage access"
             // Launch modern permission flow
             permissionLauncher.launch(missing.toTypedArray())
         }
