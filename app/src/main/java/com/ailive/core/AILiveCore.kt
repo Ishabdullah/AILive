@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import com.ailive.motor.MotorAI
 import com.ailive.emotion.EmotionAI
+import com.ailive.location.LocationManager
 import com.ailive.memory.MemoryAI
 import com.ailive.predictive.PredictiveAI
 import com.ailive.reward.RewardAI
@@ -17,6 +18,7 @@ import com.ailive.personality.PersonalityEngine
 import com.ailive.personality.tools.SentimentAnalysisTool
 import com.ailive.personality.tools.DeviceControlTool
 import com.ailive.personality.tools.MemoryRetrievalTool
+import com.ailive.stats.StatisticsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +43,10 @@ class AILiveCore(
 
     // NEW: PersonalityEngine for unified intelligence
     lateinit var personalityEngine: PersonalityEngine  // Public for CommandRouter
+
+    // Context managers
+    lateinit var locationManager: LocationManager  // GPS and geocoding
+    lateinit var statisticsManager: StatisticsManager  // Usage statistics
 
     // Legacy agents (kept for backward compatibility during transition)
     private lateinit var motorAI: MotorAI
@@ -73,6 +79,11 @@ class AILiveCore(
             stateManager = StateManager()
             ttsManager = TTSManager(context)
             llmManager = LLMManager(context)
+
+            // Context managers
+            locationManager = LocationManager(context)
+            statisticsManager = StatisticsManager(context)
+            Log.i(TAG, "✓ Context managers initialized (location + statistics)")
 
             // Initialize LLM in background (takes ~5-10 seconds)
             Log.i(TAG, "⏱️  Starting LLM initialization (5-10 seconds)...")

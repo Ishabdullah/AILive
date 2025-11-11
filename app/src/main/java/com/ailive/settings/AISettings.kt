@@ -69,6 +69,14 @@ class AISettings(context: Context) {
             Log.i(TAG, "Speech buffer delay set to: ${clamped}s")
         }
 
+    // Location Awareness - Provide location context to AI
+    var locationAwarenessEnabled: Boolean
+        get() = prefs.getBoolean("location_awareness_enabled", false)  // Disabled by default
+        set(value) {
+            prefs.edit().putBoolean("location_awareness_enabled", value).apply()
+            Log.i(TAG, "Location awareness ${if (value) "enabled" else "disabled"}")
+        }
+
     fun clear() {
         prefs.edit().clear().apply()
         Log.i(TAG, "Settings cleared")

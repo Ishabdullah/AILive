@@ -255,16 +255,17 @@ class MainActivity : AppCompatActivity() {
         // If model setup required, show dialog and defer init
         if (modelSetupDialog.isSetupNeeded()) {
             Log.i(TAG, "Model setup needed - showing dialog")
-            statusIndicator.text = "● MODEL SETUP REQUIRED"
-            classificationResult.text = "Please download or import an AI model"
+            statusIndicator.text = "● SETUP REQUIRED"
+            classificationResult.text = "Let's set up your AI assistant!"
 
             filePickerOnComplete = {
                 Log.i(TAG, "Model setup complete, continuing initialization")
                 continueInitialization()
             }
 
-            modelSetupDialog.showFirstRunDialog {
-                Log.i(TAG, "Model setup complete, continuing initialization")
+            // Show AI name customization first, then model setup
+            modelSetupDialog.showNameSetupDialog {
+                Log.i(TAG, "Setup complete, continuing initialization")
                 continueInitialization()
             }
             // stop further initialization until user completes model setup
