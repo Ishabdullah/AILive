@@ -747,7 +747,8 @@ class MainActivity : AppCompatActivity() {
                 val startTime = System.currentTimeMillis()
                 val streamingSpeechEnabled = settings.streamingSpeechEnabled
 
-                aiLiveCore.llmManager.generateStreaming(command, agentName = "AILive")
+                // Use PersonalityEngine for proper context (name, time, location)
+                aiLiveCore.personalityEngine.generateStreamingResponse(command)
                     .collect { token ->
                         tokenCount++
                         responseBuilder.append(token)
@@ -814,6 +815,25 @@ class MainActivity : AppCompatActivity() {
                     btnCancelGeneration.visibility = View.GONE
                     btnSendCommand.isEnabled = true
                     Log.i(TAG, "✅ Streaming complete: $tokenCount tokens in ${totalTime}ms")
+
+                    // Add to conversation history for PersonalityEngine
+                    if (::aiLiveCore.isInitialized) {
+                        aiLiveCore.personalityEngine.addToHistory(
+                            com.ailive.personality.ConversationTurn(
+                                role = com.ailive.personality.Role.USER,
+                                content = command,
+                                timestamp = startTime
+                            )
+                        )
+                        aiLiveCore.personalityEngine.addToHistory(
+                            com.ailive.personality.ConversationTurn(
+                                role = com.ailive.personality.Role.ASSISTANT,
+                                content = responseBuilder.toString(),
+                                timestamp = System.currentTimeMillis()
+                            )
+                        )
+                        Log.d(TAG, "📝 Added conversation to history")
+                    }
 
                     // Speak any remaining buffered text
                     if (streamingSpeechEnabled && ::aiLiveCore.isInitialized && sentenceBuffer.isNotEmpty()) {
