@@ -86,25 +86,17 @@ class ModelDownloadManager(private val context: Context) {
     /**
      * Get the directory where model files are stored.
      *
-     * Android 13+ (API 33+): App-private external storage (no permissions needed)
+     * ALL Android versions: App-private external storage (no permissions needed)
      *   Path: /Android/data/com.ailive/files/Download/
      *   Files deleted when app uninstalled
-     *
-     * Android 12- (API 32-): Public Downloads folder (requires READ_EXTERNAL_STORAGE)
-     *   Path: /storage/emulated/0/Download/
-     *   Files persist after app uninstall
+     *   REASON: llama.cpp native code needs direct file access which doesn't
+     *           work reliably with public Downloads on Android 12-
      */
     private fun getModelsDir(): File {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: Use app-private external storage (scoped storage compliant)
-            val appPrivateDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            appPrivateDir ?: context.filesDir.also {
-                Log.w(TAG, "⚠️ External storage not available, using internal storage")
-            }
-        } else {
-            // Android 12-: Use public Downloads (legacy behavior)
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        }.also { dir ->
+        // Use app-private external storage for ALL Android versions
+        // This ensures llama.cpp can always load model files
+        val appPrivateDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        return (appPrivateDir ?: context.filesDir).also { dir ->
             if (!dir.exists()) {
                 dir.mkdirs()
                 Log.i(TAG, "📁 Created models directory: ${dir.absolutePath}")
@@ -302,20 +294,14 @@ class ModelDownloadManager(private val context: Context) {
                 )
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
 
-            // Set download destination based on Android version
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // Android 13+: Download to app-private external storage (no permissions needed)
-                request.setDestinationInExternalFilesDir(
-                    context,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    modelName
-                )
-                Log.i(TAG, "📁 Download destination: App-private storage (Android 13+)")
-            } else {
-                // Android 12-: Download to public Downloads folder (requires permission)
-                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, modelName)
-                Log.i(TAG, "📁 Download destination: Public Downloads (Android 12-)")
-            }
+            // Download to app-private external storage for ALL Android versions
+            // This ensures llama.cpp can always access the model files
+            request.setDestinationInExternalFilesDir(
+                context,
+                Environment.DIRECTORY_DOWNLOADS,
+                modelName
+            )
+            Log.i(TAG, "📁 Download destination: App-private storage")
 
             downloadId = downloadManager.enqueue(request)
             Log.i(TAG, "✅ Download queued with ID: $downloadId")
