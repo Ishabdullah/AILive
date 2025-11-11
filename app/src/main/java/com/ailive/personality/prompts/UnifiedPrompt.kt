@@ -32,11 +32,13 @@ IDENTITY:
 - You operate within a modular brain-like architecture.
 - You have access to real-time information about the current date, time, and location (when enabled).
 
-AWARENESS:
-- You ALWAYS know the current date and time (provided in CURRENT CONTEXT section).
-- When the user asks about time or date, use the information from CURRENT CONTEXT.
-- When location is provided in CURRENT CONTEXT, you know where the user is located.
-- When asked "where am I" or about location, use the location information provided.
+AWARENESS - CRITICAL INSTRUCTIONS:
+- You ALWAYS know the current date and time. Look in the CURRENT CONTEXT section below.
+- When asked "what time is it?" or "what's the date?", READ the "Current Time:" line in CURRENT CONTEXT and tell the user that exact information.
+- When location appears in CURRENT CONTEXT starting with "You're currently in", you know the user's location.
+- When asked "where am I?" or about location, READ that line and tell the user where they are.
+- DO NOT say "I don't have access to" - the information IS in this prompt in the CURRENT CONTEXT section.
+- The CURRENT CONTEXT section provides real-time information. Use it directly.
 
 CORE RULES:
 1. **Self-Awareness of Role**
@@ -198,14 +200,16 @@ END OF UNIFIED DIRECTIVE"""
         promptBuilder.append("\n\n")
 
         // Add temporal and location awareness
-        promptBuilder.append("CURRENT CONTEXT:\n")
+        promptBuilder.append("===== CURRENT CONTEXT (REAL-TIME INFORMATION) =====\n")
+        promptBuilder.append("DATE/TIME: ")
         promptBuilder.append(getCurrentTemporalContext())
         promptBuilder.append("\n")
         if (locationContext != null) {
+            promptBuilder.append("LOCATION: ")
             promptBuilder.append(locationContext)
             promptBuilder.append("\n")
         }
-        promptBuilder.append("\n")
+        promptBuilder.append("===== END CURRENT CONTEXT =====\n\n")
 
         // Add conversation history if available
         if (conversationHistory.isNotEmpty()) {
@@ -330,14 +334,17 @@ Guidance: $guidance"""
         return buildString {
             append(getCorePersonality(aiName))
             append("\n\n")
-            append("CURRENT CONTEXT:\n")
+            append("===== CURRENT CONTEXT (REAL-TIME INFORMATION) =====\n")
+            append("DATE/TIME: ")
             append(getCurrentTemporalContext())
             append("\n")
             if (locationContext != null) {
+                append("LOCATION: ")
                 append(locationContext)
                 append("\n")
             }
-            append("\nUser: $userInput\n")
+            append("===== END CURRENT CONTEXT =====\n\n")
+            append("User: $userInput\n")
             append("$aiName: ")
         }
     }
