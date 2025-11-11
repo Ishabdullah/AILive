@@ -13,6 +13,7 @@ import com.ailive.personality.tools.*
 import com.ailive.settings.AISettings
 import com.ailive.stats.StatisticsManager
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import java.util.UUID
 
@@ -192,6 +193,49 @@ class PersonalityEngine(
             speakResponse(errorResponse)
             errorResponse
         }
+    }
+
+    /**
+     * Generate streaming response with full context awareness
+     *
+     * This method creates a proper UnifiedPrompt with AI name, temporal context,
+     * location context, and conversation history before streaming to the LLM.
+     *
+     * Use this instead of calling llmManager.generateStreaming() directly!
+     */
+    suspend fun generateStreamingResponse(input: String): Flow<String> {
+        Log.d(TAG, "Generating streaming response with full context for: ${input.take(50)}...")
+
+        // Get location context if enabled
+        val locationContext = if (aiSettings.locationAwarenessEnabled) {
+            withContext(Dispatchers.IO) {
+                try {
+                    locationManager.getLocationContext(forceRefresh = false)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to get location context: ${e.message}")
+                    null
+                }
+            }
+        } else null
+
+        // Create optimized prompt with ALL context:
+        // - AI custom name
+        // - Current date and time (temporal awareness)
+        // - GPS location (if enabled)
+        // - Conversation history
+        val prompt = UnifiedPrompt.create(
+            userInput = input,
+            aiName = aiSettings.aiName,
+            conversationHistory = conversationHistory.takeLast(10),
+            toolContext = emptyMap(),  // No tool context for simple streaming
+            emotionContext = currentEmotion,
+            locationContext = locationContext
+        )
+
+        Log.d(TAG, "✅ Created full prompt with AI name='${aiSettings.aiName}', temporal context, location context")
+
+        // Stream with the FULL PROMPT (not just raw input!)
+        return llmManager.generateStreaming(prompt, agentName = aiSettings.aiName)
     }
 
     /**
@@ -490,7 +534,7 @@ class PersonalityEngine(
     /**
      * Add turn to conversation history
      */
-    private fun addToHistory(turn: ConversationTurn) {
+    fun addToHistory(turn: ConversationTurn) {
         conversationHistory.add(turn)
 
         // Keep only recent history
