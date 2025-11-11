@@ -206,36 +206,61 @@ class PersonalityEngine(
     suspend fun generateStreamingResponse(input: String): Flow<String> {
         Log.d(TAG, "Generating streaming response with full context for: ${input.take(50)}...")
 
-        // Get location context if enabled
-        val locationContext = if (aiSettings.locationAwarenessEnabled) {
-            withContext(Dispatchers.IO) {
-                try {
-                    locationManager.getLocationContext(forceRefresh = false)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to get location context: ${e.message}")
-                    null
+        try {
+            // Get location context if enabled
+            val locationContext = if (aiSettings.locationAwarenessEnabled) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        locationManager.getLocationContext(forceRefresh = false)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to get location context: ${e.message}")
+                        null
+                    }
                 }
+            } else {
+                Log.d(TAG, "Location awareness disabled")
+                null
             }
-        } else null
 
-        // Create optimized prompt with ALL context:
-        // - AI custom name
-        // - Current date and time (temporal awareness)
-        // - GPS location (if enabled)
-        // - Conversation history
-        val prompt = UnifiedPrompt.create(
-            userInput = input,
-            aiName = aiSettings.aiName,
-            conversationHistory = conversationHistory.takeLast(10),
-            toolContext = emptyMap(),  // No tool context for simple streaming
-            emotionContext = currentEmotion,
-            locationContext = locationContext
-        )
+            // Create optimized prompt with ALL context:
+            // - AI custom name
+            // - Current date and time (temporal awareness)
+            // - GPS location (if enabled)
+            // - Conversation history
+            Log.d(TAG, "Building prompt with AI name='${aiSettings.aiName}'")
 
-        Log.d(TAG, "✅ Created full prompt with AI name='${aiSettings.aiName}', temporal context, location context")
+            val prompt = UnifiedPrompt.create(
+                userInput = input,
+                aiName = aiSettings.aiName,
+                conversationHistory = conversationHistory.takeLast(10),
+                toolContext = emptyMap(),  // No tool context for simple streaming
+                emotionContext = currentEmotion,
+                locationContext = locationContext
+            )
 
-        // Stream with the FULL PROMPT (not just raw input!)
-        return llmManager.generateStreaming(prompt, agentName = aiSettings.aiName)
+            // Log prompt details for debugging
+            val promptLength = prompt.length
+            Log.i(TAG, "✅ Created full prompt: length=$promptLength chars")
+            Log.d(TAG, "Prompt preview (first 500 chars):")
+            Log.d(TAG, prompt.take(500))
+
+            if (promptLength > 10000) {
+                Log.w(TAG, "⚠️ Prompt is very long ($promptLength chars) - may exceed context window")
+            }
+
+            // Stream with the FULL PROMPT (not just raw input!)
+            Log.d(TAG, "Calling llmManager.generateStreaming()...")
+            return llmManager.generateStreaming(prompt, agentName = aiSettings.aiName)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error in generateStreamingResponse", e)
+            Log.e(TAG, "Exception type: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Exception message: ${e.message}")
+            e.printStackTrace()
+
+            // Return error message as a flow
+            return kotlinx.coroutines.flow.flowOf("I encountered an error: ${e.message}. Please try again.")
+        }
     }
 
     /**
