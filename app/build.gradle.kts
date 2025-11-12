@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp") version "2.0.0-1.0.21"
 }
 
 android {
@@ -162,6 +163,14 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
 
+    // Google Play Services Location for GPS and location awareness (v1.2)
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
     // Phase 6.2: Data Visualization
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+
+    // Room Database for persistent memory (v1.3)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 }

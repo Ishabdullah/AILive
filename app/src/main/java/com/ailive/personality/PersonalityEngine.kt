@@ -7,9 +7,14 @@ import com.ailive.audio.TTSManager
 import com.ailive.core.messaging.*
 import com.ailive.core.state.StateManager
 import com.ailive.core.types.AgentType
+import com.ailive.location.LocationManager
 import com.ailive.personality.prompts.UnifiedPrompt
 import com.ailive.personality.tools.*
+import com.ailive.settings.AISettings
+import com.ailive.stats.StatisticsManager
+import com.ailive.memory.managers.UnifiedMemoryManager
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import java.util.UUID
 
@@ -41,13 +46,19 @@ class PersonalityEngine(
     private val messageBus: MessageBus,
     private val stateManager: StateManager,
     private val llmManager: LLMManager,
-    private val ttsManager: TTSManager
+    private val ttsManager: TTSManager,
+    private val memoryManager: UnifiedMemoryManager? = null  // v1.3: Persistent memory
 ) {
     private val TAG = "PersonalityEngine"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     // Tool registry
     private val toolRegistry = ToolRegistry()
+
+    // Context managers (lazy initialization)
+    private val locationManager by lazy { LocationManager(context) }
+    private val statisticsManager by lazy { StatisticsManager(context) }
+    private val aiSettings by lazy { AISettings(context) }
 
     // Conversation context
     private val conversationHistory = mutableListOf<ConversationTurn>()
@@ -183,6 +194,104 @@ class PersonalityEngine(
 
             speakResponse(errorResponse)
             errorResponse
+        }
+    }
+
+    /**
+     * Generate streaming response with full context awareness
+     *
+     * This method creates a proper UnifiedPrompt with AI name, temporal context,
+     * location context, conversation history, and persistent memory before streaming to the LLM.
+     *
+     * Use this instead of calling llmManager.generateStreaming() directly!
+     */
+    suspend fun generateStreamingResponse(input: String): Flow<String> {
+        Log.d(TAG, "Generating streaming response with full context for: ${input.take(50)}...")
+
+        try {
+            // Get location context if enabled
+            val locationContext = if (aiSettings.locationAwarenessEnabled) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        locationManager.getLocationContext(forceRefresh = false)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to get location context: ${e.message}")
+                        null
+                    }
+                }
+            } else {
+                Log.d(TAG, "Location awareness disabled")
+                null
+            }
+
+            // Get memory context if available
+            val memoryContext = memoryManager?.let {
+                withContext(Dispatchers.IO) {
+                    try {
+                        it.generateContextForPrompt(
+                            userInput = input,
+                            includeProfile = true,
+                            includeRecentContext = true,
+                            includeFacts = true,
+                            maxContextLength = 800  // Keep under 1000 chars to avoid bloating prompt
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to generate memory context: ${e.message}")
+                        null
+                    }
+                }
+            }
+
+            if (memoryContext != null) {
+                Log.d(TAG, "✓ Generated memory context: ${memoryContext.length} chars")
+            }
+
+            // Create optimized prompt with ALL context:
+            // - AI custom name
+            // - Current date and time (temporal awareness)
+            // - GPS location (if enabled)
+            // - Conversation history
+            // - Persistent memory (profile + facts + recent context)
+            Log.d(TAG, "Building prompt with AI name='${aiSettings.aiName}'")
+
+            // Include memory context in tool context if available
+            val toolContext = if (memoryContext != null && memoryContext.isNotBlank()) {
+                mapOf("memory" to memoryContext)
+            } else {
+                emptyMap()
+            }
+
+            val prompt = UnifiedPrompt.create(
+                userInput = input,
+                aiName = aiSettings.aiName,
+                conversationHistory = conversationHistory.takeLast(10),
+                toolContext = toolContext,  // Include memory context
+                emotionContext = currentEmotion,
+                locationContext = locationContext
+            )
+
+            // Log prompt details for debugging
+            val promptLength = prompt.length
+            Log.i(TAG, "✅ Created full prompt: length=$promptLength chars")
+            Log.d(TAG, "Prompt preview (first 500 chars):")
+            Log.d(TAG, prompt.take(500))
+
+            if (promptLength > 10000) {
+                Log.w(TAG, "⚠️ Prompt is very long ($promptLength chars) - may exceed context window")
+            }
+
+            // Stream with the FULL PROMPT (not just raw input!)
+            Log.d(TAG, "Calling llmManager.generateStreaming()...")
+            return llmManager.generateStreaming(prompt, agentName = aiSettings.aiName)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error in generateStreamingResponse", e)
+            Log.e(TAG, "Exception type: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Exception message: ${e.message}")
+            e.printStackTrace()
+
+            // Return error message as a flow
+            return kotlinx.coroutines.flow.flowOf("I encountered an error: ${e.message}. Please try again.")
         }
     }
 
@@ -340,6 +449,18 @@ class PersonalityEngine(
         // Build context from tool results
         val toolContext = buildToolContext(toolResults)
 
+        // Get location context if enabled
+        val locationContext = if (aiSettings.locationAwarenessEnabled) {
+            withContext(Dispatchers.IO) {
+                try {
+                    locationManager.getLocationContext(forceRefresh = false)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to get location context: ${e.message}")
+                    null
+                }
+            }
+        } else null
+
         // PHASE 4 OPTIMIZATION: LLM re-enabled with improvements
         // - Fixed prompt bias (removed vision keyword issue)
         // - NNAPI GPU acceleration enabled
@@ -351,16 +472,21 @@ class PersonalityEngine(
         // Create optimized prompt (vision keywords removed)
         val prompt = UnifiedPrompt.create(
             userInput = input,
+            aiName = aiSettings.aiName,
             conversationHistory = conversationHistory.takeLast(10),
             toolContext = toolContext,
-            emotionContext = currentEmotion
+            emotionContext = currentEmotion,
+            locationContext = locationContext
         )
 
         // Generate response with LLM (with fallback)
         val responseText = try {
             val startTime = System.currentTimeMillis()
-            val llmResponse = llmManager.generate(prompt, agentName = "AILive")
+            val llmResponse = llmManager.generate(prompt, agentName = aiSettings.aiName)
             val duration = System.currentTimeMillis() - startTime
+
+            // Track statistics
+            statisticsManager.recordResponseTime(duration)
 
             Log.i(TAG, "✨ LLM generated response in ${duration}ms")
 
@@ -465,12 +591,27 @@ class PersonalityEngine(
     /**
      * Add turn to conversation history
      */
-    private fun addToHistory(turn: ConversationTurn) {
+    fun addToHistory(turn: ConversationTurn) {
         conversationHistory.add(turn)
 
         // Keep only recent history
         if (conversationHistory.size > maxHistorySize) {
             conversationHistory.removeAt(0)
+        }
+
+        // Record in persistent memory system (v1.3)
+        memoryManager?.let {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    it.recordConversationTurn(
+                        role = if (turn.role == Role.USER) "USER" else "ASSISTANT",
+                        content = turn.content
+                    )
+                    Log.d(TAG, "✓ Recorded ${turn.role} message in persistent memory")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to record ${turn.role} message in memory", e)
+                }
+            }
         }
     }
 
