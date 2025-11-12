@@ -206,8 +206,14 @@ class ModelSetupDialog(
                     isProcessingDownload = false
 
                     if (success) {
-                        Log.i(TAG, "All models downloaded successfully")
-                        Toast.makeText(activity, "All models downloaded successfully! AILive is ready.", Toast.LENGTH_SHORT).show()
+                        // Check if models were already downloaded (EXISTS message)
+                        if (errorMessage == "EXISTS") {
+                            Log.i(TAG, "All models already downloaded")
+                            Toast.makeText(activity, "All models already downloaded! AILive is ready.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.i(TAG, "All models downloaded successfully")
+                            Toast.makeText(activity, "All models downloaded successfully! AILive is ready.", Toast.LENGTH_SHORT).show()
+                        }
                         markSetupComplete()
                         onComplete()
                     } else {
@@ -246,8 +252,13 @@ class ModelSetupDialog(
                     isProcessingDownload = false
 
                     if (success) {
-                        Log.i(TAG, "BGE Embedding Model download complete")
-                        Toast.makeText(activity, "BGE Embedding Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        if (errorMessage == "EXISTS") {
+                            Log.i(TAG, "BGE Embedding Model already downloaded")
+                            Toast.makeText(activity, "BGE Embedding Model already downloaded!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.i(TAG, "BGE Embedding Model download complete")
+                            Toast.makeText(activity, "BGE Embedding Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        }
                         markSetupComplete()
                         onComplete()
                     } else {
@@ -285,8 +296,13 @@ class ModelSetupDialog(
                     isProcessingDownload = false
 
                     if (success) {
-                        Log.i(TAG, "Memory Model download complete")
-                        Toast.makeText(activity, "Memory Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        if (errorMessage == "EXISTS") {
+                            Log.i(TAG, "Memory Model already downloaded")
+                            Toast.makeText(activity, "Memory Model already downloaded!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.i(TAG, "Memory Model download complete")
+                            Toast.makeText(activity, "Memory Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        }
                         markSetupComplete()
                         onComplete()
                     } else {
@@ -325,8 +341,13 @@ class ModelSetupDialog(
                     isProcessingDownload = false
 
                     if (success) {
-                        Log.i(TAG, "Qwen2-VL GGUF download complete")
-                        Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        if (errorMessage == "EXISTS") {
+                            Log.i(TAG, "Qwen2-VL GGUF already downloaded")
+                            Toast.makeText(activity, "Qwen2-VL model already downloaded!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Log.i(TAG, "Qwen2-VL GGUF download complete")
+                            Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        }
                         markSetupComplete()
                         onComplete()
                     } else {
@@ -477,8 +498,13 @@ class ModelSetupDialog(
                 isProcessingDownload = false
 
                 if (success) {
-                    Log.i(TAG, "Download complete: $modelName")
-                    Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                    if (errorMessage == "EXISTS") {
+                        Log.i(TAG, "Model already downloaded: $modelName")
+                        Toast.makeText(activity, "Model already downloaded!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Log.i(TAG, "Download complete: $modelName")
+                        Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                    }
                     markSetupComplete()
                     onComplete()
                 } else {
