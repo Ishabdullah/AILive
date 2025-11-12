@@ -41,20 +41,27 @@ class UnifiedMemoryManager(private val context: Context) {
 
     /**
      * Initialize memory system
-     * v1.4: Now initializes lightweight memory model for intelligent fact extraction
+     * v1.4: Memory model initialization DISABLED (llama.cpp singleton conflict)
+     *
+     * IMPORTANT: TinyLlama memory model is NOT initialized because llama.cpp
+     * can only load ONE model at a time. Since Qwen (main conversation model)
+     * needs priority, we skip TinyLlama initialization.
+     *
+     * Impact: Falls back to regex-based fact extraction instead of LLM-based.
+     * This is acceptable since Qwen handles the main intelligence needs.
+     *
+     * Future: Consider using Qwen itself for memory operations, or find a way
+     * to swap models dynamically (unload Qwen, load TinyLlama, run extraction,
+     * unload TinyLlama, reload Qwen).
      */
     suspend fun initialize() {
         Log.i(TAG, "Initializing unified memory system...")
 
-        // Initialize memory model in background (non-blocking)
-        scope.launch {
-            val success = memoryModelManager.initialize()
-            if (success) {
-                Log.i(TAG, "✅ Memory AI model ready for intelligent fact extraction")
-            } else {
-                Log.w(TAG, "⚠️  Memory AI model unavailable - using fallback regex extraction")
-            }
-        }
+        // DISABLED: Memory model initialization (llama.cpp singleton conflict)
+        // TinyLlama cannot load while Qwen is loaded - both use LLamaAndroid.instance()
+        // Falling back to regex-based fact extraction
+        Log.i(TAG, "⚠️  Memory AI model disabled (llama.cpp singleton - Qwen has priority)")
+        Log.i(TAG, "   Using fallback regex extraction for facts")
 
         // Ensure user profile exists
         userProfile.getOrCreateProfile()
