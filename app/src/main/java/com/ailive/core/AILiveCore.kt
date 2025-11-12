@@ -143,10 +143,16 @@ class AILiveCore(
             personalityEngine.registerTool(com.ailive.personality.tools.PatternAnalysisTool(context, stateManager))
             personalityEngine.registerTool(com.ailive.personality.tools.FeedbackTrackingTool(context))
 
+            // v1.4: Register critical missing tools (GPS, web search, corrections)
+            personalityEngine.registerTool(com.ailive.personality.tools.LocationTool(locationManager))
+            personalityEngine.registerTool(com.ailive.websearch.integration.WebSearchTool(context))
+            personalityEngine.registerTool(com.ailive.personality.tools.UserCorrectionTool(context, memoryManager))
+
             isInitialized = true
 
             if (usePersonalityEngine) {
-                Log.i(TAG, "✓ AILive initialized successfully (PersonalityEngine + 5 tools + legacy agents)")
+                Log.i(TAG, "✓ AILive initialized successfully (PersonalityEngine + 8 tools + legacy agents)")
+                Log.i(TAG, "  Tools: Sentiment, Device, Memory, Patterns, Feedback, Location, WebSearch, Corrections")
             } else {
                 Log.i(TAG, "✓ AILive initialized successfully (6 agents + TTS + LLM) [Legacy mode]")
             }
