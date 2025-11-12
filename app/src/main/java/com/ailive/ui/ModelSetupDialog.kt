@@ -148,21 +148,30 @@ class ModelSetupDialog(
             "4. All Models - Download all (~1.9GB) ⭐ Recommended"
         )
 
-        AlertDialog.Builder(activity)
-            .setTitle("Select Models to Download")
-            // REMOVED: .setMessage() - conflicts with .setItems() and hides the list
-            .setItems(models) { _, which ->
-                when (which) {
-                    0 -> downloadBGEModelOnly(onComplete)  // BGE embedding model only
-                    1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
-                    2 -> downloadQwenVLModel(onComplete)  // Qwen only
-                    3 -> downloadAllModels(onComplete)  // All models (recommended)
-                }
+        val builder = AlertDialog.Builder(activity)
+        builder.setTitle("Select Models to Download")
+        // REMOVED: .setMessage() - conflicts with .setItems() and hides the list
+        builder.setItems(models) { _, which ->
+            when (which) {
+                0 -> downloadBGEModelOnly(onComplete)  // BGE embedding model only
+                1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
+                2 -> downloadQwenVLModel(onComplete)  // Qwen only
+                3 -> downloadAllModels(onComplete)  // All models (recommended)
             }
-            .setNegativeButton("Cancel") { _, _ ->
-                onComplete()
-            }
-            .show()
+        }
+        builder.setNegativeButton("Cancel") { _, _ ->
+            onComplete()
+        }
+
+        val dialog = builder.create()
+        dialog.show()
+
+        // BUGFIX: Explicitly set dialog size to ensure items list is visible
+        // Some Android versions/themes don't auto-size the dialog correctly for .setItems()
+        dialog.window?.setLayout(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
     }
 
     /**
