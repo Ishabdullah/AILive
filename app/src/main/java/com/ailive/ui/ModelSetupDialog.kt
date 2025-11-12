@@ -136,6 +136,8 @@ class ModelSetupDialog(
     /**
      * Show model selection dialog with recommendations (GGUF models)
      * Lists each model individually, then "All Models" option
+     *
+     * BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
@@ -146,7 +148,7 @@ class ModelSetupDialog(
 
         AlertDialog.Builder(activity)
             .setTitle("Select Models to Download")
-            .setMessage("Choose individual models or download all for full functionality:")
+            // REMOVED: .setMessage() - conflicts with .setItems() and hides the list
             .setItems(models) { _, which ->
                 when (which) {
                     0 -> downloadMemoryModelOnly(onComplete)  // Memory model only
