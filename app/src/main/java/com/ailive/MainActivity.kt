@@ -83,6 +83,9 @@ class MainActivity : AppCompatActivity() {
     // Permissions launcher
     private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
 
+    // Settings launcher (to receive download requests)
+    private lateinit var settingsLauncher: ActivityResultLauncher<Intent>
+
     private var callbackCount = 0
     private var isInitialized = false
     private var isListeningForWakeWord = false
@@ -108,6 +111,22 @@ class MainActivity : AppCompatActivity() {
                     if (onComplete != null) {
                         modelSetupDialog.handleFilePickerResult(uri, onComplete)
                         filePickerOnComplete = null
+                    }
+                }
+            }
+        }
+
+        // Register settings launcher to receive download requests
+        settingsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                result.data?.getStringExtra("download_model")?.let { modelType ->
+                    Log.i(TAG, "📥 Download request from settings: $modelType")
+                    // Trigger download via ModelSetupDialog
+                    when (modelType) {
+                        "BGE" -> modelSetupDialog.downloadBGEModel()
+                        "Memory" -> modelSetupDialog.downloadMemoryModel()
+                        "Qwen" -> modelSetupDialog.downloadQwenModel()
+                        "All" -> modelSetupDialog.downloadAllModels()
                     }
                 }
             }
@@ -696,7 +715,7 @@ class MainActivity : AppCompatActivity() {
         btnSettings.setOnClickListener {
             Log.i(TAG, "⚙️ Opening Model Settings")
             val intent = Intent(this, com.ailive.ui.ModelSettingsActivity::class.java)
-            startActivity(intent)
+            settingsLauncher.launch(intent)  // Use launcher to receive download requests
         }
     }
 
