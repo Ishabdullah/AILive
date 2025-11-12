@@ -384,42 +384,49 @@ class ModelDownloadManager(private val context: Context) {
             if (error == "EXISTS") filesAlreadyExisted++
             Log.i(TAG, "✅ BGE model file ${if (error == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
 
-            // Download 2: tokenizer.json (~2MB)
-            onProgress(BGE_TOKENIZER_JSON, 2, totalFiles)
-            downloadModel(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON) { tokenizerSuccess, tokenizerError ->
-                if (!tokenizerSuccess) {
-                    Log.e(TAG, "❌ Failed to download BGE tokenizer: $tokenizerError")
-                    onComplete(false, "Failed to download BGE tokenizer: $tokenizerError")
-                    return@downloadModel
-                }
-
-                filesDownloaded++
-                if (tokenizerError == "EXISTS") filesAlreadyExisted++
-                Log.i(TAG, "✅ BGE tokenizer ${if (tokenizerError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
-
-                // Download 3: config.json (~1KB)
-                onProgress(BGE_CONFIG_JSON, 3, totalFiles)
-                downloadModel(BGE_CONFIG_URL, BGE_CONFIG_JSON) { configSuccess, configError ->
-                    if (!configSuccess) {
-                        Log.e(TAG, "❌ Failed to download BGE config: $configError")
-                        onComplete(false, "Failed to download BGE config: $configError")
+            // BUGFIX: Add delay to ensure first download's state is fully cleaned up
+            // Prevents race conditions when downloads happen in quick succession
+            handler.postDelayed({
+                // Download 2: tokenizer.json (~2MB)
+                onProgress(BGE_TOKENIZER_JSON, 2, totalFiles)
+                downloadModel(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON) { tokenizerSuccess, tokenizerError ->
+                    if (!tokenizerSuccess) {
+                        Log.e(TAG, "❌ Failed to download BGE tokenizer: $tokenizerError")
+                        onComplete(false, "Failed to download BGE tokenizer: $tokenizerError")
                         return@downloadModel
                     }
 
                     filesDownloaded++
-                    if (configError == "EXISTS") filesAlreadyExisted++
-                    Log.i(TAG, "✅ BGE config ${if (configError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
+                    if (tokenizerError == "EXISTS") filesAlreadyExisted++
+                    Log.i(TAG, "✅ BGE tokenizer ${if (tokenizerError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
 
-                    // Report whether all files already existed or were newly downloaded
-                    if (filesAlreadyExisted == totalFiles) {
-                        Log.i(TAG, "ℹ️ BGE Embedding Model already downloaded (3/3 files exist)")
-                        onComplete(true, "EXISTS")
-                    } else {
-                        Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
-                        onComplete(true, "")
-                    }
+                    // BUGFIX: Add delay before third download
+                    handler.postDelayed({
+                        // Download 3: config.json (~1KB)
+                        onProgress(BGE_CONFIG_JSON, 3, totalFiles)
+                        downloadModel(BGE_CONFIG_URL, BGE_CONFIG_JSON) { configSuccess, configError ->
+                            if (!configSuccess) {
+                                Log.e(TAG, "❌ Failed to download BGE config: $configError")
+                                onComplete(false, "Failed to download BGE config: $configError")
+                                return@downloadModel
+                            }
+
+                            filesDownloaded++
+                            if (configError == "EXISTS") filesAlreadyExisted++
+                            Log.i(TAG, "✅ BGE config ${if (configError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
+
+                            // Report whether all files already existed or were newly downloaded
+                            if (filesAlreadyExisted == totalFiles) {
+                                Log.i(TAG, "ℹ️ BGE Embedding Model already downloaded (3/3 files exist)")
+                                onComplete(true, "EXISTS")
+                            } else {
+                                Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
+                                onComplete(true, "")
+                            }
+                        }
+                    }, 500) // 500ms delay
                 }
-            }
+            }, 500) // 500ms delay
         }
     }
 
@@ -462,8 +469,10 @@ class ModelDownloadManager(private val context: Context) {
                 Log.i(TAG, "✅ BGE model ${if (error == "EXISTS") "already exists" else "downloaded"} (1/3)")
                 onProgress(MEMORY_MODEL_GGUF, 2, 3, 7)
 
-                // Download memory model second (medium size)
-                downloadMemoryModel(
+                // BUGFIX: Add delay between models to prevent state conflicts
+                handler.postDelayed({
+                    // Download memory model second (medium size)
+                    downloadMemoryModel(
                     onProgress = { fileName, fileNum, totalFiles ->
                         // Report memory model progress (7-44% overall, ~700MB of ~1900MB)
                         onProgress(fileName, 2, 3, 25)
@@ -479,8 +488,10 @@ class ModelDownloadManager(private val context: Context) {
                         Log.i(TAG, "✅ Memory model ${if (memError == "EXISTS") "already exists" else "downloaded"} (2/3)")
                         onProgress(QWEN_VL_MODEL_GGUF, 3, 3, 44)
 
-                        // Download Qwen model third (largest)
-                        downloadQwenVLModel(
+                        // BUGFIX: Add delay before final model
+                        handler.postDelayed({
+                            // Download Qwen model third (largest)
+                            downloadQwenVLModel(
                             onProgress = { fileName, fileNum, totalFiles ->
                                 // Report Qwen progress (44-100% overall, ~986MB of ~1900MB)
                                 onProgress(fileName, 3, 3, 70)
@@ -504,8 +515,10 @@ class ModelDownloadManager(private val context: Context) {
                                 }
                             }
                         )
+                        }, 500) // 500ms delay before Qwen
                     }
                 )
+                }, 500) // 500ms delay before Memory model
             }
         )
     }

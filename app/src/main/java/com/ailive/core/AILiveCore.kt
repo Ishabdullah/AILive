@@ -88,22 +88,23 @@ class AILiveCore(
             memoryManager = UnifiedMemoryManager(context)
             Log.i(TAG, "✓ Context managers initialized (location + statistics + memory)")
 
-            // Initialize memory system in background
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    memoryManager.initialize()
-                    Log.i(TAG, "✅ Memory system initialized")
-                } catch (e: Exception) {
-                    Log.e(TAG, "⚠️ Memory system initialization failed", e)
-                }
-            }
-
             // Initialize LLM in background (takes ~5-10 seconds)
+            // v1.5: LLM must initialize BEFORE memory system (memory needs LLMManager)
             Log.i(TAG, "⏱️  Starting LLM initialization (5-10 seconds)...")
             CoroutineScope(Dispatchers.IO).launch {
                 val success = llmManager.initialize()
                 if (success) {
                     Log.i(TAG, "✅ LLM ready for intelligent responses")
+
+                    // v1.5: Now initialize memory system with LLMManager
+                    // This enables LLM-based fact extraction using Qwen
+                    try {
+                        memoryManager.initialize(llmManager)
+                        Log.i(TAG, "✅ Memory system initialized with Qwen-powered fact extraction")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "⚠️ Memory system initialization failed", e)
+                    }
+
                     // Notify user that AI is now fully powered
                     ttsManager.speak(
                         text = "Language model loaded. AI responses are now fully powered!",
@@ -113,6 +114,14 @@ class AILiveCore(
                     val error = llmManager.getInitializationError()
                     Log.w(TAG, "⚠️ LLM not available: $error")
                     Log.w(TAG, "   Using fallback response system")
+
+                    // Initialize memory system without LLM (will use regex fallback)
+                    try {
+                        memoryManager.initialize(null)
+                        Log.i(TAG, "✅ Memory system initialized (regex-based extraction)")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "⚠️ Memory system initialization failed", e)
+                    }
                 }
             }
 

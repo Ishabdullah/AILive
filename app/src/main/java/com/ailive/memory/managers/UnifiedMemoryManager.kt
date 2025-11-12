@@ -41,27 +41,31 @@ class UnifiedMemoryManager(private val context: Context) {
 
     /**
      * Initialize memory system
-     * v1.4: Memory model initialization DISABLED (llama.cpp singleton conflict)
+     * v1.5: Memory model now uses Qwen via LLMManager (fixed singleton conflict)
      *
-     * IMPORTANT: TinyLlama memory model is NOT initialized because llama.cpp
-     * can only load ONE model at a time. Since Qwen (main conversation model)
-     * needs priority, we skip TinyLlama initialization.
+     * SOLUTION: Instead of loading separate TinyLlama, we now use Qwen (which is
+     * already loaded) for memory operations via LLMManager. This solves the llama.cpp
+     * singleton conflict and provides better results (Qwen is more capable than TinyLlama).
      *
-     * Impact: Falls back to regex-based fact extraction instead of LLM-based.
-     * This is acceptable since Qwen handles the main intelligence needs.
+     * Benefits:
+     * - No model conflicts (single model for everything)
+     * - Better accuracy (Qwen 2B vs TinyLlama 1.1B)
+     * - Faster (no model swapping needed)
+     * - LLM-based fact extraction enabled
      *
-     * Future: Consider using Qwen itself for memory operations, or find a way
-     * to swap models dynamically (unload Qwen, load TinyLlama, run extraction,
-     * unload TinyLlama, reload Qwen).
+     * @param llmManager The initialized LLMManager instance (with Qwen loaded)
      */
-    suspend fun initialize() {
+    suspend fun initialize(llmManager: com.ailive.ai.llm.LLMManager? = null) {
         Log.i(TAG, "Initializing unified memory system...")
 
-        // DISABLED: Memory model initialization (llama.cpp singleton conflict)
-        // TinyLlama cannot load while Qwen is loaded - both use LLamaAndroid.instance()
-        // Falling back to regex-based fact extraction
-        Log.i(TAG, "⚠️  Memory AI model disabled (llama.cpp singleton - Qwen has priority)")
-        Log.i(TAG, "   Using fallback regex extraction for facts")
+        // v1.5: Initialize memory model with Qwen via LLMManager
+        if (llmManager != null && llmManager.isReady()) {
+            Log.i(TAG, "✓ Initializing memory AI with Qwen (shared model)")
+            memoryModelManager.initialize(llmManager)
+        } else {
+            Log.i(TAG, "⚠️  LLMManager not ready - memory AI will use regex fallback")
+            Log.i(TAG, "   This is normal during app startup - memory AI will initialize later")
+        }
 
         // Ensure user profile exists
         userProfile.getOrCreateProfile()
