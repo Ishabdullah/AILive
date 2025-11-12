@@ -368,6 +368,7 @@ class ModelDownloadManager(private val context: Context) {
 
         // Download files sequentially: model → tokenizer → config
         var filesDownloaded = 0
+        var filesAlreadyExisted = 0
         val totalFiles = 3
 
         // Download 1: model_quantized.onnx (~120MB)
@@ -380,7 +381,8 @@ class ModelDownloadManager(private val context: Context) {
             }
 
             filesDownloaded++
-            Log.i(TAG, "✅ BGE model file downloaded ($filesDownloaded/$totalFiles)")
+            if (error == "EXISTS") filesAlreadyExisted++
+            Log.i(TAG, "✅ BGE model file ${if (error == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
 
             // Download 2: tokenizer.json (~2MB)
             onProgress(BGE_TOKENIZER_JSON, 2, totalFiles)
@@ -392,7 +394,8 @@ class ModelDownloadManager(private val context: Context) {
                 }
 
                 filesDownloaded++
-                Log.i(TAG, "✅ BGE tokenizer downloaded ($filesDownloaded/$totalFiles)")
+                if (tokenizerError == "EXISTS") filesAlreadyExisted++
+                Log.i(TAG, "✅ BGE tokenizer ${if (tokenizerError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
 
                 // Download 3: config.json (~1KB)
                 onProgress(BGE_CONFIG_JSON, 3, totalFiles)
@@ -404,9 +407,17 @@ class ModelDownloadManager(private val context: Context) {
                     }
 
                     filesDownloaded++
-                    Log.i(TAG, "✅ BGE config downloaded ($filesDownloaded/$totalFiles)")
-                    Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
-                    onComplete(true, "")
+                    if (configError == "EXISTS") filesAlreadyExisted++
+                    Log.i(TAG, "✅ BGE config ${if (configError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
+
+                    // Report whether all files already existed or were newly downloaded
+                    if (filesAlreadyExisted == totalFiles) {
+                        Log.i(TAG, "ℹ️ BGE Embedding Model already downloaded (3/3 files exist)")
+                        onComplete(true, "EXISTS")
+                    } else {
+                        Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
+                        onComplete(true, "")
+                    }
                 }
             }
         }
@@ -428,6 +439,9 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "   Total size: ~1.9GB")
         Log.i(TAG, "   Order: BGE (133MB) → Memory Model (700MB) → Qwen (986MB)")
 
+        var modelsAlreadyExisted = 0
+        val totalModels = 3
+
         // Download BGE model first (smallest, fastest)
         onProgress("BGE Embedding Model", 1, 3, 0)
 
@@ -444,7 +458,8 @@ class ModelDownloadManager(private val context: Context) {
                     return@downloadBGEModel
                 }
 
-                Log.i(TAG, "✅ BGE model downloaded (1/3)")
+                if (error == "EXISTS") modelsAlreadyExisted++
+                Log.i(TAG, "✅ BGE model ${if (error == "EXISTS") "already exists" else "downloaded"} (1/3)")
                 onProgress(MEMORY_MODEL_GGUF, 2, 3, 7)
 
                 // Download memory model second (medium size)
@@ -460,7 +475,8 @@ class ModelDownloadManager(private val context: Context) {
                             return@downloadMemoryModel
                         }
 
-                        Log.i(TAG, "✅ Memory model downloaded (2/3)")
+                        if (memError == "EXISTS") modelsAlreadyExisted++
+                        Log.i(TAG, "✅ Memory model ${if (memError == "EXISTS") "already exists" else "downloaded"} (2/3)")
                         onProgress(QWEN_VL_MODEL_GGUF, 3, 3, 44)
 
                         // Download Qwen model third (largest)
@@ -476,8 +492,16 @@ class ModelDownloadManager(private val context: Context) {
                                     return@downloadQwenVLModel
                                 }
 
-                                Log.i(TAG, "✅ All models downloaded successfully! (3/3)")
-                                onComplete(true, "")
+                                if (qwenError == "EXISTS") modelsAlreadyExisted++
+
+                                // Report whether all models already existed or were newly downloaded
+                                if (modelsAlreadyExisted == totalModels) {
+                                    Log.i(TAG, "ℹ️ All models already downloaded! (3/3 exist)")
+                                    onComplete(true, "EXISTS")
+                                } else {
+                                    Log.i(TAG, "✅ All models downloaded successfully! (3/3)")
+                                    onComplete(true, "")
+                                }
                             }
                         )
                     }
@@ -511,7 +535,8 @@ class ModelDownloadManager(private val context: Context) {
             val fileSizeMB = existingFile.length() / 1024 / 1024
             Log.i(TAG, "✓ File already exists: $modelName (${fileSizeMB}MB)")
             Log.i(TAG, "   Skipping download")
-            onComplete(true, "")
+            // Return a special message indicating file already exists
+            onComplete(true, "EXISTS")
             return
         }
 
