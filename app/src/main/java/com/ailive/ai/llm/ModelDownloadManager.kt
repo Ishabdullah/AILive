@@ -254,6 +254,87 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * Download Memory Model (TinyLlama-1.1B) GGUF
+     * Lightweight model for memory operations (fact extraction, summarization)
+     * Size: ~700MB (Q4_K_M quantization)
+     */
+    fun downloadMemoryModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
+        Log.i(TAG, "📥 Starting Memory Model (TinyLlama-1.1B) download...")
+        Log.i(TAG, "   Model: $MEMORY_MODEL_GGUF (~700MB)")
+        Log.i(TAG, "   Quantization: Q4_K_M (optimized for mobile)")
+        Log.i(TAG, "   Purpose: Intelligent memory operations")
+
+        // Report progress (file 1 of 1)
+        onProgress(MEMORY_MODEL_GGUF, 1, 1)
+
+        // Download the single GGUF file
+        downloadModel(MEMORY_MODEL_URL, MEMORY_MODEL_GGUF) { success, error ->
+            if (success) {
+                Log.i(TAG, "✅ Memory Model downloaded successfully!")
+                onComplete(true, "")
+            } else {
+                Log.e(TAG, "❌ Failed to download Memory Model: $error")
+                onComplete(false, "Failed to download memory model: $error")
+            }
+        }
+    }
+
+    /**
+     * Download all necessary models for AILive
+     * Downloads in optimal order: Memory model first (smaller, faster), then Qwen
+     *
+     * @param onProgress Callback for progress updates (modelName, current, total, overallPercent)
+     * @param onComplete Callback when all downloads complete (success, errorMessage)
+     */
+    fun downloadAllModels(
+        onProgress: (String, Int, Int, Int) -> Unit,  // modelName, modelNum, totalModels, overallPercent
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        Log.i(TAG, "📥 Starting download of all necessary models...")
+        Log.i(TAG, "   Total models: 2")
+        Log.i(TAG, "   Total size: ~1.7GB")
+        Log.i(TAG, "   Order: Memory Model (700MB) → Qwen (986MB)")
+
+        // Download memory model first (smaller, initializes faster)
+        onProgress(MEMORY_MODEL_GGUF, 1, 2, 0)
+
+        downloadMemoryModel(
+            onProgress = { fileName, fileNum, totalFiles ->
+                // Report memory model progress (0-50% overall)
+                onProgress(fileName, 1, 2, 25)
+            },
+            onComplete = { success, error ->
+                if (!success) {
+                    Log.e(TAG, "❌ Memory model download failed, aborting: $error")
+                    onComplete(false, "Memory model download failed: $error")
+                    return@downloadMemoryModel
+                }
+
+                Log.i(TAG, "✅ Memory model downloaded (1/2)")
+                onProgress(QWEN_VL_MODEL_GGUF, 2, 2, 50)
+
+                // Download Qwen model second
+                downloadQwenVLModel(
+                    onProgress = { fileName, fileNum, totalFiles ->
+                        // Report Qwen progress (50-100% overall)
+                        onProgress(fileName, 2, 2, 75)
+                    },
+                    onComplete = { qwenSuccess, qwenError ->
+                        if (!qwenSuccess) {
+                            Log.e(TAG, "❌ Qwen model download failed: $qwenError")
+                            onComplete(false, "Qwen model download failed: $qwenError")
+                            return@downloadQwenVLModel
+                        }
+
+                        Log.i(TAG, "✅ All models downloaded successfully! (2/2)")
+                        onComplete(true, "")
+                    }
+                )
+            }
+        )
+    }
+
+    /**
      * Download a single model file from HuggingFace (ONNX/BIN)
      *
      * Used internally by downloadQwenVLModel() for batch downloads.

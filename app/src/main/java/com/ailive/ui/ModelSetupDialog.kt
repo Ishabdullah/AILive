@@ -111,13 +111,15 @@ class ModelSetupDialog(
         AlertDialog.Builder(activity)
             .setTitle("Welcome to AILive!")
             .setMessage(
-                "To get started, AILive needs an AI model for on-device intelligence.\n\n" +
+                "To get started, AILive needs AI models for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download Qwen2-VL GGUF (~986MB, vision + text AI)\n" +
-                "• Import a GGUF/ONNX model from your device\n\n" +
+                "• Download necessary models (~1.7GB total)\n" +
+                "  - Memory Model (TinyLlama-1.1B, 700MB) - For intelligent memory\n" +
+                "  - Main AI (Qwen2-VL-2B, 986MB) - For conversation & vision\n" +
+                "• Import GGUF models from your device\n\n" +
                 "All models run 100% on your device - no internet needed after download."
             )
-            .setPositiveButton("Download Model") { _, _ ->
+            .setPositiveButton("Download Necessary Models") { _, _ ->
                 showModelSelectionDialog(onComplete)
             }
             .setNegativeButton("Import from Device") { _, _ ->
@@ -136,21 +138,114 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "Qwen2-VL-2B (~986MB) - Vision + Text AI GGUF"
+            "All Necessary Models (~1.7GB total) - Recommended",
+            "Memory Model only (TinyLlama-1.1B, ~700MB)",
+            "Main AI only (Qwen2-VL-2B, ~986MB)"
         )
 
-        // BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
         AlertDialog.Builder(activity)
-            .setTitle("Select AI Model to Download")
+            .setTitle("Select Models to Download")
+            .setMessage("AILive works best with both models, but you can download them individually if needed.")
             .setItems(models) { _, which ->
                 when (which) {
-                    0 -> downloadQwenVLModel(onComplete)
+                    0 -> downloadAllModels(onComplete)  // Both models (recommended)
+                    1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
+                    2 -> downloadQwenVLModel(onComplete)  // Qwen only
                 }
             }
             .setNegativeButton("Cancel") { _, _ ->
                 onComplete()
             }
             .show()
+    }
+
+    /**
+     * Download all necessary models (Memory Model + Qwen2-VL)
+     * Downloads in optimal order for best user experience
+     */
+    private fun downloadAllModels(onComplete: () -> Unit) {
+        Log.i(TAG, "Starting download of all necessary models")
+        Toast.makeText(activity, "Downloading necessary models (~1.7GB)...", Toast.LENGTH_SHORT).show()
+
+        isProcessingDownload = false  // Reset state
+        var currentModelName = ""
+        var currentModelNum = 0
+        var totalModels = 2
+        var overallPercent = 0
+
+        modelDownloadManager.downloadAllModels(
+            onProgress = { modelName, modelNum, total, percent ->
+                activity.runOnUiThread {
+                    currentModelName = modelName
+                    currentModelNum = modelNum
+                    totalModels = total
+                    overallPercent = percent
+                    updateMultiModelDownloadProgress(modelName, modelNum, total, percent)
+                }
+            },
+            onComplete = { success, errorMessage ->
+                activity.runOnUiThread {
+                    // Dismiss progress dialog when callback is invoked
+                    downloadDialog?.dismiss()
+                    progressHandler?.removeCallbacksAndMessages(null)
+                    isProcessingDownload = false
+
+                    if (success) {
+                        Log.i(TAG, "All models downloaded successfully")
+                        Toast.makeText(activity, "All models downloaded successfully! AILive is ready.", Toast.LENGTH_SHORT).show()
+                        markSetupComplete()
+                        onComplete()
+                    } else {
+                        Log.e(TAG, "Model download failed: $errorMessage")
+                        Toast.makeText(activity, "Download failed: $errorMessage", Toast.LENGTH_LONG).show()
+                        // Allow user to try again
+                        showFirstRunDialog(onComplete)
+                    }
+                }
+            }
+        )
+
+        // Show multi-model progress dialog
+        showMultiModelDownloadProgressDialog()
+    }
+
+    /**
+     * Download Memory Model only (TinyLlama-1.1B)
+     */
+    private fun downloadMemoryModelOnly(onComplete: () -> Unit) {
+        Log.i(TAG, "Starting Memory Model download")
+        Toast.makeText(activity, "Downloading Memory Model...", Toast.LENGTH_SHORT).show()
+
+        isProcessingDownload = false  // Reset state
+
+        modelDownloadManager.downloadMemoryModel(
+            onProgress = { fileName, fileNum, total ->
+                activity.runOnUiThread {
+                    updateBatchDownloadProgress(fileName, fileNum, total, "Memory Model")
+                }
+            },
+            onComplete = { success, errorMessage ->
+                activity.runOnUiThread {
+                    downloadDialog?.dismiss()
+                    progressHandler?.removeCallbacksAndMessages(null)
+                    isProcessingDownload = false
+
+                    if (success) {
+                        Log.i(TAG, "Memory Model download complete")
+                        Toast.makeText(activity, "Memory Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        markSetupComplete()
+                        onComplete()
+                    } else {
+                        Log.e(TAG, "Memory Model download failed: $errorMessage")
+                        Toast.makeText(activity, "Download failed: $errorMessage", Toast.LENGTH_LONG).show()
+                        showFirstRunDialog(onComplete)
+                    }
+                }
+            }
+        )
+
+        // Show progress dialog
+        showBatchDownloadProgressDialog("Memory Model (TinyLlama-1.1B)")
     }
 
     /**
@@ -161,17 +256,11 @@ class ModelSetupDialog(
         Toast.makeText(activity, "Downloading Qwen2-VL model...", Toast.LENGTH_SHORT).show()
 
         isProcessingDownload = false  // Reset state
-        var currentFileName = ""
-        var currentFileNum = 0
-        var totalFiles = 1
 
         modelDownloadManager.downloadQwenVLModel(
             onProgress = { fileName, fileNum, total ->
                 activity.runOnUiThread {
-                    currentFileName = fileName
-                    currentFileNum = fileNum
-                    totalFiles = total
-                    updateBatchDownloadProgress(fileName, fileNum, total)
+                    updateBatchDownloadProgress(fileName, fileNum, total, "Qwen2-VL")
                 }
             },
             onComplete = { success, errorMessage ->
@@ -197,17 +286,17 @@ class ModelSetupDialog(
         )
 
         // Show progress dialog
-        showBatchDownloadProgressDialog()
+        showBatchDownloadProgressDialog("Qwen2-VL")
     }
 
     /**
      * Show batch download progress dialog (for multiple files)
      */
-    private fun showBatchDownloadProgressDialog() {
-        val message = "Downloading Qwen2-VL model file...\n\nThis will download 1 file (~986MB).\n\nPlease wait, this may take several minutes."
+    private fun showBatchDownloadProgressDialog(modelTitle: String = "Qwen2-VL") {
+        val message = "Downloading $modelTitle...\n\nThis may take several minutes depending on your connection.\n\nPlease wait..."
 
         downloadDialog = AlertDialog.Builder(activity)
-            .setTitle("Downloading Qwen2-VL")
+            .setTitle("Downloading $modelTitle")
             .setMessage(message)
             .setCancelable(false)
             .setNegativeButton("Cancel") { _, _ ->
@@ -219,13 +308,78 @@ class ModelSetupDialog(
 
         // Update progress every second
         progressHandler = Handler(Looper.getMainLooper())
-        updateBatchDownloadProgress("", 0, 1)
+        updateBatchDownloadProgress("", 0, 1, modelTitle)
+    }
+
+    /**
+     * Show multi-model download progress dialog
+     */
+    private fun showMultiModelDownloadProgressDialog() {
+        val message = "Downloading AILive Models...\n\n" +
+                "Model 1/2: Memory Model (TinyLlama-1.1B, ~700MB)\n" +
+                "Model 2/2: Main AI (Qwen2-VL-2B, ~986MB)\n\n" +
+                "Total: ~1.7GB\n\n" +
+                "This may take 10-20 minutes depending on your connection.\n\n" +
+                "Please keep the app open while downloading..."
+
+        downloadDialog = AlertDialog.Builder(activity)
+            .setTitle("Downloading Necessary Models")
+            .setMessage(message)
+            .setCancelable(false)
+            .setNegativeButton("Cancel") { _, _ ->
+                modelDownloadManager.cancelDownload()
+            }
+            .create()
+
+        downloadDialog?.show()
+
+        // Update progress every second
+        progressHandler = Handler(Looper.getMainLooper())
+        updateMultiModelDownloadProgress("", 0, 2, 0)
+    }
+
+    /**
+     * Update multi-model download progress
+     */
+    private fun updateMultiModelDownloadProgress(modelName: String, modelNum: Int, totalModels: Int, overallPercent: Int) {
+        val progress = modelDownloadManager.getDownloadProgress()
+
+        val message = if (progress != null) {
+            val (downloaded, total) = progress
+            val percent = if (total > 0) {
+                ((downloaded.toDouble() / total) * 100).toInt()
+            } else 0
+
+            val downloadedMB = downloaded / 1024 / 1024
+            val totalMB = total / 1024 / 1024
+
+            val modelInfo = when (modelNum) {
+                1 -> "Memory Model (TinyLlama-1.1B)"
+                2 -> "Main AI (Qwen2-VL-2B)"
+                else -> "Model"
+            }
+
+            "Downloading Model $modelNum/$totalModels:\n" +
+                    "$modelInfo\n\n" +
+                    "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
+                    "Overall Progress: $overallPercent%\n\n" +
+                    "Please wait..."
+        } else {
+            "Preparing to download models...\n\nModel $modelNum/$totalModels\n\nPlease wait..."
+        }
+
+        downloadDialog?.setMessage(message)
+
+        // Schedule next update in 1 second
+        progressHandler?.postDelayed({
+            updateMultiModelDownloadProgress(modelName, modelNum, totalModels, overallPercent)
+        }, 1000)
     }
 
     /**
      * Update batch download progress (shows which file is downloading)
      */
-    private fun updateBatchDownloadProgress(fileName: String, fileNum: Int, totalFiles: Int) {
+    private fun updateBatchDownloadProgress(fileName: String, fileNum: Int, totalFiles: Int, modelTitle: String = "Model") {
         val progress = modelDownloadManager.getDownloadProgress()
 
         val message = if (progress != null && fileName.isNotEmpty()) {
@@ -241,14 +395,14 @@ class ModelSetupDialog(
                     "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
                     "Please wait..."
         } else {
-            "Downloading Qwen2-VL model file...\n\nFile $fileNum/$totalFiles\n\nPlease wait..."
+            "Downloading $modelTitle...\n\nFile $fileNum/$totalFiles\n\nPlease wait..."
         }
 
         downloadDialog?.setMessage(message)
 
         // Schedule next update in 1 second
         progressHandler?.postDelayed({
-            updateBatchDownloadProgress(fileName, fileNum, totalFiles)
+            updateBatchDownloadProgress(fileName, fileNum, totalFiles, modelTitle)
         }, 1000)
     }
 
@@ -476,7 +630,7 @@ class ModelSetupDialog(
                 val selectedModel = availableModels[which]
                 showModelOptionsDialog(selectedModel.name)
             }
-            .setPositiveButton("Download New Model") { _, _ ->
+            .setPositiveButton("Download More Models") { _, _ ->
                 showModelSelectionDialog {}
             }
             .setNegativeButton("Import from Device") { _, _ ->
