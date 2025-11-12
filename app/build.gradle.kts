@@ -151,8 +151,10 @@ dependencies {
     // Supports GGUF models with native ARM64 libraries
     implementation(project(":llama"))
 
-    // DEPRECATED: ONNX Runtime (ArgMax opset 13 not supported on Android)
-    // implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
+    // ONNX Runtime for BGE embeddings (v1.4 - Memory enhancement)
+    // Used ONLY for embedding models (no ArgMax op issues with sentence transformers)
+    // BGE-small-en-v1.5 requires only basic ONNX ops (MatMul, Add, Softmax)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
 
     // DEPRECATED: Hugging Face Tokenizers (llama.cpp has built-in tokenizer)
     // implementation("ai.djl.huggingface:tokenizers:0.29.0")

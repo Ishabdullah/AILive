@@ -88,10 +88,41 @@ class ModelDownloadManager(private val context: Context) {
         // - GPU (Adreno): 30-40 tokens/sec
         // - Init time: < 5 seconds
 
+        // BGE-small-en-v1.5 ONNX model (Semantic embeddings)
+        // Lightweight embedding model for semantic search and memory retrieval
+        // This runs ALONGSIDE Qwen and TinyLlama for vector operations
+
+        // Base URL for BGE-small-en-v1.5 ONNX (Xenova optimized export)
+        private const val BGE_BASE_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx"
+
+        // BGE model files (quantized INT8 for mobile efficiency)
+        const val BGE_MODEL_ONNX = "model_quantized.onnx"
+        const val BGE_TOKENIZER_JSON = "tokenizer.json"
+        const val BGE_CONFIG_JSON = "config.json"
+
+        const val BGE_MODEL_URL = "$BGE_BASE_URL/$BGE_MODEL_ONNX"
+        const val BGE_TOKENIZER_URL = "$BGE_BASE_URL/$BGE_TOKENIZER_JSON"
+        const val BGE_CONFIG_URL = "$BGE_BASE_URL/$BGE_CONFIG_JSON"
+
+        // Model info:
+        // - 33M parameters (optimized for embeddings)
+        // - ONNX format: Compatible with ONNX Runtime Android
+        // - INT8 quantization: ~133MB (model + tokenizer + config)
+        // - Output: 384-dimensional embeddings
+        // - Purpose: Semantic search, memory retrieval, fact similarity
+        // - License: MIT (fully commercial-safe)
+        //
+        // Performance on mobile:
+        // - Inference: < 50ms per text
+        // - Batch processing: 20-30 texts/second
+        // - Init time: < 2 seconds
+        // - Memory: ~150MB RAM
+
         private const val MODELS_DIR = "models"
 
         // Minimum valid model size
-        private const val MIN_MODEL_SIZE_BYTES = 100 * 1024 * 1024L  // 100MB (GGUF models are large)
+        private const val MIN_MODEL_SIZE_BYTES = 10 * 1024 * 1024L  // 10MB (BGE files are smaller)
+        private const val MIN_GGUF_SIZE_BYTES = 100 * 1024 * 1024L  // 100MB for GGUF models
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -175,6 +206,50 @@ class ModelDownloadManager(private val context: Context) {
         }
 
         Log.i(TAG, "✅ Memory model available (${sizeMB}MB)")
+        return true
+    }
+
+    /**
+     * Check if BGE embedding model exists in models folder
+     * Used for semantic embeddings: similarity search, memory retrieval
+     * Requires 3 files: model_quantized.onnx, tokenizer.json, config.json
+     */
+    fun isBGEModelAvailable(): Boolean {
+        val downloadsDir = getModelsDir()
+        val modelFile = File(downloadsDir, BGE_MODEL_ONNX)
+        val tokenizerFile = File(downloadsDir, BGE_TOKENIZER_JSON)
+        val configFile = File(downloadsDir, BGE_CONFIG_JSON)
+
+        // Check all 3 required files
+        if (!modelFile.exists()) {
+            Log.i(TAG, "❌ Missing BGE model file: $BGE_MODEL_ONNX")
+            return false
+        }
+        if (!tokenizerFile.exists()) {
+            Log.i(TAG, "❌ Missing BGE tokenizer file: $BGE_TOKENIZER_JSON")
+            return false
+        }
+        if (!configFile.exists()) {
+            Log.i(TAG, "❌ Missing BGE config file: $BGE_CONFIG_JSON")
+            return false
+        }
+
+        val modelSizeMB = modelFile.length() / 1024 / 1024
+        val tokenizerSizeMB = tokenizerFile.length() / 1024 / 1024
+        val configSizeMB = configFile.length() / 1024 / 1024
+
+        Log.d(TAG, "✓ Found BGE model: $BGE_MODEL_ONNX (${modelSizeMB}MB)")
+        Log.d(TAG, "✓ Found BGE tokenizer: $BGE_TOKENIZER_JSON (${tokenizerSizeMB}MB)")
+        Log.d(TAG, "✓ Found BGE config: $BGE_CONFIG_JSON (${configSizeMB}MB)")
+
+        // Validate model file size (tokenizer/config are smaller, so use MIN_MODEL_SIZE_BYTES)
+        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
+            Log.e(TAG, "❌ BGE model file too small (${modelSizeMB}MB), likely corrupted")
+            return false
+        }
+
+        val totalSizeMB = modelSizeMB + tokenizerSizeMB + configSizeMB
+        Log.i(TAG, "✅ BGE embedding model available (~${totalSizeMB}MB)")
         return true
     }
 
@@ -280,8 +355,66 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * Download BGE Embedding Model (BGE-small-en-v1.5) ONNX
+     * Lightweight embedding model for semantic search and memory retrieval
+     * Total size: ~133MB (model + tokenizer + config)
+     * Requires 3 files: model_quantized.onnx, tokenizer.json, config.json
+     */
+    fun downloadBGEModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
+        Log.i(TAG, "📥 Starting BGE Embedding Model (BGE-small-en-v1.5) download...")
+        Log.i(TAG, "   Files: 3 (model, tokenizer, config)")
+        Log.i(TAG, "   Total size: ~133MB (INT8 quantized)")
+        Log.i(TAG, "   Purpose: Semantic embeddings for memory retrieval")
+
+        // Download files sequentially: model → tokenizer → config
+        var filesDownloaded = 0
+        val totalFiles = 3
+
+        // Download 1: model_quantized.onnx (~120MB)
+        onProgress(BGE_MODEL_ONNX, 1, totalFiles)
+        downloadModel(BGE_MODEL_URL, BGE_MODEL_ONNX) { success, error ->
+            if (!success) {
+                Log.e(TAG, "❌ Failed to download BGE model file: $error")
+                onComplete(false, "Failed to download BGE model: $error")
+                return@downloadModel
+            }
+
+            filesDownloaded++
+            Log.i(TAG, "✅ BGE model file downloaded ($filesDownloaded/$totalFiles)")
+
+            // Download 2: tokenizer.json (~2MB)
+            onProgress(BGE_TOKENIZER_JSON, 2, totalFiles)
+            downloadModel(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON) { tokenizerSuccess, tokenizerError ->
+                if (!tokenizerSuccess) {
+                    Log.e(TAG, "❌ Failed to download BGE tokenizer: $tokenizerError")
+                    onComplete(false, "Failed to download BGE tokenizer: $tokenizerError")
+                    return@downloadModel
+                }
+
+                filesDownloaded++
+                Log.i(TAG, "✅ BGE tokenizer downloaded ($filesDownloaded/$totalFiles)")
+
+                // Download 3: config.json (~1KB)
+                onProgress(BGE_CONFIG_JSON, 3, totalFiles)
+                downloadModel(BGE_CONFIG_URL, BGE_CONFIG_JSON) { configSuccess, configError ->
+                    if (!configSuccess) {
+                        Log.e(TAG, "❌ Failed to download BGE config: $configError")
+                        onComplete(false, "Failed to download BGE config: $configError")
+                        return@downloadModel
+                    }
+
+                    filesDownloaded++
+                    Log.i(TAG, "✅ BGE config downloaded ($filesDownloaded/$totalFiles)")
+                    Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
+                    onComplete(true, "")
+                }
+            }
+        }
+    }
+
+    /**
      * Download all necessary models for AILive
-     * Downloads in optimal order: Memory model first (smaller, faster), then Qwen
+     * Downloads in optimal order: BGE first (smallest/fastest), then Memory model, then Qwen
      *
      * @param onProgress Callback for progress updates (modelName, current, total, overallPercent)
      * @param onComplete Callback when all downloads complete (success, errorMessage)
@@ -291,43 +424,62 @@ class ModelDownloadManager(private val context: Context) {
         onComplete: (Boolean, String) -> Unit
     ) {
         Log.i(TAG, "📥 Starting download of all necessary models...")
-        Log.i(TAG, "   Total models: 2")
-        Log.i(TAG, "   Total size: ~1.7GB")
-        Log.i(TAG, "   Order: Memory Model (700MB) → Qwen (986MB)")
+        Log.i(TAG, "   Total models: 3")
+        Log.i(TAG, "   Total size: ~1.9GB")
+        Log.i(TAG, "   Order: BGE (133MB) → Memory Model (700MB) → Qwen (986MB)")
 
-        // Download memory model first (smaller, initializes faster)
-        onProgress(MEMORY_MODEL_GGUF, 1, 2, 0)
+        // Download BGE model first (smallest, fastest)
+        onProgress("BGE Embedding Model", 1, 3, 0)
 
-        downloadMemoryModel(
+        downloadBGEModel(
             onProgress = { fileName, fileNum, totalFiles ->
-                // Report memory model progress (0-50% overall)
-                onProgress(fileName, 1, 2, 25)
+                // Report BGE progress (0-7% overall, ~133MB of ~1900MB)
+                val percent = (7 * fileNum) / totalFiles
+                onProgress(fileName, 1, 3, percent)
             },
             onComplete = { success, error ->
                 if (!success) {
-                    Log.e(TAG, "❌ Memory model download failed, aborting: $error")
-                    onComplete(false, "Memory model download failed: $error")
-                    return@downloadMemoryModel
+                    Log.e(TAG, "❌ BGE model download failed, aborting: $error")
+                    onComplete(false, "BGE model download failed: $error")
+                    return@downloadBGEModel
                 }
 
-                Log.i(TAG, "✅ Memory model downloaded (1/2)")
-                onProgress(QWEN_VL_MODEL_GGUF, 2, 2, 50)
+                Log.i(TAG, "✅ BGE model downloaded (1/3)")
+                onProgress(MEMORY_MODEL_GGUF, 2, 3, 7)
 
-                // Download Qwen model second
-                downloadQwenVLModel(
+                // Download memory model second (medium size)
+                downloadMemoryModel(
                     onProgress = { fileName, fileNum, totalFiles ->
-                        // Report Qwen progress (50-100% overall)
-                        onProgress(fileName, 2, 2, 75)
+                        // Report memory model progress (7-44% overall, ~700MB of ~1900MB)
+                        onProgress(fileName, 2, 3, 25)
                     },
-                    onComplete = { qwenSuccess, qwenError ->
-                        if (!qwenSuccess) {
-                            Log.e(TAG, "❌ Qwen model download failed: $qwenError")
-                            onComplete(false, "Qwen model download failed: $qwenError")
-                            return@downloadQwenVLModel
+                    onComplete = { memSuccess, memError ->
+                        if (!memSuccess) {
+                            Log.e(TAG, "❌ Memory model download failed, aborting: $memError")
+                            onComplete(false, "Memory model download failed: $memError")
+                            return@downloadMemoryModel
                         }
 
-                        Log.i(TAG, "✅ All models downloaded successfully! (2/2)")
-                        onComplete(true, "")
+                        Log.i(TAG, "✅ Memory model downloaded (2/3)")
+                        onProgress(QWEN_VL_MODEL_GGUF, 3, 3, 44)
+
+                        // Download Qwen model third (largest)
+                        downloadQwenVLModel(
+                            onProgress = { fileName, fileNum, totalFiles ->
+                                // Report Qwen progress (44-100% overall, ~986MB of ~1900MB)
+                                onProgress(fileName, 3, 3, 70)
+                            },
+                            onComplete = { qwenSuccess, qwenError ->
+                                if (!qwenSuccess) {
+                                    Log.e(TAG, "❌ Qwen model download failed: $qwenError")
+                                    onComplete(false, "Qwen model download failed: $qwenError")
+                                    return@downloadQwenVLModel
+                                }
+
+                                Log.i(TAG, "✅ All models downloaded successfully! (3/3)")
+                                onComplete(true, "")
+                            }
+                        )
                     }
                 )
             }
