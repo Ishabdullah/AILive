@@ -64,6 +64,30 @@ class ModelDownloadManager(private val context: Context) {
         // Q5_K_M: 1.13GB (higher quality)
         // Q6_K: 1.27GB (very high quality)
 
+        // TinyLlama-1.1B-Chat-v1.0 GGUF model (Q4_K_M quantized)
+        // Lightweight model for memory operations (fact extraction, summarization)
+        // This runs BEFORE/ALONGSIDE Qwen to manage AILive's memory system
+
+        // Base URL for TinyLlama-1.1B-Chat-v1.0 GGUF (TheBloke quantization)
+        private const val TINYLLAMA_BASE_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main"
+
+        // Memory model file (Q4_K_M quantization)
+        const val MEMORY_MODEL_GGUF = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+        const val MEMORY_MODEL_URL = "$TINYLLAMA_BASE_URL/$MEMORY_MODEL_GGUF"
+
+        // Model info:
+        // - 1.1B parameters (instruction-tuned for chat/extraction)
+        // - GGUF format: Compatible with llama.cpp Android
+        // - Q4_K_M quantization: ~700MB
+        // - Context: 2048 tokens
+        // - Purpose: Memory operations (fact extraction, summarization, context filtering)
+        // - License: Apache 2.0 (fully commercial-safe)
+        //
+        // Performance on mobile:
+        // - CPU: 10-15 tokens/sec
+        // - GPU (Adreno): 30-40 tokens/sec
+        // - Init time: < 5 seconds
+
         private const val MODELS_DIR = "models"
 
         // Minimum valid model size
@@ -126,6 +150,31 @@ class ModelDownloadManager(private val context: Context) {
         }
 
         Log.i(TAG, "✅ Qwen2-VL GGUF model available (${sizeMB}MB)")
+        return true
+    }
+
+    /**
+     * Check if Memory Model (TinyLlama) exists in models folder
+     * Used for memory operations: fact extraction, summarization, context filtering
+     */
+    fun isMemoryModelAvailable(): Boolean {
+        val downloadsDir = getModelsDir()
+        val modelFile = File(downloadsDir, MEMORY_MODEL_GGUF)
+
+        if (!modelFile.exists()) {
+            Log.i(TAG, "❌ Missing memory model file: $MEMORY_MODEL_GGUF")
+            return false
+        }
+
+        val sizeMB = modelFile.length() / 1024 / 1024
+        Log.d(TAG, "✓ Found memory model: $MEMORY_MODEL_GGUF (${sizeMB}MB)")
+
+        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
+            Log.e(TAG, "❌ Memory model file too small (${sizeMB}MB), likely corrupted")
+            return false
+        }
+
+        Log.i(TAG, "✅ Memory model available (${sizeMB}MB)")
         return true
     }
 

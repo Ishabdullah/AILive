@@ -5,15 +5,34 @@ import kotlin.random.Random
 
 /**
  * Text embedding generator for AILive.
- * 
- * PLACEHOLDER: Uses deterministic random embeddings for now.
- * TODO: Integrate actual BGE-small-en-v1.5 model via ONNX Runtime.
- * 
- * Model: BAAI/bge-small-en-v1.5
- * License: MIT
- * Dimensions: 384
- * Size: 133 MB
- * Commercial Use: YES - Fully permitted
+ *
+ * ⚠️ CRITICAL ISSUE: PLACEHOLDER IMPLEMENTATION
+ * ================================
+ * PROBLEM: This class uses deterministic RANDOM embeddings based on text hash.
+ *          Semantic search DOES NOT WORK - it's just pseudo-random similarity scores.
+ *
+ * IMPACT:
+ * - MemoryAI.recall() returns meaningless results
+ * - VectorDB.search() finds random matches, not semantically similar ones
+ * - LongTermMemoryManager fact embeddings are useless
+ * - Memory system appears to work but retrieves irrelevant memories
+ *
+ * ROOT CAUSE: No real embedding model integrated
+ *
+ * SOLUTION: Integrate actual BGE-small-en-v1.5 model via ONNX Runtime
+ * - Model: BAAI/bge-small-en-v1.5
+ * - License: MIT (fully commercial-safe)
+ * - Dimensions: 384
+ * - Size: 133 MB
+ * - Runtime: ONNX Runtime Android
+ *
+ * ALTERNATIVES:
+ * 1. Use lightweight memory model (TinyLlama/Phi-2) for embeddings
+ * 2. Use sentence-transformers ONNX models
+ * 3. Leverage Qwen model for embedding generation (slower but works)
+ *
+ * TODO: Integrate real embedding model ASAP - memory system is broken without it
+ * ================================
  */
 class TextEmbedder(private val dimensions: Int = 384) {
     private val TAG = "TextEmbedder"
