@@ -119,17 +119,18 @@ class MainActivity : AppCompatActivity() {
             val allGranted = results.values.all { it }
             if (allGranted) {
                 Log.i(TAG, "✓ All requested permissions granted (launcher)")
-                startModels()
+                // After permissions granted, check if model setup is needed
+                proceedAfterPermissions()
             } else {
                 Log.e(TAG, "✗ One or more permissions denied: $results")
                 runOnUiThread {
                     statusIndicator?.text = "● PERMISSION DENIED"
-                    classificationResult?.text = "Camera and microphone permissions required"
+                    classificationResult?.text = "Permissions required for full functionality"
 
                     // Show explanation dialog with option to open settings
                     AlertDialog.Builder(this)
                         .setTitle("Permissions Required")
-                        .setMessage("AILive requires camera and microphone permissions to function.\n\nPlease grant these permissions in Settings to continue.")
+                        .setMessage("AILive needs:\n• Camera & Microphone - for voice/video interaction\n• Location - for contextual awareness\n• Storage - to import custom models\n\nPlease grant these permissions to continue.")
                         .setPositiveButton("Open Settings") { _, _ ->
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.fromParts("package", packageName, null)
@@ -190,22 +191,88 @@ class MainActivity : AppCompatActivity() {
         modelDownloadManager = ModelDownloadManager(this)
         modelSetupDialog = ModelSetupDialog(this, modelDownloadManager, filePickerLauncher)
 
+        // Request permissions FIRST before showing model setup dialog
+        requestInitialPermissions()
+    }
+
+    /**
+     * Build list of permissions based on Android version
+     */
+    private fun buildPermissionList(): List<String> {
+        val permissionsToRequest = mutableListOf<String>()
+        permissionsToRequest.add(Manifest.permission.CAMERA)
+        permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
+
+        // Location permissions for GPS/Location Awareness (v1.2)
+        permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+        // Storage permissions:
+        // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
+        // Android 13+ uses granular READ_MEDIA_* permissions
+        // Android 10-12 uses READ_EXTERNAL_STORAGE
+        // Android 9- uses WRITE_EXTERNAL_STORAGE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ - need granular media permissions to read model files
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
+            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        } else {
+            // Android 9 and below - need both READ and WRITE
+            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+
+        return permissionsToRequest
+    }
+
+    /**
+     * Request all necessary permissions before proceeding with initialization
+     */
+    private fun requestInitialPermissions() {
+        val permissionsToRequest = buildPermissionList()
+
+        // Check current permission status
+        val missing = permissionsToRequest.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missing.isEmpty()) {
+            Log.i(TAG, "✓ Permissions already granted")
+            proceedAfterPermissions()
+        } else {
+            Log.i(TAG, "Requesting permissions: $missing")
+            statusIndicator.text = "● REQUESTING PERMISSIONS..."
+            classificationResult.text = "Please allow camera, microphone, location, and storage access"
+            // Launch modern permission flow
+            permissionLauncher.launch(missing.toTypedArray())
+        }
+    }
+
+    /**
+     * Called after permissions are granted. Check if model setup is needed.
+     */
+    private fun proceedAfterPermissions() {
         // If model setup required, show dialog and defer init
         if (modelSetupDialog.isSetupNeeded()) {
             Log.i(TAG, "Model setup needed - showing dialog")
-            statusIndicator.text = "● MODEL SETUP REQUIRED"
-            classificationResult.text = "Please download or import an AI model"
+            statusIndicator.text = "● SETUP REQUIRED"
+            classificationResult.text = "Let's set up your AI assistant!"
 
             filePickerOnComplete = {
                 Log.i(TAG, "Model setup complete, continuing initialization")
                 continueInitialization()
             }
 
-            modelSetupDialog.showFirstRunDialog {
-                Log.i(TAG, "Model setup complete, continuing initialization")
+            // Show AI name customization first, then model setup
+            modelSetupDialog.showNameSetupDialog {
+                Log.i(TAG, "Setup complete, continuing initialization")
                 continueInitialization()
             }
-            // stop further onCreate initialization until user completes model setup
+            // stop further initialization until user completes model setup
             return
         }
 
@@ -247,49 +314,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Build permission list dynamically (device-version-aware)
-        val permissionsToRequest = mutableListOf<String>()
-        permissionsToRequest.add(Manifest.permission.CAMERA)
-        permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
-
-        // Storage permissions:
-        // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
-        // Android 13+ uses granular READ_MEDIA_* permissions
-        // Android 10-12 uses READ_EXTERNAL_STORAGE
-        // Android 9- uses WRITE_EXTERNAL_STORAGE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ - need granular media permissions to read model files
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
-            // Android 9 and below - need both READ and WRITE
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        }
-
-        // Check current permission status
-        val missing = permissionsToRequest.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        runOnUiThread { statusIndicator.text = "● CHECKING PERMISSIONS..." }
-
-        if (missing.isEmpty()) {
-            Log.i(TAG, "✓ Permissions already granted")
-            startModels()
-        } else {
-            Log.i(TAG, "Requesting permissions: $missing")
-            runOnUiThread {
-                statusIndicator.text = "● REQUESTING PERMISSIONS..."
-                classificationResult.text = "Please allow camera, microphone, and storage access"
-            }
-            // Launch modern permission flow
-            permissionLauncher.launch(missing.toTypedArray())
-        }
+        // Permissions are now requested earlier in requestInitialPermissions()
+        // Proceed directly to starting models
+        Log.i(TAG, "✓ Permissions verified, starting models")
+        startModels()
     }
 
     private fun startModels() {
@@ -710,17 +738,21 @@ class MainActivity : AppCompatActivity() {
             btnSendCommand.isEnabled = false
         }
 
-        // Stream response in real-time (store Job for cancellation)
+        // Stream response in real-time with incremental TTS (store Job for cancellation)
         generationJob = lifecycleScope.launch {
             try {
                 val responseBuilder = StringBuilder()
+                val sentenceBuffer = StringBuilder()
                 var tokenCount = 0
                 val startTime = System.currentTimeMillis()
+                val streamingSpeechEnabled = settings.streamingSpeechEnabled
 
-                aiLiveCore.llmManager.generateStreaming(command, agentName = "AILive")
+                // Use PersonalityEngine for proper context (name, time, location)
+                aiLiveCore.personalityEngine.generateStreamingResponse(command)
                     .collect { token ->
                         tokenCount++
                         responseBuilder.append(token)
+                        sentenceBuffer.append(token)
 
                         // Update UI with streaming text
                         withContext(Dispatchers.Main) {
@@ -740,7 +772,29 @@ class MainActivity : AppCompatActivity() {
                                     0f
                                 }
                                 inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
-                                statusIndicator.text = "● GENERATING..."
+                                statusIndicator.text = "● 🔊 LIVE SPEAKING..."
+                            }
+
+                            // STREAMING TTS: Speak sentence as soon as it's complete
+                            if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                                val currentText = sentenceBuffer.toString()
+
+                                // Check if we have a complete sentence or phrase
+                                val shouldSpeak = currentText.endsWith(". ") ||
+                                                  currentText.endsWith("! ") ||
+                                                  currentText.endsWith("? ") ||
+                                                  currentText.endsWith(".\n") ||
+                                                  currentText.endsWith("!\n") ||
+                                                  currentText.endsWith("?\n") ||
+                                                  (currentText.length > 80 && token == " ")  // Long phrase, speak at word boundary
+
+                                if (shouldSpeak && currentText.length > 10) {
+                                    // Speak this sentence incrementally (queues, doesn't interrupt)
+                                    val sentenceToSpeak = currentText.trim()
+                                    Log.d(TAG, "🔊 Streaming TTS: Speaking sentence of ${sentenceToSpeak.length} chars")
+                                    aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
+                                    sentenceBuffer.clear()
+                                }
                             }
                         }
                     }
@@ -762,8 +816,34 @@ class MainActivity : AppCompatActivity() {
                     btnSendCommand.isEnabled = true
                     Log.i(TAG, "✅ Streaming complete: $tokenCount tokens in ${totalTime}ms")
 
-                    // Speak the response if TTS available
+                    // Add to conversation history for PersonalityEngine
                     if (::aiLiveCore.isInitialized) {
+                        aiLiveCore.personalityEngine.addToHistory(
+                            com.ailive.personality.ConversationTurn(
+                                role = com.ailive.personality.Role.USER,
+                                content = command,
+                                timestamp = startTime
+                            )
+                        )
+                        aiLiveCore.personalityEngine.addToHistory(
+                            com.ailive.personality.ConversationTurn(
+                                role = com.ailive.personality.Role.ASSISTANT,
+                                content = responseBuilder.toString(),
+                                timestamp = System.currentTimeMillis()
+                            )
+                        )
+                        Log.d(TAG, "📝 Added conversation to history")
+                    }
+
+                    // Speak any remaining buffered text
+                    if (streamingSpeechEnabled && ::aiLiveCore.isInitialized && sentenceBuffer.isNotEmpty()) {
+                        val remaining = sentenceBuffer.toString().trim()
+                        if (remaining.isNotEmpty()) {
+                            Log.d(TAG, "🔊 Speaking final buffer: ${remaining.length} chars")
+                            aiLiveCore.ttsManager.speakIncremental(remaining)
+                        }
+                    } else if (!streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                        // Fallback to batched TTS if streaming disabled
                         aiLiveCore.ttsManager.speak(responseBuilder.toString(), com.ailive.audio.TTSManager.Priority.NORMAL)
                     }
                 }

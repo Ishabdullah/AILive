@@ -196,6 +196,48 @@ class TTSManager(private val context: Context) : TextToSpeech.OnInitListener {
     }
 
     /**
+     * Speak text incrementally (for streaming) - adds to queue instead of flushing
+     * Use this for real-time token-to-speech streaming where sentences are generated progressively
+     */
+    fun speakIncremental(
+        text: String,
+        callback: ((Boolean) -> Unit)? = null
+    ) {
+        if (!isInitialized) {
+            Log.w(TAG, "TTS not initialized, cannot speak")
+            callback?.invoke(false)
+            return
+        }
+
+        if (text.isBlank()) {
+            Log.w(TAG, "Empty text, ignoring incremental speak request")
+            callback?.invoke(false)
+            return
+        }
+
+        tts?.let { engine ->
+            val utteranceId = UUID.randomUUID().toString()
+
+            // Use QUEUE_ADD to append speech without interrupting current playback
+            val result = engine.speak(
+                text,
+                TextToSpeech.QUEUE_ADD,  // Key difference: ADD not FLUSH
+                null,
+                utteranceId
+            )
+
+            if (result == TextToSpeech.SUCCESS) {
+                Log.d(TAG, "🔊 Queued incremental speech: ${text.take(50)}${if (text.length > 50) "..." else ""}")
+                _state.value = TTSState.SPEAKING
+                callback?.invoke(true)
+            } else {
+                Log.e(TAG, "Failed to queue incremental speech")
+                callback?.invoke(false)
+            }
+        }
+    }
+
+    /**
      * Process next speech request in queue
      */
     private fun processNextInQueue() {

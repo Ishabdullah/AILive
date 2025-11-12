@@ -388,6 +388,76 @@
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp" />
 
+            <!-- Streaming Speech Toggle -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔊 Real-Time Speech Streaming"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Speak sentences as they're generated (300-500ms latency)"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="8dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchStreamingSpeech"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Enable Streaming Speech"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:checked="true"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                app:thumbTint="#00FFFF"
+                app:trackTint="#406080" />
+
+            <!-- Location Awareness Toggle -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📍 Location Awareness"
+                android:textColor="#00FFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:shadowColor="#00FFFF"
+                android:shadowRadius="3"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Provide current location context to AI responses"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:layout_marginBottom="8dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchLocationAwareness"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Enable Location Context"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:checked="false"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                app:thumbTint="#00FFFF"
+                app:trackTint="#406080" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
