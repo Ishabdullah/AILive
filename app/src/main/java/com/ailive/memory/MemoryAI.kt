@@ -24,36 +24,46 @@ class MemoryAI(
     
     private val vectorDB = VectorDB(dimensions = 384, maxEntries = 50000)
     private val memoryStore = MemoryStore(context)
-    private val embedder = TextEmbedder(dimensions = 384)
-    
+    private val embedder = TextEmbedder(context = context, dimensions = 384)
+
     private var isRunning = false
     private var autoSaveJob: Job? = null
-    
+
     /**
      * Start Memory AI.
      */
     fun start() {
         if (isRunning) return
-        
+
         isRunning = true
         Log.i(TAG, "Memory AI starting...")
-        
+
+        // Initialize embedding model in background (non-blocking)
+        scope.launch {
+            val success = embedder.initialize()
+            if (success) {
+                Log.i(TAG, "✅ Real semantic embeddings enabled for Memory AI")
+            } else {
+                Log.w(TAG, "⚠️  Using fallback random embeddings for Memory AI")
+            }
+        }
+
         scope.launch {
             loadMemoriesFromDisk()
         }
-        
+
         subscribeToMessages()
-        
+
         autoSaveJob = scope.launch {
             autoSaveLoop()
         }
-        
+
         scope.launch {
             messageBus.publish(
                 AIMessage.System.AgentStarted(source = AgentType.MEMORY_AI)
             )
         }
-        
+
         Log.i(TAG, "Memory AI started")
     }
     

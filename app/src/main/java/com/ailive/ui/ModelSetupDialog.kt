@@ -113,7 +113,8 @@ class ModelSetupDialog(
             .setMessage(
                 "To get started, AILive needs AI models for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download necessary models (~1.7GB total)\n" +
+                "• Download necessary models (~1.9GB total)\n" +
+                "  - BGE Model (133MB) - For semantic embeddings\n" +
                 "  - Memory Model (TinyLlama-1.1B, 700MB) - For intelligent memory\n" +
                 "  - Main AI (Qwen2-VL-2B, 986MB) - For conversation & vision\n" +
                 "• Import GGUF models from your device\n\n" +
@@ -134,16 +135,17 @@ class ModelSetupDialog(
     }
 
     /**
-     * Show model selection dialog with recommendations (GGUF models)
+     * Show model selection dialog with recommendations (GGUF + ONNX models)
      * Lists each model individually, then "All Models" option
      *
      * BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "1. Memory Model (TinyLlama-1.1B) - 700MB",
-            "2. Main AI (Qwen2-VL-2B) - 986MB",
-            "3. All Models - Download both (~1.7GB) ⭐ Recommended"
+            "1. BGE Embedding Model - 133MB",
+            "2. Memory Model (TinyLlama-1.1B) - 700MB",
+            "3. Main AI (Qwen2-VL-2B) - 986MB",
+            "4. All Models - Download all (~1.9GB) ⭐ Recommended"
         )
 
         AlertDialog.Builder(activity)
@@ -151,9 +153,10 @@ class ModelSetupDialog(
             // REMOVED: .setMessage() - conflicts with .setItems() and hides the list
             .setItems(models) { _, which ->
                 when (which) {
-                    0 -> downloadMemoryModelOnly(onComplete)  // Memory model only
-                    1 -> downloadQwenVLModel(onComplete)  // Qwen only
-                    2 -> downloadAllModels(onComplete)  // All models (recommended)
+                    0 -> downloadBGEModelOnly(onComplete)  // BGE embedding model only
+                    1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
+                    2 -> downloadQwenVLModel(onComplete)  // Qwen only
+                    3 -> downloadAllModels(onComplete)  // All models (recommended)
                 }
             }
             .setNegativeButton("Cancel") { _, _ ->
@@ -163,17 +166,17 @@ class ModelSetupDialog(
     }
 
     /**
-     * Download all necessary models (Memory Model + Qwen2-VL)
+     * Download all necessary models (BGE + Memory Model + Qwen2-VL)
      * Downloads in optimal order for best user experience
      */
     private fun downloadAllModels(onComplete: () -> Unit) {
         Log.i(TAG, "Starting download of all necessary models")
-        Toast.makeText(activity, "Downloading necessary models (~1.7GB)...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(activity, "Downloading necessary models (~1.9GB)...", Toast.LENGTH_SHORT).show()
 
         isProcessingDownload = false  // Reset state
         var currentModelName = ""
         var currentModelNum = 0
-        var totalModels = 2
+        var totalModels = 3
         var overallPercent = 0
 
         modelDownloadManager.downloadAllModels(
@@ -210,6 +213,45 @@ class ModelSetupDialog(
 
         // Show multi-model progress dialog
         showMultiModelDownloadProgressDialog()
+    }
+
+    /**
+     * Download BGE Embedding Model only (BGE-small-en-v1.5)
+     */
+    private fun downloadBGEModelOnly(onComplete: () -> Unit) {
+        Log.i(TAG, "Starting BGE Embedding Model download")
+        Toast.makeText(activity, "Downloading BGE Embedding Model...", Toast.LENGTH_SHORT).show()
+
+        isProcessingDownload = false  // Reset state
+
+        modelDownloadManager.downloadBGEModel(
+            onProgress = { fileName, fileNum, total ->
+                activity.runOnUiThread {
+                    updateBatchDownloadProgress(fileName, fileNum, total, "BGE Embedding Model")
+                }
+            },
+            onComplete = { success, errorMessage ->
+                activity.runOnUiThread {
+                    downloadDialog?.dismiss()
+                    progressHandler?.removeCallbacksAndMessages(null)
+                    isProcessingDownload = false
+
+                    if (success) {
+                        Log.i(TAG, "BGE Embedding Model download complete")
+                        Toast.makeText(activity, "BGE Embedding Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                        markSetupComplete()
+                        onComplete()
+                    } else {
+                        Log.e(TAG, "BGE Embedding Model download failed: $errorMessage")
+                        Toast.makeText(activity, "Download failed: $errorMessage", Toast.LENGTH_LONG).show()
+                        showFirstRunDialog(onComplete)
+                    }
+                }
+            }
+        )
+
+        // Show progress dialog
+        showBatchDownloadProgressDialog("BGE Embedding Model (BGE-small-en-v1.5)")
     }
 
     /**
