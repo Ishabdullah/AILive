@@ -192,7 +192,7 @@ class WebSearchTool(
                 if (result.execution?.success == true && result.execution.response != null) {
                     val response = result.execution.response
 
-                    val resultData = mutableMapOf(
+                    val resultData: MutableMap<String, Any> = mutableMapOf(
                         "search_triggered" to true,
                         "should_search" to true,
                         "reason" to result.decision.reason,
@@ -253,7 +253,7 @@ class WebSearchTool(
             }
 
             // Format result for PersonalityEngine
-            val resultData = mutableMapOf(
+            val resultData: MutableMap<String, Any> = mutableMapOf(
                 "search_triggered" to true,
                 "should_search" to true,
                 "reason" to "Explicit search mode"
