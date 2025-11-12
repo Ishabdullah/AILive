@@ -135,9 +135,28 @@ AILive is a **completely private, on-device AI assistant** powered by llama.cpp 
 
 **Documentation**: See [GPU_ACCELERATION_RESEARCH.md](GPU_ACCELERATION_RESEARCH.md) for GPU acceleration research (deferred to v2.0)
 
-### ✅ Version 1.4 - Web Search Integration (COMPLETE)
+### ✅ Version 1.4 - Web Search Integration with Intelligent Detection (COMPLETE)
 
 **Release Date**: November 12, 2025
+
+**🧠 Intelligent Search Detection (NEW)**
+- ✅ **KnowledgeConfidenceAnalyzer** - Automatic detection of when queries need web search
+  - Temporal signal detection ("latest", "recent", "2025", "today", "breaking", etc.)
+  - Knowledge cutoff awareness (detects queries about post-training events)
+  - Uncertainty signal detection ("is it true", "verify", "fact check")
+  - Real-time topic detection (weather, stock, news, scores)
+  - Location and time-sensitivity analysis
+- ✅ **SearchHistoryManager** - Tracks searches to avoid redundancy
+  - Similarity matching using Jaccard algorithm (detects ~70% similar queries)
+  - Configurable time windows (30min-3hr for fresh matches)
+  - Search frequency analytics and statistics
+  - Persistent storage across app restarts
+- ✅ **SearchDecisionEngine** - Orchestrates intelligent decisions
+  - Analyzes query → checks history → makes decision → executes search
+  - Search urgency levels: NONE, LOW, MEDIUM, HIGH
+  - Auto-detect mode (default) vs. explicit search mode
+  - Structured JSON responses with reasoning and metadata
+  - Context-aware: uses location, time, and user history
 
 **Core Web Search Subsystem 🌐**
 - ✅ WebSearchManager - Main orchestrator for multi-provider search
@@ -232,9 +251,31 @@ val webSearchTool = WebSearchTool(
     )
 )
 
-// Execute search via PersonalityEngine
-val result = webSearchTool.execute(mapOf(
-    "query" to "What's the weather in Boston?",
+// MODE 1: Auto-detect mode (RECOMMENDED)
+// AI automatically decides if web search is needed
+val result1 = webSearchTool.execute(mapOf(
+    "query" to "What's the latest news about AI?",  // Will search (temporal signal)
+    "auto_detect" to true  // default
+))
+// Response includes:
+// - search_triggered: true
+// - reason: "query contains temporal keywords"
+// - confidence: 0.3 (low internal confidence)
+// - results: [...]
+
+val result2 = webSearchTool.execute(mapOf(
+    "query" to "What is photosynthesis?",  // Will NOT search (timeless knowledge)
+    "auto_detect" to true
+))
+// Response includes:
+// - search_triggered: false
+// - reason: "Internal knowledge sufficient (confidence: 0.95)"
+// - internal_knowledge_sufficient: true
+
+// MODE 2: Explicit search mode
+val result3 = webSearchTool.execute(mapOf(
+    "query" to "Weather in Boston",
+    "auto_detect" to false,  // Always search
     "max_results" to 5
 ))
 

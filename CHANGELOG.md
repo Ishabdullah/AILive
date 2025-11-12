@@ -7,7 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.0] - 2025-11-12
 
-### Added - Web Search Integration Subsystem 🌐
+### Added - Web Search Integration with Intelligent Detection 🌐🧠
+
+**Intelligent Search Detection (NEW)**
+- KnowledgeConfidenceAnalyzer.kt (300+ lines) - Automatic detection of when queries need web search
+  - Temporal signal detection ("latest", "recent", "2025", "today", "breaking", "update")
+  - Knowledge cutoff awareness (detects queries about post-training events)
+  - Uncertainty signal detection ("is it true", "verify", "fact check", "confirm")
+  - Real-time topic detection (weather, stock, news, scores, traffic)
+  - Location dependency analysis (queries requiring location context)
+  - Time-sensitivity analysis (queries with temporal constraints)
+  - Confidence scoring (0.0-1.0) with configurable thresholds
+- SearchHistoryManager.kt (350+ lines) - Tracks searches to avoid redundancy
+  - Persistent search history with SharedPreferences
+  - Similarity matching using Jaccard algorithm (~70% threshold)
+  - Configurable time windows (30min for HIGH urgency, 3hr for MEDIUM, 12hr for LOW)
+  - Search frequency analytics and statistics
+  - Topic frequency tracking for user preferences
+  - Automatic cleanup of old entries (30-day retention)
+- SearchDecisionEngine.kt (300+ lines) - Orchestrates intelligent search decisions
+  - Complete decision pipeline: analyze → check history → decide → execute
+  - Search urgency levels: NONE, LOW, MEDIUM, HIGH
+  - Auto-detect mode (default) vs. explicit search mode
+  - Structured JSON responses with detailed reasoning
+  - Context-aware: integrates location, time, and user history
+  - Adaptive search strategy based on query characteristics
+- WebSearchTool.kt - Enhanced with intelligent detection integration
+  - Auto-detect parameter (default: true)
+  - Returns decision metadata with all responses
+  - Skips search when internal knowledge is sufficient
+  - Includes confidence scores and reasoning in responses
 
 **Core Infrastructure**
 - WebSearchManager.kt (300+ lines) - Main orchestrator for multi-provider web search
