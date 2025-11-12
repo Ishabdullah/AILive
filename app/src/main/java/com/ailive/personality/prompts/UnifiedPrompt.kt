@@ -181,12 +181,40 @@ END OF UNIFIED DIRECTIVE"""
 
     /**
      * Format tool context in natural language
+     *
+     * ⚠️ CRITICAL BUG: MEMORY CONTEXT SILENTLY DROPPED
+     * ================================
+     * PROBLEM: PersonalityEngine passes memory context with key "memory" (line 259),
+     *          but this function doesn't have a case for "memory", only "retrieve_memory".
+     *
+     * RESULT: Memory context from UnifiedMemoryManager is retrieved but NEVER included
+     *         in the prompt sent to Qwen. The AI has NO access to persistent memory.
+     *
+     * EVIDENCE:
+     * - PersonalityEngine.kt:259 → mapOf("memory" to memoryContext)
+     * - This function → No case for "memory" key
+     * - Qwen receives prompt WITHOUT memory context
+     *
+     * IMPACT:
+     * - AI cannot remember user preferences, facts, or past conversations
+     * - Memory system appears to work but is completely ineffective
+     * - User experience: AI seems to have amnesia between sessions
+     *
+     * FIX: Add case for "memory" key to include context in prompt
+     *
+     * TODO: Fix this ASAP - memory integration is completely broken
+     * ================================
      */
     private fun formatToolContext(context: Map<String, Any>): String {
         val descriptions = mutableListOf<String>()
 
         context.forEach { (toolName, data) ->
             when (toolName) {
+                "memory" -> {
+                    // ✅ FIXED: Include UnifiedMemoryManager context in prompt
+                    // This is the persistent memory (user profile, facts, recent conversations)
+                    descriptions.add("PERSISTENT MEMORY:\n${data.toString()}")
+                }
                 "analyze_sentiment" -> {
                     descriptions.add("Emotional context: ${formatSentiment(data)}")
                 }

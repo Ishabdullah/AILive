@@ -2,6 +2,7 @@ package com.ailive.memory.managers
 
 import android.content.Context
 import android.util.Log
+import com.ailive.ai.memory.MemoryModelManager
 import com.ailive.memory.database.entities.FactCategory
 import com.ailive.memory.database.entities.LongTermFactEntity
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,8 @@ import java.util.concurrent.TimeUnit
  * - User Profile (Personal information)
  *
  * Provides a unified interface for the PersonalityEngine to interact with memory.
+ *
+ * v1.4: Enhanced with lightweight AI model for intelligent fact extraction and summarization
  */
 class UnifiedMemoryManager(private val context: Context) {
     private val TAG = "UnifiedMemoryManager"
@@ -31,13 +34,27 @@ class UnifiedMemoryManager(private val context: Context) {
     val longTermMemory = LongTermMemoryManager(context)
     val userProfile = UserProfileManager(context)
 
+    // NEW: Lightweight AI model for memory operations
+    private val memoryModelManager = MemoryModelManager(context)
+
     // ===== Lifecycle Management =====
 
     /**
      * Initialize memory system
+     * v1.4: Now initializes lightweight memory model for intelligent fact extraction
      */
     suspend fun initialize() {
         Log.i(TAG, "Initializing unified memory system...")
+
+        // Initialize memory model in background (non-blocking)
+        scope.launch {
+            val success = memoryModelManager.initialize()
+            if (success) {
+                Log.i(TAG, "✅ Memory AI model ready for intelligent fact extraction")
+            } else {
+                Log.w(TAG, "⚠️  Memory AI model unavailable - using fallback regex extraction")
+            }
+        }
 
         // Ensure user profile exists
         userProfile.getOrCreateProfile()
@@ -86,6 +103,7 @@ class UnifiedMemoryManager(private val context: Context) {
         )
 
         // Auto-extract facts in background
+        // v1.4: Now uses LLM-based extraction with fallback to regex
         if (role == "USER") {
             scope.launch {
                 try {
@@ -94,11 +112,44 @@ class UnifiedMemoryManager(private val context: Context) {
                     val history = conversationMemory.getConversationHistory(conversationId, limit = 2)
                     val lastAiResponse = history.lastOrNull { it.role == "ASSISTANT" }?.content ?: ""
 
-                    longTermMemory.extractFactsFromConversation(
-                        userMessage = content,
-                        aiResponse = lastAiResponse,
-                        conversationId = conversationId
-                    )
+                    // Try LLM-based fact extraction first
+                    if (memoryModelManager.isReady()) {
+                        try {
+                            Log.d(TAG, "Using LLM-based fact extraction")
+                            val extractedFacts = memoryModelManager.extractFacts(
+                                userMessage = content,
+                                assistantResponse = lastAiResponse
+                            )
+
+                            // Store each extracted fact
+                            extractedFacts.forEach { fact ->
+                                longTermMemory.learnFact(
+                                    category = fact.category,
+                                    factText = fact.text,
+                                    extractedFrom = conversationId,
+                                    importance = fact.importance
+                                )
+                            }
+
+                            Log.i(TAG, "✅ Extracted ${extractedFacts.size} facts using LLM")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "LLM fact extraction failed, falling back to regex: ${e.message}")
+                            // Fallback to regex-based extraction
+                            longTermMemory.extractFactsFromConversation(
+                                userMessage = content,
+                                aiResponse = lastAiResponse,
+                                conversationId = conversationId
+                            )
+                        }
+                    } else {
+                        // Memory model not available, use regex fallback
+                        Log.d(TAG, "Memory model not ready, using regex-based fact extraction")
+                        longTermMemory.extractFactsFromConversation(
+                            userMessage = content,
+                            aiResponse = lastAiResponse,
+                            conversationId = conversationId
+                        )
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error extracting facts", e)
                 }

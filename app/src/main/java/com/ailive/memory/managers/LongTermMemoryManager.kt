@@ -68,10 +68,49 @@ class LongTermMemoryManager(private val context: Context) {
 
     /**
      * Auto-extract and learn facts from conversation
+     *
+     * ⚠️ CRITICAL LIMITATION: REGEX-BASED EXTRACTION ONLY
+     * ================================
+     * PROBLEM: Uses hardcoded regex patterns to extract facts.
+     *          Misses 90%+ of actual facts from conversations.
+     *
+     * CURRENT COVERAGE:
+     * - "my name is X" → Extracts name
+     * - "my favorite Y is Z" → Extracts preferences
+     * - "i want to X" → Extracts goals
+     * - "my wife/husband X" → Extracts relationships
+     *
+     * WHAT IT MISSES:
+     * - Complex statements: "I've been working as a software engineer for 5 years"
+     * - Implied facts: "I love dogs" → User likes dogs
+     * - Context-dependent facts: "She's my sister" (who is "she"?)
+     * - Temporal facts: "I moved to NYC last month"
+     * - Multi-sentence facts: "I studied CS. Then worked at Google."
+     *
+     * IMPACT:
+     * - Memory system captures < 10% of user information
+     * - No entity linking, coreference resolution, or semantic understanding
+     * - Facts stored are overly rigid and miss natural language variations
+     *
+     * SOLUTION: Use lightweight LLM for fact extraction
+     * - Input: Conversation turn (user + AI response)
+     * - Output: Structured facts with category, text, importance, entities
+     * - Model: TinyLlama-1.1B or Phi-2 (Q4_K_M quantized)
+     *
+     * EXAMPLE PROMPT:
+     * "Extract facts from this conversation:
+     *  User: I love dogs
+     *  AI: That's great!
+     *
+     *  Facts:
+     *  [PREFERENCES] User likes dogs (importance: 0.6)"
+     *
+     * TODO: Replace regex with LLM-based extraction for 10x better coverage
+     * ================================
      */
     suspend fun extractFactsFromConversation(userMessage: String, aiResponse: String, conversationId: String) {
-        // Simple pattern matching for common fact types
-        // In production, this would use NLP/LLM for extraction
+        // ⚠️ TEMPORARY: Simple pattern matching for common fact types
+        // TODO: Replace with LLM-based extraction
 
         val facts = mutableListOf<Pair<FactCategory, String>>()
 
