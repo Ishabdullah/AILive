@@ -102,88 +102,88 @@ class UserCorrectionTool(
      * - context_query: The original query that led to the mistake (optional)
      * - ai_response: AILive's incorrect response (optional)
      */
-    override suspend fun execute(parameters: Map<String, Any>): ToolResult {
-        return try {
-            val correctionType = parameters["correction_type"] as? String ?: "other"
-            val whatWentWrong = parameters["what_went_wrong"] as? String ?: "No description"
-            val correctApproach = parameters["correct_approach"] as? String ?: "No approach specified"
-            val userMessage = parameters["user_message"] as? String ?: ""
-            val contextQuery = parameters["context_query"] as? String
-            val aiResponse = parameters["ai_response"] as? String
+    override suspend fun executeInternal(parameters: Map<String, Any>): ToolResult {
+        val correctionType = parameters["correction_type"] as? String ?: "other"
+        val whatWentWrong = parameters["what_went_wrong"] as? String ?: "No description"
+        val correctApproach = parameters["correct_approach"] as? String ?: "No approach specified"
+        val userMessage = parameters["user_message"] as? String ?: ""
+        val contextQuery = parameters["context_query"] as? String
+        val aiResponse = parameters["ai_response"] as? String
 
-            Log.i(TAG, "📝 Recording user correction:")
-            Log.i(TAG, "   Type: $correctionType")
-            Log.i(TAG, "   What went wrong: $whatWentWrong")
-            Log.i(TAG, "   Correct approach: $correctApproach")
+        Log.i(TAG, "📝 Recording user correction:")
+        Log.i(TAG, "   Type: $correctionType")
+        Log.i(TAG, "   What went wrong: $whatWentWrong")
+        Log.i(TAG, "   Correct approach: $correctApproach")
 
-            // Format correction as a structured fact
-            val correctionFact = buildString {
-                append("USER CORRECTION (${getCurrentTimestamp()}):\n\n")
-                append("TYPE: $correctionType\n\n")
-                append("WHAT WENT WRONG:\n$whatWentWrong\n\n")
-                append("CORRECT APPROACH:\n$correctApproach\n\n")
-                if (contextQuery != null) {
-                    append("ORIGINAL QUERY: $contextQuery\n\n")
-                }
-                if (aiResponse != null) {
-                    append("INCORRECT RESPONSE: $aiResponse\n\n")
-                }
-                append("USER FEEDBACK: $userMessage\n")
+        // Format correction as a structured fact
+        val correctionFact = buildString {
+            append("USER CORRECTION (${getCurrentTimestamp()}):\n\n")
+            append("TYPE: $correctionType\n\n")
+            append("WHAT WENT WRONG:\n$whatWentWrong\n\n")
+            append("CORRECT APPROACH:\n$correctApproach\n\n")
+            if (contextQuery != null) {
+                append("ORIGINAL QUERY: $contextQuery\n\n")
             }
-
-            // Store in memory system
-            var memoryStored = false
-            if (memoryManager != null) {
-                scope.launch {
-                    try {
-                        // Store as a high-importance behavioral fact
-                        memoryManager.longTermMemory.learnFact(
-                            category = FactCategory.BEHAVIORAL,
-                            fact = correctionFact,
-                            conversationId = null,
-                            importance = 0.9f  // High importance - user-provided teaching
-                        )
-
-                        Log.i(TAG, "✅ Correction saved to long-term memory")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to save correction to memory", e)
-                    }
-                }
-                memoryStored = true
-            } else {
-                Log.w(TAG, "⚠️ Memory system not available - correction logged but not persisted in memory")
+            if (aiResponse != null) {
+                append("INCORRECT RESPONSE: $aiResponse\n\n")
             }
-
-            // ALWAYS save to training file for Qwen fine-tuning
-            val trainingSaved = saveToTrainingFile(
-                correctionType = correctionType,
-                contextQuery = contextQuery,
-                incorrectResponse = aiResponse,
-                correctApproach = correctApproach,
-                userCorrection = userMessage
-            )
-
-            if (trainingSaved) {
-                Log.i(TAG, "✅ Correction saved to training file: ${trainingFile.absolutePath}")
-                Log.i(TAG, "   Total training examples: ${countTrainingExamples()}")
-            }
-
-            return ToolResult.success(
-                data = mapOf(
-                    "correction_recorded" to true,
-                    "correction_type" to correctionType,
-                    "stored_in_memory" to memoryStored,
-                    "saved_to_training" to trainingSaved,
-                    "training_file" to trainingFile.absolutePath,
-                    "total_training_examples" to countTrainingExamples()
-                ),
-                message = "Thank you for the correction. I've recorded this feedback and will learn from it."
-            )
-
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to record correction", e)
-            return ToolResult.error("Failed to record correction: ${e.message}")
+            append("USER FEEDBACK: $userMessage\n")
         }
+
+        // Store in memory system
+        var memoryStored = false
+        if (memoryManager != null) {
+            scope.launch {
+                try {
+                    // Store as a high-importance fact in OTHER category
+                    memoryManager.longTermMemory.learnFact(
+                        category = FactCategory.OTHER,
+                        factText = correctionFact,
+                        extractedFrom = "user_correction:$correctionType",
+                        importance = 0.9f,  // High importance - user-provided teaching
+                        confidence = 1.0f,
+                        tags = listOf("correction", "feedback", correctionType)
+                    )
+
+                    Log.i(TAG, "✅ Correction saved to long-term memory")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save correction to memory", e)
+                }
+            }
+            memoryStored = true
+        } else {
+            Log.w(TAG, "⚠️ Memory system not available - correction logged but not persisted in memory")
+        }
+
+        // ALWAYS save to training file for Qwen fine-tuning
+        val trainingSaved = saveToTrainingFile(
+            correctionType = correctionType,
+            contextQuery = contextQuery,
+            incorrectResponse = aiResponse,
+            correctApproach = correctApproach,
+            userCorrection = userMessage
+        )
+
+        if (trainingSaved) {
+            Log.i(TAG, "✅ Correction saved to training file: ${trainingFile.absolutePath}")
+            Log.i(TAG, "   Total training examples: ${countTrainingExamples()}")
+        }
+
+        return ToolResult.Success(
+            data = mapOf(
+                "correction_recorded" to true,
+                "correction_type" to correctionType,
+                "stored_in_memory" to memoryStored,
+                "saved_to_training" to trainingSaved,
+                "training_file" to trainingFile.absolutePath,
+                "total_training_examples" to countTrainingExamples(),
+                "message" to "Thank you for the correction. I've recorded this feedback and will learn from it."
+            ),
+            context = mapOf(
+                "correction_saved" to true,
+                "training_available" to trainingSaved
+            )
+        )
     }
 
     private fun getCurrentTimestamp(): String {
