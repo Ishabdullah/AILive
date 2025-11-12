@@ -347,8 +347,40 @@ class LLMManager(private val context: Context) {
         // Reload settings in case they changed
         settings = ModelSettings.load(context)
 
-        // Create chat prompt
-        val chatPrompt = createChatPrompt(prompt, agentName)
+        // Check if prompt is already in chat template format (from PersonalityEngine)
+        // PersonalityEngine sends pre-formatted prompts with system message + context + history
+        val chatPrompt = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
+                            prompt.contains("===== CURRENT CONTEXT =====") ||
+                            prompt.contains("User:") && prompt.contains("$agentName:")) {
+            // Prompt is already formatted by PersonalityEngine - use Qwen2-VL chat template
+            Log.d(TAG, "✓ Using PersonalityEngine formatted prompt with Qwen2-VL template")
+            buildString {
+                append("<|im_start|>system\n")
+                // Extract system message (everything before "===== CURRENT CONTEXT =====" or "User:")
+                val systemEnd = prompt.indexOf("===== CURRENT CONTEXT =====")
+                val userStart = prompt.indexOf("User:")
+                val splitPoint = when {
+                    systemEnd > 0 -> systemEnd
+                    userStart > 0 -> userStart
+                    else -> prompt.length
+                }
+                val systemMessage = prompt.substring(0, splitPoint).trim()
+                val restOfPrompt = prompt.substring(splitPoint).trim()
+
+                append(systemMessage)
+                append("<|im_end|>\n")
+
+                // Add the rest (context, history, user input)
+                append("<|im_start|>user\n")
+                append(restOfPrompt)
+                append("<|im_end|>\n")
+                append("<|im_start|>assistant\n")
+            }
+        } else {
+            // Simple prompt - use basic chat template
+            Log.d(TAG, "✓ Using basic chat template for simple prompt")
+            createChatPrompt(prompt, agentName)
+        }
 
         // Stream tokens directly from llama.cpp with configured max tokens
         var tokenCount = 0
