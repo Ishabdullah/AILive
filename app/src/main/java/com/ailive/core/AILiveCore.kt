@@ -144,7 +144,7 @@ class AILiveCore(
             personalityEngine.registerTool(com.ailive.personality.tools.FeedbackTrackingTool(context))
 
             // v1.4: Register critical missing tools (GPS, web search, corrections)
-            personalityEngine.registerTool(com.ailive.personality.tools.LocationTool(locationManager))
+            personalityEngine.registerTool(com.ailive.personality.tools.LocationTool(locationManager, context))
             personalityEngine.registerTool(com.ailive.websearch.integration.WebSearchTool(context))
             personalityEngine.registerTool(com.ailive.personality.tools.UserCorrectionTool(context, memoryManager))
 

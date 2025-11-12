@@ -1,5 +1,8 @@
 package com.ailive.personality.tools
 
+import android.content.Context
+import android.location.Geocoder
+import android.os.Build
 import android.util.Log
 import com.ailive.location.LocationManager
 
@@ -10,9 +13,6 @@ import com.ailive.location.LocationManager
  * - Get current GPS coordinates (latitude, longitude)
  * - Get current location name (city, state, country)
  * - Get formatted address
- * - Distance calculations
- * - Geocoding (address → coordinates)
- * - Reverse geocoding (coordinates → address)
  *
  * Use when user asks:
  * - "Where am I?"
@@ -22,10 +22,12 @@ import com.ailive.location.LocationManager
  * - Any question requiring current location
  *
  * @param locationManager The LocationManager instance
+ * @param context Android context for geocoding
  * @since v1.4 - Tool Integration Fix
  */
 class LocationTool(
-    private val locationManager: LocationManager
+    private val locationManager: LocationManager,
+    private val context: Context
 ) : BaseTool() {
 
     override val name: String = "get_location"
@@ -53,6 +55,14 @@ class LocationTool(
     override val requiresPermissions: Boolean = true  // Requires LOCATION permission
 
     private val TAG = "LocationTool"
+    private val geocoder = Geocoder(context)
+
+    /**
+     * Check if tool is available (has permissions)
+     */
+    override suspend fun isAvailable(): Boolean {
+        return locationManager.hasLocationPermission()
+    }
 
     /**
      * Execute location query
@@ -60,30 +70,52 @@ class LocationTool(
      * Parameters: None required
      * Returns: Location information as ToolResult
      */
-    override suspend fun execute(parameters: Map<String, Any>): ToolResult {
+    override suspend fun executeInternal(parameters: Map<String, Any>): ToolResult {
+        Log.i(TAG, "🌍 Getting current location...")
+
+        // Check permissions first
+        if (!locationManager.hasLocationPermission()) {
+            return ToolResult.Blocked(
+                reason = "Location permission not granted",
+                requiredAction = "Please grant location permissions in Settings"
+            )
+        }
+
+        // Get current location
+        val location = locationManager.getCurrentLocation(forceRefresh = false)
+
+        if (location == null) {
+            Log.w(TAG, "No location available yet")
+            return ToolResult.Failure(
+                error = Exception("Location not available"),
+                reason = "Location not available. GPS may still be acquiring position. Please wait a moment and try again.",
+                recoverable = true
+            )
+        }
+
+        // Get location details
+        val latitude = location.latitude
+        val longitude = location.longitude
+
+        Log.i(TAG, "📍 Got coordinates: $latitude, $longitude")
+
+        // Try to get address information via geocoding
         return try {
-            Log.i(TAG, "🌍 Getting current location...")
-
-            // Get last known location
-            val location = locationManager.getLastKnownLocation()
-
-            if (location == null) {
-                Log.w(TAG, "No location available yet")
-                return ToolResult.error(
-                    "Location not available. GPS may still be acquiring position. Please wait a moment and try again."
-                )
+            @Suppress("DEPRECATION")
+            val addresses = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Use new API for Android 13+
+                var result: List<android.location.Address>? = null
+                geocoder.getFromLocation(latitude, longitude, 1) { addresses ->
+                    result = addresses
+                }
+                result
+            } else {
+                // Use deprecated API for older Android versions
+                geocoder.getFromLocation(latitude, longitude, 1)
             }
 
-            // Get location details
-            val latitude = location.latitude
-            val longitude = location.longitude
-
-            Log.i(TAG, "📍 Got coordinates: $latitude, $longitude")
-
-            // Get address from coordinates (reverse geocoding)
-            val address = locationManager.getAddressFromCoordinates(latitude, longitude)
-
-            if (address != null) {
+            if (!addresses.isNullOrEmpty()) {
+                val address = addresses[0]
                 val city = address.locality ?: address.subAdminArea ?: "Unknown"
                 val state = address.adminArea ?: "Unknown"
                 val country = address.countryName ?: "Unknown"
@@ -97,12 +129,12 @@ class LocationTool(
                     if (postalCode.isNotBlank()) {
                         append("Postal Code: $postalCode\n")
                     }
-                    append("Coordinates: $latitude, $longitude")
+                    append("Coordinates: ${String.format("%.4f", latitude)}, ${String.format("%.4f", longitude)}")
                 }
 
                 Log.i(TAG, "✅ Location: $city, $state, $country")
 
-                return ToolResult.success(
+                ToolResult.Success(
                     data = mapOf(
                         "city" to city,
                         "state" to state,
@@ -112,27 +144,48 @@ class LocationTool(
                         "longitude" to longitude,
                         "formatted" to locationText
                     ),
-                    message = locationText
+                    context = mapOf(
+                        "location_available" to true,
+                        "address_resolved" to true
+                    )
                 )
             } else {
                 // Couldn't get address, return coordinates only
-                val locationText = "Location: $latitude, $longitude\n(Address lookup unavailable)"
+                val locationText = "Location: ${String.format("%.4f", latitude)}, ${String.format("%.4f", longitude)}\n(Address lookup unavailable)"
 
                 Log.w(TAG, "⚠️ Got coordinates but no address")
 
-                return ToolResult.success(
+                ToolResult.Success(
                     data = mapOf(
                         "latitude" to latitude,
                         "longitude" to longitude,
                         "formatted" to locationText
                     ),
-                    message = locationText
+                    context = mapOf(
+                        "location_available" to true,
+                        "address_resolved" to false
+                    )
                 )
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Location query failed", e)
-            return ToolResult.error("Failed to get location: ${e.message}")
+            Log.e(TAG, "❌ Geocoding failed", e)
+
+            // Fall back to coordinates only
+            val locationText = "Location: ${String.format("%.4f", latitude)}, ${String.format("%.4f", longitude)}"
+
+            ToolResult.Success(
+                data = mapOf(
+                    "latitude" to latitude,
+                    "longitude" to longitude,
+                    "formatted" to locationText
+                ),
+                context = mapOf(
+                    "location_available" to true,
+                    "address_resolved" to false,
+                    "geocoding_error" to (e.message ?: "Unknown error")
+                )
+            )
         }
     }
 }
