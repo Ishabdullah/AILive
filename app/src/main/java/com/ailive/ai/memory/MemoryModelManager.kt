@@ -1,44 +1,48 @@
 package com.ailive.ai.memory
 
 import android.content.Context
-import android.llama.cpp.LLamaAndroid
 import android.util.Log
-import com.ailive.ai.llm.ModelDownloadManager
+import com.ailive.ai.llm.LLMManager
 import com.ailive.memory.database.entities.FactCategory
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
 
 /**
- * MemoryModelManager - Lightweight AI model for memory operations
+ * MemoryModelManager - AI-powered memory operations
  *
- * Uses TinyLlama-1.1B for:
- * - Extracting facts from conversations
- * - Summarizing conversations
- * - Filtering relevant memories
- * - Generating embeddings (future)
+ * v1.5: Now uses Qwen (via LLMManager) for memory operations instead of TinyLlama
  *
- * Runs separately from main Qwen model to avoid blocking.
- * Designed to initialize quickly (< 5 seconds) and run efficiently in background.
+ * Reason: llama.cpp can only load ONE GGUF model at a time (singleton).
+ * Since Qwen is already loaded for conversations and is MORE capable than TinyLlama,
+ * we use it for memory operations too.
+ *
+ * Capabilities:
+ * - Extracting facts from conversations using Qwen
+ * - Summarizing conversations using Qwen
+ * - Filtering relevant memories using Qwen
+ *
+ * Benefits of using Qwen over TinyLlama:
+ * - Better accuracy (2B params vs 1.1B params)
+ * - No model loading conflicts (llama.cpp singleton)
+ * - Faster (no need to swap models)
+ * - More robust fact extraction
  *
  * @author AILive Memory System Team
  * @since v1.4
+ * @updated v1.5 - Using Qwen instead of TinyLlama
  */
 class MemoryModelManager(private val context: Context) {
 
     companion object {
         private const val TAG = "MemoryModelManager"
-        private const val MAX_CONTEXT_LENGTH = 2048  // TinyLlama context window
         private const val MAX_RESPONSE_TOKENS = 512  // Limit response length
     }
 
-    // Lazy initialization of llama.cpp instance for memory model
-    // NOTE: This is a SEPARATE instance from the main Qwen model
-    private val llamaAndroid = LLamaAndroid.instance()
-
-    private val modelDownloadManager = ModelDownloadManager(context)
+    // Use LLMManager (which has Qwen loaded) instead of separate llama.cpp instance
+    // This avoids the llama.cpp singleton conflict
+    private var llmManager: LLMManager? = null
 
     @Volatile
     private var isInitialized = false
@@ -49,12 +53,13 @@ class MemoryModelManager(private val context: Context) {
     private var initializationError: String? = null
 
     /**
-     * Initialize memory model (TinyLlama)
-     * Call on app startup in background thread
+     * Initialize memory model
+     * v1.5: Now uses Qwen via LLMManager instead of loading TinyLlama
      *
+     * @param llmManager The initialized LLMManager instance (with Qwen loaded)
      * @return true if initialization successful, false otherwise
      */
-    suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun initialize(llmManager: LLMManager? = null): Boolean = withContext(Dispatchers.IO) {
         if (isInitialized) {
             Log.i(TAG, "Memory model already initialized")
             return@withContext true
@@ -69,41 +74,31 @@ class MemoryModelManager(private val context: Context) {
         initializationError = null
 
         try {
-            Log.i(TAG, "🧠 Initializing Memory Model (TinyLlama-1.1B)...")
+            Log.i(TAG, "🧠 Initializing Memory AI (using Qwen)...")
             Log.i(TAG, "   Purpose: Fact extraction, summarization, context filtering")
+            Log.i(TAG, "   Strategy: Using Qwen (main model) instead of separate TinyLlama")
+            Log.i(TAG, "   Reason: llama.cpp singleton - only one model at a time")
 
-            // Check if memory model is available
-            if (!modelDownloadManager.isMemoryModelAvailable()) {
-                val error = "Memory model not found. Using fallback regex extraction."
+            // Store reference to LLMManager
+            this@MemoryModelManager.llmManager = llmManager
+
+            // Check if Qwen is ready
+            if (llmManager == null || !llmManager.isReady()) {
+                val error = "LLMManager not ready. Using fallback regex extraction."
                 Log.w(TAG, "⚠️  $error")
-                Log.i(TAG, "   Required file: ${ModelDownloadManager.MEMORY_MODEL_GGUF}")
-                Log.i(TAG, "   Download from: ${ModelDownloadManager.MEMORY_MODEL_URL}")
                 Log.i(TAG, "   App will continue with limited memory capabilities")
                 initializationError = error
                 isInitializing = false
                 return@withContext false  // Non-critical - app can run without it
             }
 
-            // Get model path
-            val modelPath = modelDownloadManager.getModelPath(ModelDownloadManager.MEMORY_MODEL_GGUF)
-            val modelFile = java.io.File(modelPath)
-
-            Log.i(TAG, "📂 Loading memory model: ${modelFile.name}")
-            Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
-            Log.i(TAG, "   Format: GGUF (Q4_K_M quantization)")
-            Log.i(TAG, "   Context: $MAX_CONTEXT_LENGTH tokens")
-
-            // Load model using llama.cpp
-            // NOTE: This creates a SEPARATE model instance from Qwen
-            llamaAndroid.load(modelPath)
-
             isInitialized = true
             isInitializing = false
 
-            Log.i(TAG, "✅ Memory Model initialized successfully!")
-            Log.i(TAG, "   Model: TinyLlama-1.1B-Chat-v1.0")
-            Log.i(TAG, "   Capabilities: Fact extraction, summarization, context filtering")
-            Log.i(TAG, "   Expected performance: 10-15 tokens/sec (CPU), 30-40 tokens/sec (GPU)")
+            Log.i(TAG, "✅ Memory AI initialized successfully!")
+            Log.i(TAG, "   Model: Qwen2-VL-2B-Instruct (shared with conversation)")
+            Log.i(TAG, "   Capabilities: LLM-based fact extraction, summarization, context filtering")
+            Log.i(TAG, "   Benefits: Better accuracy, no model conflicts, faster")
             Log.i(TAG, "🧠 Memory AI ready!")
 
             true
@@ -121,7 +116,7 @@ class MemoryModelManager(private val context: Context) {
     /**
      * Extract facts from a conversation turn
      *
-     * Uses the memory model to analyze a user-AI conversation exchange
+     * v1.5: Uses Qwen (via LLMManager) to analyze a user-AI conversation exchange
      * and extract structured facts about the user.
      *
      * @param userMessage User's message
@@ -132,7 +127,7 @@ class MemoryModelManager(private val context: Context) {
         userMessage: String,
         assistantResponse: String
     ): List<ExtractedFact> = withContext(Dispatchers.IO) {
-        if (!isInitialized) {
+        if (!isInitialized || llmManager == null) {
             Log.w(TAG, "Memory model not initialized - skipping fact extraction")
             return@withContext emptyList()
         }
@@ -144,14 +139,13 @@ class MemoryModelManager(private val context: Context) {
 
         try {
             val prompt = buildFactExtractionPrompt(userMessage, assistantResponse)
-            Log.d(TAG, "Extracting facts from conversation turn...")
+            Log.d(TAG, "Extracting facts from conversation using Qwen...")
 
-            val responseTokens: List<String> = llamaAndroid.send(prompt, formatChat = false)
-                .toList()
-            val response = responseTokens.joinToString(separator = "")
+            // Use Qwen via LLMManager instead of TinyLlama
+            val response = llmManager!!.generate(prompt, agentName = "FactExtractor")
 
             val facts = parseFacts(response)
-            Log.i(TAG, "✅ Extracted ${facts.size} facts from conversation")
+            Log.i(TAG, "✅ Extracted ${facts.size} facts from conversation (using Qwen)")
             facts.forEach { fact ->
                 Log.d(TAG, "   $fact")
             }
@@ -166,7 +160,7 @@ class MemoryModelManager(private val context: Context) {
     /**
      * Summarize a conversation for archival
      *
-     * Generates a 2-3 sentence summary of a conversation
+     * v1.5: Uses Qwen to generate a 2-3 sentence summary of a conversation
      * to store before archiving old conversations.
      *
      * @param conversationId ID of conversation to summarize
@@ -177,7 +171,7 @@ class MemoryModelManager(private val context: Context) {
         conversationId: String,
         turns: List<Pair<String, String>>  // (user, assistant) pairs
     ): String = withContext(Dispatchers.IO) {
-        if (!isInitialized) {
+        if (!isInitialized || llmManager == null) {
             Log.w(TAG, "Memory model not initialized - using simple summarization")
             return@withContext "Conversation with ${turns.size} turns"
         }
@@ -188,13 +182,12 @@ class MemoryModelManager(private val context: Context) {
 
         try {
             val prompt = buildSummarizationPrompt(turns)
-            Log.d(TAG, "Summarizing conversation $conversationId with ${turns.size} turns...")
+            Log.d(TAG, "Summarizing conversation $conversationId with ${turns.size} turns using Qwen...")
 
-            val responseTokens: List<String> = llamaAndroid.send(prompt, formatChat = false)
-                .toList()
-            val summary = responseTokens.joinToString(separator = "").trim()
+            // Use Qwen via LLMManager
+            val summary = llmManager!!.generate(prompt, agentName = "Summarizer").trim()
 
-            Log.i(TAG, "✅ Generated summary: ${summary.take(100)}...")
+            Log.i(TAG, "✅ Generated summary (using Qwen): ${summary.take(100)}...")
             summary
         } catch (e: Exception) {
             Log.e(TAG, "Summarization failed: ${e.message}", e)
@@ -205,8 +198,7 @@ class MemoryModelManager(private val context: Context) {
     /**
      * Enhance memory context by filtering most relevant facts
      *
-     * Given a user query and existing memory context, uses the model
-     * to select the most relevant facts for the current conversation.
+     * v1.5: Uses Qwen to select the most relevant facts for the current conversation.
      *
      * @param userQuery Current user query
      * @param existingContext Memory context from UnifiedMemoryManager
@@ -216,17 +208,17 @@ class MemoryModelManager(private val context: Context) {
         userQuery: String,
         existingContext: String
     ): String = withContext(Dispatchers.IO) {
-        if (!isInitialized || existingContext.isBlank()) {
+        if (!isInitialized || llmManager == null || existingContext.isBlank()) {
             return@withContext existingContext
         }
 
         try {
             val prompt = buildContextEnhancementPrompt(userQuery, existingContext)
-            Log.d(TAG, "Enhancing memory context for query: ${userQuery.take(50)}...")
+            Log.d(TAG, "Enhancing memory context for query using Qwen: ${userQuery.take(50)}...")
 
-            val responseTokens: List<String> = llamaAndroid.send(prompt, formatChat = false)
-                .toList()
-            responseTokens.joinToString(separator = "").trim()
+            // Use Qwen via LLMManager
+            val enhanced = llmManager!!.generate(prompt, agentName = "ContextEnhancer").trim()
+            enhanced
         } catch (e: Exception) {
             Log.e(TAG, "Context enhancement failed: ${e.message}", e)
             existingContext  // Fallback to original context

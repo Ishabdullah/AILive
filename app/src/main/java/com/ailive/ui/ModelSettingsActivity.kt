@@ -2,6 +2,7 @@ package com.ailive.ui
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -14,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import com.ailive.R
 import com.ailive.ai.llm.ModelSettings
+import com.ailive.ai.llm.ModelDownloadManager
 import com.ailive.settings.AISettings
 
 /**
@@ -23,6 +25,7 @@ import com.ailive.settings.AISettings
  * - Sampling parameters (temperature, top_p, top_k, penalties)
  * - Generation parameters (context size, max tokens)
  * - Advanced features (Mirostat sampling)
+ * - Model management (download, view models)
  *
  * Real-time RAM usage estimation warns users if settings may cause instability.
  * All settings are persisted to SharedPreferences.
@@ -57,11 +60,15 @@ class ModelSettingsActivity : AppCompatActivity() {
     private lateinit var btnSave: Button
     private lateinit var btnReset: Button
     private lateinit var btnClose: Button
+    private lateinit var btnDownloadModels: Button
+    private lateinit var btnViewModels: Button
+    private lateinit var tvModelStatus: TextView
 
     // Current settings
     private var settings: ModelSettings = ModelSettings.getDefaults()
     private lateinit var aiSettings: AISettings
     private var totalDeviceRamMB: Int = 0
+    private lateinit var modelDownloadManager: ModelDownloadManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,11 +77,15 @@ class ModelSettingsActivity : AppCompatActivity() {
         // Get device RAM
         totalDeviceRamMB = getTotalRAM()
 
+        // Initialize model download manager
+        modelDownloadManager = ModelDownloadManager(this)
+
         // Initialize UI
         initializeViews()
         loadSettings()
         setupListeners()
         updateUI()
+        updateModelStatus()
     }
 
     private fun initializeViews() {
@@ -117,6 +128,16 @@ class ModelSettingsActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSave)
         btnReset = findViewById(R.id.btnReset)
         btnClose = findViewById(R.id.btnClose)
+
+        // Model Management UI (will fail gracefully if not in layout)
+        try {
+            btnDownloadModels = findViewById(R.id.btnDownloadModels)
+            btnViewModels = findViewById(R.id.btnViewModels)
+            tvModelStatus = findViewById(R.id.tvModelStatus)
+        } catch (e: Exception) {
+            // Layout doesn't have model management UI yet - that's OK
+            android.util.Log.d(TAG, "Model management UI not in layout (will add)")
+        }
     }
 
     private fun loadSettings() {
@@ -254,6 +275,19 @@ class ModelSettingsActivity : AppCompatActivity() {
                 "Location awareness ${if (isChecked) "enabled" else "disabled"}",
                 Toast.LENGTH_SHORT
             ).show()
+        }
+
+        // Model Management buttons
+        if (::btnDownloadModels.isInitialized) {
+            btnDownloadModels.setOnClickListener {
+                openDownloadModelsDialog()
+            }
+        }
+
+        if (::btnViewModels.isInitialized) {
+            btnViewModels.setOnClickListener {
+                showDownloadedModels()
+            }
         }
     }
 
@@ -396,5 +430,95 @@ class ModelSettingsActivity : AppCompatActivity() {
             maxTokens <= 1500 -> 19 + ((maxTokens - 1000) / 50)
             else -> 29 + ((maxTokens - 1500) / 50)
         }.coerceIn(0, 39)
+    }
+
+    /**
+     * Update model status display
+     */
+    private fun updateModelStatus() {
+        if (!::tvModelStatus.isInitialized) return
+
+        val qwenAvailable = modelDownloadManager.isQwenVLModelAvailable()
+        val memoryAvailable = modelDownloadManager.isMemoryModelAvailable()
+        val bgeAvailable = modelDownloadManager.isBGEModelAvailable()
+
+        val statusText = buildString {
+            append("Model Status:\n")
+            append("• Qwen (Main): ${if (qwenAvailable) "✓ Downloaded" else "✗ Missing"}\n")
+            append("• BGE (Memory): ${if (bgeAvailable) "✓ Downloaded" else "✗ Missing"}\n")
+            append("• TinyLlama: ${if (memoryAvailable) "Downloaded (unused)" else "Not needed"}")
+        }
+
+        tvModelStatus.text = statusText
+    }
+
+    /**
+     * Open dialog to download models
+     */
+    private fun openDownloadModelsDialog() {
+        val options = arrayOf(
+            "1. BGE Embedding Model (~133MB)",
+            "2. Memory Model / TinyLlama (~700MB)",
+            "3. Qwen Main Model (~986MB)",
+            "4. Download All Models (~1.9GB)"
+        )
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Download Models")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> startDownload("BGE")
+                    1 -> startDownload("Memory")
+                    2 -> startDownload("Qwen")
+                    3 -> startDownload("All")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Start downloading a specific model
+     */
+    private fun startDownload(modelType: String) {
+        Toast.makeText(this, "Starting $modelType model download...", Toast.LENGTH_SHORT).show()
+
+        // Return to MainActivity and trigger download there
+        // (ModelSetupDialog needs to be handled by MainActivity)
+        val intent = Intent().apply {
+            putExtra("download_model", modelType)
+        }
+        setResult(RESULT_OK, intent)
+        finish()
+    }
+
+    /**
+     * Show list of downloaded models
+     */
+    private fun showDownloadedModels() {
+        val models = mutableListOf<String>()
+
+        if (modelDownloadManager.isQwenVLModelAvailable()) {
+            models.add("✓ Qwen2-VL (~986MB) - Main conversation model")
+        }
+        if (modelDownloadManager.isBGEModelAvailable()) {
+            models.add("✓ BGE-small (~133MB) - Semantic embeddings")
+        }
+        if (modelDownloadManager.isMemoryModelAvailable()) {
+            models.add("✓ TinyLlama (~700MB) - Memory model (currently unused)")
+        }
+
+        if (models.isEmpty()) {
+            models.add("No models downloaded yet")
+        }
+
+        val modelsDir = modelDownloadManager.getModelsDirectory()
+        models.add("\nStorage location:\n$modelsDir")
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Downloaded Models")
+            .setMessage(models.joinToString("\n\n"))
+            .setPositiveButton("OK", null)
+            .show()
     }
 }
