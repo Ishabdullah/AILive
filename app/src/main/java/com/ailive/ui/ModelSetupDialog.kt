@@ -135,22 +135,23 @@ class ModelSetupDialog(
 
     /**
      * Show model selection dialog with recommendations (GGUF models)
+     * Lists each model individually, then "All Models" option
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "All Necessary Models (~1.7GB total) - Recommended",
-            "Memory Model only (TinyLlama-1.1B, ~700MB)",
-            "Main AI only (Qwen2-VL-2B, ~986MB)"
+            "1. Memory Model (TinyLlama-1.1B) - 700MB",
+            "2. Main AI (Qwen2-VL-2B) - 986MB",
+            "3. All Models - Download both (~1.7GB) ⭐ Recommended"
         )
 
         AlertDialog.Builder(activity)
             .setTitle("Select Models to Download")
-            .setMessage("AILive works best with both models, but you can download them individually if needed.")
+            .setMessage("Choose individual models or download all for full functionality:")
             .setItems(models) { _, which ->
                 when (which) {
-                    0 -> downloadAllModels(onComplete)  // Both models (recommended)
-                    1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
-                    2 -> downloadQwenVLModel(onComplete)  // Qwen only
+                    0 -> downloadMemoryModelOnly(onComplete)  // Memory model only
+                    1 -> downloadQwenVLModel(onComplete)  // Qwen only
+                    2 -> downloadAllModels(onComplete)  // All models (recommended)
                 }
             }
             .setNegativeButton("Cancel") { _, _ ->
