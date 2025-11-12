@@ -173,4 +173,37 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+
+    // Web Search Integration (v1.4)
+    // OkHttp - HTTP client with connection pooling, interceptors, TLS
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Retrofit - Type-safe REST client
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+
+    // Moshi - JSON parsing (Kotlin-friendly with codegen)
+    implementation("com.squareup.moshi:moshi:1.15.1")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
+
+    // Caffeine - High-performance in-memory cache
+    implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
+
+    // SnakeYAML - YAML configuration parsing
+    implementation("org.yaml:snakeyaml:2.2")
+
+    // MockWebServer - Testing HTTP clients
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+
+    // Kotlin Test - Coroutine testing
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+
+    // Mockito - Mocking framework
+    testImplementation("org.mockito:mockito-core:5.11.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+
+    // Truth - Fluent assertions
+    testImplementation("com.google.truth:truth:1.4.2")
 }
