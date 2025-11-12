@@ -1,11 +1,12 @@
 package com.ailive.ai.memory
 
 import android.content.Context
+import android.llama.cpp.LLamaAndroid
 import android.util.Log
-import com.ailive.ai.llm.LLamaAndroid
 import com.ailive.ai.llm.ModelDownloadManager
 import com.ailive.memory.database.entities.FactCategory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
@@ -145,9 +146,9 @@ class MemoryModelManager(private val context: Context) {
             val prompt = buildFactExtractionPrompt(userMessage, assistantResponse)
             Log.d(TAG, "Extracting facts from conversation turn...")
 
-            val response = llamaAndroid.send(prompt, formatChat = false)
+            val responseTokens: List<String> = llamaAndroid.send(prompt, formatChat = false)
                 .toList()
-                .joinToString("")
+            val response = responseTokens.joinToString(separator = "")
 
             val facts = parseFacts(response)
             Log.i(TAG, "✅ Extracted ${facts.size} facts from conversation")
@@ -189,10 +190,9 @@ class MemoryModelManager(private val context: Context) {
             val prompt = buildSummarizationPrompt(turns)
             Log.d(TAG, "Summarizing conversation $conversationId with ${turns.size} turns...")
 
-            val summary = llamaAndroid.send(prompt, formatChat = false)
+            val responseTokens: List<String> = llamaAndroid.send(prompt, formatChat = false)
                 .toList()
-                .joinToString("")
-                .trim()
+            val summary = responseTokens.joinToString(separator = "").trim()
 
             Log.i(TAG, "✅ Generated summary: ${summary.take(100)}...")
             summary
@@ -224,10 +224,9 @@ class MemoryModelManager(private val context: Context) {
             val prompt = buildContextEnhancementPrompt(userQuery, existingContext)
             Log.d(TAG, "Enhancing memory context for query: ${userQuery.take(50)}...")
 
-            llamaAndroid.send(prompt, formatChat = false)
+            val responseTokens: List<String> = llamaAndroid.send(prompt, formatChat = false)
                 .toList()
-                .joinToString("")
-                .trim()
+            responseTokens.joinToString(separator = "").trim()
         } catch (e: Exception) {
             Log.e(TAG, "Context enhancement failed: ${e.message}", e)
             existingContext  // Fallback to original context
