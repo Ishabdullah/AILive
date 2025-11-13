@@ -438,15 +438,23 @@ class ModelSettingsActivity : AppCompatActivity() {
     private fun updateModelStatus() {
         if (!::tvModelStatus.isInitialized) return
 
-        val qwenAvailable = modelDownloadManager.isQwenVLModelAvailable()
-        val memoryAvailable = modelDownloadManager.isMemoryModelAvailable()
+        val activeModel = modelDownloadManager.getActiveModelFile()
+        val ggufModels = modelDownloadManager.getAvailableModelsInDownloads()
         val bgeAvailable = modelDownloadManager.isBGEModelAvailable()
 
         val statusText = buildString {
-            append("Model Status:\n")
-            append("• Qwen (Main): ${if (qwenAvailable) "✓ Downloaded" else "✗ Missing"}\n")
-            append("• BGE (Memory): ${if (bgeAvailable) "✓ Downloaded" else "✗ Missing"}\n")
-            append("• TinyLlama: ${if (memoryAvailable) "Downloaded (unused)" else "Not needed"}")
+            append("Active Model:\n")
+            if (activeModel != null) {
+                val sizeMB = activeModel.length() / 1024 / 1024
+                append("● ${activeModel.name} (${sizeMB}MB)\n\n")
+            } else {
+                append("✗ No model loaded\n\n")
+            }
+
+            append("Available GGUF Models: ${ggufModels.size}\n")
+            append("BGE Embeddings: ${if (bgeAvailable) "✓ Ready" else "✗ Missing"}\n\n")
+
+            append("Tap 'View Models' to switch models")
         }
 
         tvModelStatus.text = statusText
@@ -493,32 +501,65 @@ class ModelSettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Show list of downloaded models
+     * Show list of downloaded models with selection option
+     * Updated: Shows ALL GGUF models, allows switching active model
      */
     private fun showDownloadedModels() {
-        val models = mutableListOf<String>()
+        // Get all GGUF models
+        val ggufModels = modelDownloadManager.getAvailableModelsInDownloads()
+        val activeModel = modelDownloadManager.getActiveModelFile()
 
-        if (modelDownloadManager.isQwenVLModelAvailable()) {
-            models.add("✓ Qwen2-VL (~986MB) - Main conversation model")
-        }
-        if (modelDownloadManager.isBGEModelAvailable()) {
-            models.add("✓ BGE-small (~133MB) - Semantic embeddings")
-        }
-        if (modelDownloadManager.isMemoryModelAvailable()) {
-            models.add("✓ TinyLlama (~700MB) - Memory model (currently unused)")
+        if (ggufModels.isEmpty()) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("No Models Found")
+                .setMessage("No GGUF models found. Please download or import a model.")
+                .setPositiveButton("Download", { _, _ -> openDownloadModelsDialog() })
+                .setNegativeButton("Close", null)
+                .show()
+            return
         }
 
-        if (models.isEmpty()) {
-            models.add("No models downloaded yet")
-        }
+        // Build model list with selection markers
+        val modelNames = ggufModels.map { model ->
+            val sizeMB = model.length() / 1024 / 1024
+            val isActive = model.absolutePath == activeModel?.absolutePath
+            val marker = if (isActive) "● " else "○ "
+            val status = if (isActive) " (ACTIVE)" else ""
+            "$marker${model.name}$status\n   ${sizeMB}MB"
+        }.toTypedArray()
 
         val modelsDir = modelDownloadManager.getModelsDirectory()
-        models.add("\nStorage location:\n$modelsDir")
 
         android.app.AlertDialog.Builder(this)
-            .setTitle("Downloaded Models")
-            .setMessage(models.joinToString("\n\n"))
-            .setPositiveButton("OK", null)
+            .setTitle("Downloaded GGUF Models")
+            .setMessage("Select a model to set as active:\n\nStorage: $modelsDir\n")
+            .setItems(modelNames) { _, which ->
+                val selectedModel = ggufModels[which]
+                selectActiveModel(selectedModel)
+            }
+            .setNeutralButton("Import Model") { _, _ ->
+                Toast.makeText(this, "Use file picker in MainActivity to import models", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Close", null)
             .show()
+    }
+
+    /**
+     * Set selected model as the active model
+     * Saves preference and notifies user to restart app
+     */
+    private fun selectActiveModel(modelFile: java.io.File) {
+        // Save selected model to preferences
+        val prefs = getSharedPreferences("ailive_model_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("active_model_path", modelFile.absolutePath).apply()
+
+        Toast.makeText(
+            this,
+            "Active model set to:\n${modelFile.name}\n\nPlease restart AILive for changes to take effect.",
+            Toast.LENGTH_LONG
+        ).show()
+
+        // Update UI
+        updateModelStatus()
     }
 }
