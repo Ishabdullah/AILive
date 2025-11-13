@@ -95,6 +95,8 @@ class MainActivity : AppCompatActivity() {
 
     private var callbackCount = 0
     private var isInitialized = false
+    private var isModelsReady = false
+    private var isCoreReady = false
     private var isListeningForWakeWord = false
     private var isMicEnabled = false
     private var isCameraEnabled = false
@@ -419,14 +421,18 @@ class MainActivity : AppCompatActivity() {
             statusIndicator.text = "● SETUP REQUIRED"
             classificationResult.text = "Let's set up your AI assistant!"
 
+            // Setup callback for file picker if user chooses to import models
             filePickerOnComplete = {
-                Log.d(TAG, "Model setup complete, continuing initialization")
+                Log.d(TAG, "File picker complete, continuing initialization")
                 continueInitialization()
             }
 
             // Show AI name customization first, then model setup
+            // This callback is invoked when setup completes (download/import/skip)
             modelSetupDialog.showNameSetupDialog {
-                Log.d(TAG, "Setup complete, continuing initialization")
+                Log.d(TAG, "Model setup dialog complete, continuing initialization")
+                // If file picker wasn't used, clear the callback and proceed
+                filePickerOnComplete = null
                 continueInitialization()
             }
             // stop further initialization until user completes model setup
@@ -455,13 +461,13 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
         }
 
-        // Initialize core early (keeps your previous design)
+        // Initialize AILive Core (but don't start it yet - wait for models)
         try {
             Log.i(TAG, "=== Initializing ${settings.aiName} Core ===")
             aiLiveCore = AILiveCore(applicationContext, this)
             aiLiveCore.initialize()
-            aiLiveCore.start()
-            Log.i(TAG, "✓ Phase 1: Agents operational")
+            isCoreReady = true
+            Log.i(TAG, "✓ Phase 1: Core initialized (awaiting models)")
         } catch (e: Exception) {
             Log.e(TAG, "AILive Core init failed", e)
             runOnUiThread {
@@ -471,9 +477,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Permissions are now requested earlier in requestInitialPermissions()
-        // Proceed directly to starting models
-        Log.i(TAG, "✓ Permissions verified, starting models")
+        // Now initialize models, camera, and audio BEFORE starting core
+        Log.i(TAG, "✓ Permissions verified, initializing models")
         startModels()
     }
 
@@ -491,6 +496,7 @@ class MainActivity : AppCompatActivity() {
 
             lifecycleScope.launch(Dispatchers.Default) {
                 try {
+                    // Phase 2.1: Initialize TensorFlow model manager
                     modelManager.initialize()
 
                     withContext(Dispatchers.Main) {
@@ -503,6 +509,13 @@ class MainActivity : AppCompatActivity() {
 
                         delay(500)
                         initializeAudio()
+
+                        // Mark models as ready
+                        isModelsReady = true
+                        Log.i(TAG, "✓ Phase 2.4: All models initialized")
+
+                        // Now that models are ready, start the core
+                        startAILiveCore()
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -512,18 +525,60 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-
-            // Run tests on main (non-blocking)
-            lifecycleScope.launch {
-                delay(1000)
-                val tests = TestScenarios(aiLiveCore)
-                tests.runAllTests()
-            }
         } catch (e: Exception) {
             Log.e(TAG, "Init failed", e)
             runOnUiThread {
                 statusIndicator.text = "● INIT ERROR"
                 classificationResult.text = "Error: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Start AILive Core after all models and tools are ready
+     * This ensures tools are registered before the core starts processing
+     */
+    private fun startAILiveCore() {
+        if (!isCoreReady || !isModelsReady) {
+            Log.w(TAG, "⚠️ Cannot start core - prerequisites not met (core: $isCoreReady, models: $isModelsReady)")
+            return
+        }
+
+        try {
+            Log.i(TAG, "=== Starting ${settings.aiName} Core ===")
+            aiLiveCore.start()
+            Log.i(TAG, "✓ Phase 3: Core started - All systems operational")
+
+            // Run integration tests AFTER everything is initialized
+            runIntegrationTests()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start AILive Core", e)
+            runOnUiThread {
+                statusIndicator.text = "● START ERROR"
+                classificationResult.text = "Error starting core: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Run integration tests after all systems are initialized
+     * Only runs if core and models are ready
+     */
+    private fun runIntegrationTests() {
+        if (!isCoreReady || !isModelsReady) {
+            Log.w(TAG, "⚠️ Skipping tests - system not fully initialized")
+            return
+        }
+
+        lifecycleScope.launch {
+            try {
+                delay(2000)  // Give systems time to stabilize
+                Log.i(TAG, "🧪 Running integration tests...")
+                val tests = TestScenarios(aiLiveCore)
+                tests.runAllTests()
+                Log.i(TAG, "✅ Integration tests complete")
+            } catch (e: Exception) {
+                Log.e(TAG, "Integration tests failed", e)
             }
         }
     }
@@ -545,12 +600,13 @@ class MainActivity : AppCompatActivity() {
 
             cameraManager.startCamera(cameraPreview)
 
+            // Register VisionAnalysisTool with PersonalityEngine before core starts
             val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
                 modelManager = modelManager,
                 cameraManager = cameraManager
             )
             aiLiveCore.personalityEngine.registerTool(visionTool)
-            Log.d(TAG, "✓ VisionAnalysisTool registered")
+            Log.i(TAG, "✓ Phase 2.2: Camera & VisionAnalysisTool registered")
 
             runOnUiThread {
                 statusIndicator.text = "●"
@@ -706,8 +762,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            Log.i(TAG, "✓ Phase 2.3: Audio pipeline operational")
-            Log.i(TAG, "✓ Phase 2.4: TTS ready")
+            Log.i(TAG, "✓ Phase 2.3: Audio pipeline operational and TTS ready")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Audio init failed", e)
             runOnUiThread { statusIndicator.text = "● ERROR" }
