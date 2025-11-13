@@ -92,17 +92,19 @@ class ModelDownloadManager(private val context: Context) {
         // Lightweight embedding model for semantic search and memory retrieval
         // This runs ALONGSIDE Qwen and TinyLlama for vector operations
 
-        // Base URL for BGE-small-en-v1.5 ONNX (Xenova optimized export)
-        private const val BGE_BASE_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main/onnx"
+        // Base URLs for BGE-small-en-v1.5 ONNX (Xenova optimized export)
+        private const val BGE_ROOT_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main"
+        private const val BGE_ONNX_URL = "$BGE_ROOT_URL/onnx"
 
         // BGE model files (quantized INT8 for mobile efficiency)
         const val BGE_MODEL_ONNX = "model_quantized.onnx"
         const val BGE_TOKENIZER_JSON = "tokenizer.json"
         const val BGE_CONFIG_JSON = "config.json"
 
-        const val BGE_MODEL_URL = "$BGE_BASE_URL/$BGE_MODEL_ONNX"
-        const val BGE_TOKENIZER_URL = "$BGE_BASE_URL/$BGE_TOKENIZER_JSON"
-        const val BGE_CONFIG_URL = "$BGE_BASE_URL/$BGE_CONFIG_JSON"
+        // Model is in onnx/ subdirectory, but tokenizer and config are in root
+        const val BGE_MODEL_URL = "$BGE_ONNX_URL/$BGE_MODEL_ONNX"
+        const val BGE_TOKENIZER_URL = "$BGE_ROOT_URL/$BGE_TOKENIZER_JSON"
+        const val BGE_CONFIG_URL = "$BGE_ROOT_URL/$BGE_CONFIG_JSON"
 
         // Model info:
         // - 33M parameters (optimized for embeddings)
