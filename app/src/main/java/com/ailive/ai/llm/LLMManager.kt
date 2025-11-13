@@ -303,36 +303,20 @@ class LLMManager(private val context: Context) {
             // Handle PersonalityEngine prompts vs simple prompts differently
             val (messageToSend, useFormatChat) = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
                                                        prompt.contains("===== CURRENT CONTEXT =====")) {
-                // PersonalityEngine formatted prompt - contains system instructions + context + history
-                Log.d(TAG, "✓ Using PersonalityEngine prompt with full context")
+                // PersonalityEngine formatted prompt - already contains full context in natural format
+                // These prompts have system instructions, context, history, and user input
+                // DO NOT use formatChat - pass the entire prompt as-is to preserve all context
+                Log.d(TAG, "✓ PersonalityEngine prompt detected - preserving full context")
+                Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
+                Log.d(TAG, "   Contains: system instructions, capabilities, context, history, user input")
+                Log.d(TAG, "   Using formatChat=FALSE to preserve natural language format")
 
-                // Extract system message and user question properly
-                val lastUserIndex = prompt.lastIndexOf("User:")
-
-                if (lastUserIndex > 0) {
-                    // Split into system context (everything before last User:) and user question
-                    val systemAndContext = prompt.substring(0, lastUserIndex).trim()
-                    val userExchange = prompt.substring(lastUserIndex).trim()
-
-                    // Extract just the user's question (between "User:" and agentName or end)
-                    val userQuestion = userExchange.substringAfter("User:").let {
-                        val agentIndex = it.indexOf("$agentName:")
-                        if (agentIndex > 0) it.substring(0, agentIndex).trim() else it.trim()
-                    }
-
-                    Log.d(TAG, "   System context: ${systemAndContext.length} chars")
-                    Log.d(TAG, "   User question: \"${userQuestion.take(50)}...\"")
-
-                    // Pass the full context as system message + user question
-                    Pair(systemAndContext + "\n\nUser: " + userQuestion, true)
-                } else {
-                    // Fallback: use whole prompt without formatting
-                    Log.w(TAG, "   Could not split prompt, using as-is")
-                    Pair(prompt, false)
-                }
+                // Pass entire prompt without modification
+                // formatChat=FALSE means llama.cpp won't try to apply ChatML formatting
+                Pair(prompt, false)
             } else {
-                // Simple prompt - let llama.cpp format it
-                Log.d(TAG, "✓ Using simple prompt with auto-formatting")
+                // Simple prompt - let llama.cpp format it with ChatML
+                Log.d(TAG, "✓ Simple prompt - using llama.cpp auto-formatting")
                 Pair(prompt, true)
             }
 
@@ -406,38 +390,20 @@ class LLMManager(private val context: Context) {
         // Handle PersonalityEngine prompts vs simple prompts differently
         val (messageToSend, useFormatChat) = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
                                                    prompt.contains("===== CURRENT CONTEXT =====")) {
-            // PersonalityEngine formatted prompt - contains system instructions + context + history
-            Log.d(TAG, "✓ Using PersonalityEngine prompt with full context")
+            // PersonalityEngine formatted prompt - already contains full context in natural format
+            // These prompts have system instructions, context, history, and user input
+            // DO NOT use formatChat - pass the entire prompt as-is to preserve all context
+            Log.d(TAG, "✓ PersonalityEngine prompt detected - preserving full context")
+            Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
+            Log.d(TAG, "   Contains: system instructions, capabilities, context, history, user input")
+            Log.d(TAG, "   Using formatChat=FALSE to preserve natural language format")
 
-            // Extract system message and user question properly
-            val lastUserIndex = prompt.lastIndexOf("User:")
-
-            if (lastUserIndex > 0) {
-                // Split into system context (everything before last User:) and user question
-                val systemAndContext = prompt.substring(0, lastUserIndex).trim()
-                val userExchange = prompt.substring(lastUserIndex).trim()
-
-                // Extract just the user's question (between "User:" and agentName or end)
-                val userQuestion = userExchange.substringAfter("User:").let {
-                    val agentIndex = it.indexOf("$agentName:")
-                    if (agentIndex > 0) it.substring(0, agentIndex).trim() else it.trim()
-                }
-
-                Log.d(TAG, "   System context: ${systemAndContext.length} chars")
-                Log.d(TAG, "   User question: \"${userQuestion.take(50)}...\"")
-
-                // Use llama.cpp's formatChat=true with system message support
-                // Pass the full context as system message + user question
-                // llama.cpp will format it correctly for the loaded model
-                Pair(systemAndContext + "\n\nUser: " + userQuestion, true)
-            } else {
-                // Fallback: use whole prompt without formatting
-                Log.w(TAG, "   Could not split prompt, using as-is")
-                Pair(prompt, false)
-            }
+            // Pass entire prompt without modification
+            // formatChat=FALSE means llama.cpp won't try to apply ChatML formatting
+            Pair(prompt, false)
         } else {
-            // Simple prompt - let llama.cpp format it
-            Log.d(TAG, "✓ Using simple prompt with auto-formatting")
+            // Simple prompt - let llama.cpp format it with ChatML
+            Log.d(TAG, "✓ Simple prompt - using llama.cpp auto-formatting")
             Pair(prompt, true)
         }
 
