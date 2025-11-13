@@ -2,6 +2,7 @@ package com.ailive.memory.managers
 
 import android.content.Context
 import android.util.Log
+import com.ailive.ai.memory.MemoryModelManager
 import com.ailive.memory.database.entities.FactCategory
 import com.ailive.memory.database.entities.LongTermFactEntity
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,8 @@ import java.util.concurrent.TimeUnit
  * - User Profile (Personal information)
  *
  * Provides a unified interface for the PersonalityEngine to interact with memory.
+ *
+ * v1.4: Enhanced with lightweight AI model for intelligent fact extraction and summarization
  */
 class UnifiedMemoryManager(private val context: Context) {
     private val TAG = "UnifiedMemoryManager"
@@ -31,13 +34,38 @@ class UnifiedMemoryManager(private val context: Context) {
     val longTermMemory = LongTermMemoryManager(context)
     val userProfile = UserProfileManager(context)
 
+    // NEW: Lightweight AI model for memory operations
+    private val memoryModelManager = MemoryModelManager(context)
+
     // ===== Lifecycle Management =====
 
     /**
      * Initialize memory system
+     * v1.5: Memory model now uses Qwen via LLMManager (fixed singleton conflict)
+     *
+     * SOLUTION: Instead of loading separate TinyLlama, we now use Qwen (which is
+     * already loaded) for memory operations via LLMManager. This solves the llama.cpp
+     * singleton conflict and provides better results (Qwen is more capable than TinyLlama).
+     *
+     * Benefits:
+     * - No model conflicts (single model for everything)
+     * - Better accuracy (Qwen 2B vs TinyLlama 1.1B)
+     * - Faster (no model swapping needed)
+     * - LLM-based fact extraction enabled
+     *
+     * @param llmManager The initialized LLMManager instance (with Qwen loaded)
      */
-    suspend fun initialize() {
+    suspend fun initialize(llmManager: com.ailive.ai.llm.LLMManager? = null) {
         Log.i(TAG, "Initializing unified memory system...")
+
+        // v1.5: Initialize memory model with Qwen via LLMManager
+        if (llmManager != null && llmManager.isReady()) {
+            Log.i(TAG, "✓ Initializing memory AI with Qwen (shared model)")
+            memoryModelManager.initialize(llmManager)
+        } else {
+            Log.i(TAG, "⚠️  LLMManager not ready - memory AI will use regex fallback")
+            Log.i(TAG, "   This is normal during app startup - memory AI will initialize later")
+        }
 
         // Ensure user profile exists
         userProfile.getOrCreateProfile()
@@ -86,6 +114,7 @@ class UnifiedMemoryManager(private val context: Context) {
         )
 
         // Auto-extract facts in background
+        // v1.4: Now uses LLM-based extraction with fallback to regex
         if (role == "USER") {
             scope.launch {
                 try {
@@ -94,11 +123,44 @@ class UnifiedMemoryManager(private val context: Context) {
                     val history = conversationMemory.getConversationHistory(conversationId, limit = 2)
                     val lastAiResponse = history.lastOrNull { it.role == "ASSISTANT" }?.content ?: ""
 
-                    longTermMemory.extractFactsFromConversation(
-                        userMessage = content,
-                        aiResponse = lastAiResponse,
-                        conversationId = conversationId
-                    )
+                    // Try LLM-based fact extraction first
+                    if (memoryModelManager.isReady()) {
+                        try {
+                            Log.d(TAG, "Using LLM-based fact extraction")
+                            val extractedFacts = memoryModelManager.extractFacts(
+                                userMessage = content,
+                                assistantResponse = lastAiResponse
+                            )
+
+                            // Store each extracted fact
+                            extractedFacts.forEach { fact ->
+                                longTermMemory.learnFact(
+                                    category = fact.category,
+                                    factText = fact.text,
+                                    extractedFrom = conversationId,
+                                    importance = fact.importance
+                                )
+                            }
+
+                            Log.i(TAG, "✅ Extracted ${extractedFacts.size} facts using LLM")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "LLM fact extraction failed, falling back to regex: ${e.message}")
+                            // Fallback to regex-based extraction
+                            longTermMemory.extractFactsFromConversation(
+                                userMessage = content,
+                                aiResponse = lastAiResponse,
+                                conversationId = conversationId
+                            )
+                        }
+                    } else {
+                        // Memory model not available, use regex fallback
+                        Log.d(TAG, "Memory model not ready, using regex-based fact extraction")
+                        longTermMemory.extractFactsFromConversation(
+                            userMessage = content,
+                            aiResponse = lastAiResponse,
+                            conversationId = conversationId
+                        )
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error extracting facts", e)
                 }

@@ -64,10 +64,67 @@ class ModelDownloadManager(private val context: Context) {
         // Q5_K_M: 1.13GB (higher quality)
         // Q6_K: 1.27GB (very high quality)
 
+        // TinyLlama-1.1B-Chat-v1.0 GGUF model (Q4_K_M quantized)
+        // Lightweight model for memory operations (fact extraction, summarization)
+        // This runs BEFORE/ALONGSIDE Qwen to manage AILive's memory system
+
+        // Base URL for TinyLlama-1.1B-Chat-v1.0 GGUF (TheBloke quantization)
+        private const val TINYLLAMA_BASE_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main"
+
+        // Memory model file (Q4_K_M quantization)
+        const val MEMORY_MODEL_GGUF = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+        const val MEMORY_MODEL_URL = "$TINYLLAMA_BASE_URL/$MEMORY_MODEL_GGUF"
+
+        // Model info:
+        // - 1.1B parameters (instruction-tuned for chat/extraction)
+        // - GGUF format: Compatible with llama.cpp Android
+        // - Q4_K_M quantization: ~700MB
+        // - Context: 2048 tokens
+        // - Purpose: Memory operations (fact extraction, summarization, context filtering)
+        // - License: Apache 2.0 (fully commercial-safe)
+        //
+        // Performance on mobile:
+        // - CPU: 10-15 tokens/sec
+        // - GPU (Adreno): 30-40 tokens/sec
+        // - Init time: < 5 seconds
+
+        // BGE-small-en-v1.5 ONNX model (Semantic embeddings)
+        // Lightweight embedding model for semantic search and memory retrieval
+        // This runs ALONGSIDE Qwen and TinyLlama for vector operations
+
+        // Base URLs for BGE-small-en-v1.5 ONNX (Xenova optimized export)
+        private const val BGE_ROOT_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main"
+        private const val BGE_ONNX_URL = "$BGE_ROOT_URL/onnx"
+
+        // BGE model files (quantized INT8 for mobile efficiency)
+        const val BGE_MODEL_ONNX = "model_quantized.onnx"
+        const val BGE_TOKENIZER_JSON = "tokenizer.json"
+        const val BGE_CONFIG_JSON = "config.json"
+
+        // Model is in onnx/ subdirectory, but tokenizer and config are in root
+        const val BGE_MODEL_URL = "$BGE_ONNX_URL/$BGE_MODEL_ONNX"
+        const val BGE_TOKENIZER_URL = "$BGE_ROOT_URL/$BGE_TOKENIZER_JSON"
+        const val BGE_CONFIG_URL = "$BGE_ROOT_URL/$BGE_CONFIG_JSON"
+
+        // Model info:
+        // - 33M parameters (optimized for embeddings)
+        // - ONNX format: Compatible with ONNX Runtime Android
+        // - INT8 quantization: ~133MB (model + tokenizer + config)
+        // - Output: 384-dimensional embeddings
+        // - Purpose: Semantic search, memory retrieval, fact similarity
+        // - License: MIT (fully commercial-safe)
+        //
+        // Performance on mobile:
+        // - Inference: < 50ms per text
+        // - Batch processing: 20-30 texts/second
+        // - Init time: < 2 seconds
+        // - Memory: ~150MB RAM
+
         private const val MODELS_DIR = "models"
 
         // Minimum valid model size
-        private const val MIN_MODEL_SIZE_BYTES = 100 * 1024 * 1024L  // 100MB (GGUF models are large)
+        private const val MIN_MODEL_SIZE_BYTES = 10 * 1024 * 1024L  // 10MB (BGE files are smaller)
+        private const val MIN_GGUF_SIZE_BYTES = 100 * 1024 * 1024L  // 100MB for GGUF models
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -105,27 +162,112 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Check if Qwen2-VL GGUF model exists in models folder
-     * Much simpler than ONNX - just one file!
+     * Check if ANY GGUF model exists in models folder
+     * Accepts any valid GGUF file, not just Qwen2-VL
+     *
+     * This allows users to use custom models like:
+     * - The_Elder-v2.gguf
+     * - Mistral-7B-Q4.gguf
+     * - Llama-2-7B.gguf
+     * etc.
      */
     fun isQwenVLModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
-        val modelFile = File(downloadsDir, QWEN_VL_MODEL_GGUF)
+
+        // First check if the default Qwen model exists
+        val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
+        if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            val sizeMB = defaultModel.length() / 1024 / 1024
+            Log.i(TAG, "✅ Default model available: $QWEN_VL_MODEL_GGUF (${sizeMB}MB)")
+            return true
+        }
+
+        // If default doesn't exist, check for ANY valid GGUF model
+        val ggufModels = getAvailableModelsInDownloads()
+
+        if (ggufModels.isEmpty()) {
+            Log.i(TAG, "❌ No GGUF models found in ${downloadsDir.absolutePath}")
+            return false
+        }
+
+        // Use the largest GGUF model (likely the main conversation model)
+        val largestModel = ggufModels.maxByOrNull { it.length() }
+        if (largestModel != null && largestModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            val sizeMB = largestModel.length() / 1024 / 1024
+            Log.i(TAG, "✅ Found alternative GGUF model: ${largestModel.name} (${sizeMB}MB)")
+            return true
+        }
+
+        Log.i(TAG, "❌ No valid GGUF models found (all too small)")
+        return false
+    }
+
+    /**
+     * Check if Memory Model (TinyLlama) exists in models folder
+     * Used for memory operations: fact extraction, summarization, context filtering
+     */
+    fun isMemoryModelAvailable(): Boolean {
+        val downloadsDir = getModelsDir()
+        val modelFile = File(downloadsDir, MEMORY_MODEL_GGUF)
 
         if (!modelFile.exists()) {
-            Log.i(TAG, "❌ Missing required file: $QWEN_VL_MODEL_GGUF")
+            Log.i(TAG, "❌ Missing memory model file: $MEMORY_MODEL_GGUF")
             return false
         }
 
         val sizeMB = modelFile.length() / 1024 / 1024
-        Log.d(TAG, "✓ Found GGUF model: $QWEN_VL_MODEL_GGUF (${sizeMB}MB)")
+        Log.d(TAG, "✓ Found memory model: $MEMORY_MODEL_GGUF (${sizeMB}MB)")
 
         if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
-            Log.e(TAG, "❌ Model file too small (${sizeMB}MB), likely corrupted")
+            Log.e(TAG, "❌ Memory model file too small (${sizeMB}MB), likely corrupted")
             return false
         }
 
-        Log.i(TAG, "✅ Qwen2-VL GGUF model available (${sizeMB}MB)")
+        Log.i(TAG, "✅ Memory model available (${sizeMB}MB)")
+        return true
+    }
+
+    /**
+     * Check if BGE embedding model exists in models folder
+     * Used for semantic embeddings: similarity search, memory retrieval
+     * Requires 3 files: model_quantized.onnx, tokenizer.json, config.json
+     */
+    fun isBGEModelAvailable(): Boolean {
+        val downloadsDir = getModelsDir()
+        val modelFile = File(downloadsDir, BGE_MODEL_ONNX)
+        val tokenizerFile = File(downloadsDir, BGE_TOKENIZER_JSON)
+        val configFile = File(downloadsDir, BGE_CONFIG_JSON)
+
+        // Check all 3 required files
+        if (!modelFile.exists()) {
+            Log.i(TAG, "❌ Missing BGE model file: $BGE_MODEL_ONNX")
+            return false
+        }
+        if (!tokenizerFile.exists()) {
+            Log.i(TAG, "❌ Missing BGE tokenizer file: $BGE_TOKENIZER_JSON")
+            return false
+        }
+        if (!configFile.exists()) {
+            Log.i(TAG, "❌ Missing BGE config file: $BGE_CONFIG_JSON")
+            return false
+        }
+
+        val modelSizeMB = modelFile.length() / 1024 / 1024
+        val tokenizerSizeMB = tokenizerFile.length() / 1024 / 1024
+        val configSizeMB = configFile.length() / 1024 / 1024
+
+        Log.d(TAG, "✓ Found BGE model: $BGE_MODEL_ONNX (${modelSizeMB}MB)")
+        Log.d(TAG, "✓ Found BGE tokenizer: $BGE_TOKENIZER_JSON (${tokenizerSizeMB}MB)")
+        Log.d(TAG, "✓ Found BGE config: $BGE_CONFIG_JSON (${configSizeMB}MB)")
+
+        // Validate model file size (tokenizer/config are smaller, so use MIN_MODEL_SIZE_BYTES)
+        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
+            Log.e(TAG, "❌ BGE model file too small (${modelSizeMB}MB), likely corrupted")
+            return false
+        }
+
+        val totalSizeMB = modelSizeMB + tokenizerSizeMB + configSizeMB
+        Log.i(TAG, "✅ BGE embedding model available (~${totalSizeMB}MB)")
         return true
     }
 
@@ -158,6 +300,54 @@ class ModelDownloadManager(private val context: Context) {
     fun getModelPath(modelName: String = QWEN_VL_MODEL_GGUF): String {
         val downloadsDir = getModelsDir()
         return File(downloadsDir, modelName).absolutePath
+    }
+
+    /**
+     * Get the actual GGUF model to use for LLM inference
+     * Priority:
+     * 1. User-selected model (from Settings)
+     * 2. Default Qwen model
+     * 3. Largest available GGUF model
+     *
+     * This allows users to switch between models easily
+     */
+    fun getActiveModelFile(): File? {
+        val downloadsDir = getModelsDir()
+
+        // 1. Check if user has selected a specific model in Settings
+        val prefs = context.getSharedPreferences("ailive_model_prefs", Context.MODE_PRIVATE)
+        val selectedModelPath = prefs.getString("active_model_path", null)
+
+        if (selectedModelPath != null) {
+            val selectedModel = File(selectedModelPath)
+            if (selectedModel.exists() && selectedModel.length() >= MIN_MODEL_SIZE_BYTES) {
+                Log.i(TAG, "Using user-selected model: ${selectedModel.name}")
+                return selectedModel
+            } else {
+                Log.w(TAG, "User-selected model not found or invalid, falling back to default")
+                // Clear invalid preference
+                prefs.edit().remove("active_model_path").apply()
+            }
+        }
+
+        // 2. Try the default Qwen model
+        val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
+        if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            Log.i(TAG, "Using default model: ${defaultModel.name}")
+            return defaultModel
+        }
+
+        // 3. Otherwise, find the largest GGUF model (likely the main conversation model)
+        val ggufModels = getAvailableModelsInDownloads()
+        val largestModel = ggufModels.maxByOrNull { it.length() }
+
+        if (largestModel != null && largestModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            Log.i(TAG, "Using alternative model: ${largestModel.name} (${largestModel.length() / 1024 / 1024}MB)")
+            return largestModel
+        }
+
+        Log.e(TAG, "No valid GGUF models found")
+        return null
     }
 
     /**
@@ -205,6 +395,201 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * Download Memory Model (TinyLlama-1.1B) GGUF
+     * Lightweight model for memory operations (fact extraction, summarization)
+     * Size: ~700MB (Q4_K_M quantization)
+     */
+    fun downloadMemoryModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
+        Log.i(TAG, "📥 Starting Memory Model (TinyLlama-1.1B) download...")
+        Log.i(TAG, "   Model: $MEMORY_MODEL_GGUF (~700MB)")
+        Log.i(TAG, "   Quantization: Q4_K_M (optimized for mobile)")
+        Log.i(TAG, "   Purpose: Intelligent memory operations")
+
+        // Report progress (file 1 of 1)
+        onProgress(MEMORY_MODEL_GGUF, 1, 1)
+
+        // Download the single GGUF file
+        downloadModel(MEMORY_MODEL_URL, MEMORY_MODEL_GGUF) { success, error ->
+            if (success) {
+                Log.i(TAG, "✅ Memory Model downloaded successfully!")
+                onComplete(true, "")
+            } else {
+                Log.e(TAG, "❌ Failed to download Memory Model: $error")
+                onComplete(false, "Failed to download memory model: $error")
+            }
+        }
+    }
+
+    /**
+     * Download BGE Embedding Model (BGE-small-en-v1.5) ONNX
+     * Lightweight embedding model for semantic search and memory retrieval
+     * Total size: ~133MB (model + tokenizer + config)
+     * Requires 3 files: model_quantized.onnx, tokenizer.json, config.json
+     */
+    fun downloadBGEModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
+        Log.i(TAG, "📥 Starting BGE Embedding Model (BGE-small-en-v1.5) download...")
+        Log.i(TAG, "   Files: 3 (model, tokenizer, config)")
+        Log.i(TAG, "   Total size: ~133MB (INT8 quantized)")
+        Log.i(TAG, "   Purpose: Semantic embeddings for memory retrieval")
+
+        // Download files sequentially: model → tokenizer → config
+        var filesDownloaded = 0
+        var filesAlreadyExisted = 0
+        val totalFiles = 3
+
+        // Download 1: model_quantized.onnx (~120MB)
+        onProgress(BGE_MODEL_ONNX, 1, totalFiles)
+        downloadModel(BGE_MODEL_URL, BGE_MODEL_ONNX) { success, error ->
+            if (!success) {
+                Log.e(TAG, "❌ Failed to download BGE model file: $error")
+                onComplete(false, "Failed to download BGE model: $error")
+                return@downloadModel
+            }
+
+            filesDownloaded++
+            if (error == "EXISTS") filesAlreadyExisted++
+            Log.i(TAG, "✅ BGE model file ${if (error == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
+
+            // BUGFIX: Add delay to ensure first download's state is fully cleaned up
+            // Prevents race conditions when downloads happen in quick succession
+            handler.postDelayed({
+                // Download 2: tokenizer.json (~2MB)
+                onProgress(BGE_TOKENIZER_JSON, 2, totalFiles)
+                downloadModel(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON) { tokenizerSuccess, tokenizerError ->
+                    if (!tokenizerSuccess) {
+                        Log.e(TAG, "❌ Failed to download BGE tokenizer: $tokenizerError")
+                        onComplete(false, "Failed to download BGE tokenizer: $tokenizerError")
+                        return@downloadModel
+                    }
+
+                    filesDownloaded++
+                    if (tokenizerError == "EXISTS") filesAlreadyExisted++
+                    Log.i(TAG, "✅ BGE tokenizer ${if (tokenizerError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
+
+                    // BUGFIX: Add delay before third download
+                    handler.postDelayed({
+                        // Download 3: config.json (~1KB)
+                        onProgress(BGE_CONFIG_JSON, 3, totalFiles)
+                        downloadModel(BGE_CONFIG_URL, BGE_CONFIG_JSON) { configSuccess, configError ->
+                            if (!configSuccess) {
+                                Log.e(TAG, "❌ Failed to download BGE config: $configError")
+                                onComplete(false, "Failed to download BGE config: $configError")
+                                return@downloadModel
+                            }
+
+                            filesDownloaded++
+                            if (configError == "EXISTS") filesAlreadyExisted++
+                            Log.i(TAG, "✅ BGE config ${if (configError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
+
+                            // Report whether all files already existed or were newly downloaded
+                            if (filesAlreadyExisted == totalFiles) {
+                                Log.i(TAG, "ℹ️ BGE Embedding Model already downloaded (3/3 files exist)")
+                                onComplete(true, "EXISTS")
+                            } else {
+                                Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
+                                onComplete(true, "")
+                            }
+                        }
+                    }, 500) // 500ms delay
+                }
+            }, 500) // 500ms delay
+        }
+    }
+
+    /**
+     * Download all necessary models for AILive
+     * Downloads in optimal order: BGE first (smallest/fastest), then Memory model, then Qwen
+     *
+     * @param onProgress Callback for progress updates (modelName, current, total, overallPercent)
+     * @param onComplete Callback when all downloads complete (success, errorMessage)
+     */
+    fun downloadAllModels(
+        onProgress: (String, Int, Int, Int) -> Unit,  // modelName, modelNum, totalModels, overallPercent
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        Log.i(TAG, "📥 Starting download of all necessary models...")
+        Log.i(TAG, "   Total models: 3")
+        Log.i(TAG, "   Total size: ~1.9GB")
+        Log.i(TAG, "   Order: BGE (133MB) → Memory Model (700MB) → Qwen (986MB)")
+
+        var modelsAlreadyExisted = 0
+        val totalModels = 3
+
+        // Download BGE model first (smallest, fastest)
+        onProgress("BGE Embedding Model", 1, 3, 0)
+
+        downloadBGEModel(
+            onProgress = { fileName, fileNum, totalFiles ->
+                // Report BGE progress (0-7% overall, ~133MB of ~1900MB)
+                val percent = (7 * fileNum) / totalFiles
+                onProgress(fileName, 1, 3, percent)
+            },
+            onComplete = { success, error ->
+                if (!success) {
+                    Log.e(TAG, "❌ BGE model download failed, aborting: $error")
+                    onComplete(false, "BGE model download failed: $error")
+                    return@downloadBGEModel
+                }
+
+                if (error == "EXISTS") modelsAlreadyExisted++
+                Log.i(TAG, "✅ BGE model ${if (error == "EXISTS") "already exists" else "downloaded"} (1/3)")
+                onProgress(MEMORY_MODEL_GGUF, 2, 3, 7)
+
+                // BUGFIX: Add delay between models to prevent state conflicts
+                handler.postDelayed({
+                    // Download memory model second (medium size)
+                    downloadMemoryModel(
+                    onProgress = { fileName, fileNum, totalFiles ->
+                        // Report memory model progress (7-44% overall, ~700MB of ~1900MB)
+                        onProgress(fileName, 2, 3, 25)
+                    },
+                    onComplete = { memSuccess, memError ->
+                        if (!memSuccess) {
+                            Log.e(TAG, "❌ Memory model download failed, aborting: $memError")
+                            onComplete(false, "Memory model download failed: $memError")
+                            return@downloadMemoryModel
+                        }
+
+                        if (memError == "EXISTS") modelsAlreadyExisted++
+                        Log.i(TAG, "✅ Memory model ${if (memError == "EXISTS") "already exists" else "downloaded"} (2/3)")
+                        onProgress(QWEN_VL_MODEL_GGUF, 3, 3, 44)
+
+                        // BUGFIX: Add delay before final model
+                        handler.postDelayed({
+                            // Download Qwen model third (largest)
+                            downloadQwenVLModel(
+                            onProgress = { fileName, fileNum, totalFiles ->
+                                // Report Qwen progress (44-100% overall, ~986MB of ~1900MB)
+                                onProgress(fileName, 3, 3, 70)
+                            },
+                            onComplete = { qwenSuccess, qwenError ->
+                                if (!qwenSuccess) {
+                                    Log.e(TAG, "❌ Qwen model download failed: $qwenError")
+                                    onComplete(false, "Qwen model download failed: $qwenError")
+                                    return@downloadQwenVLModel
+                                }
+
+                                if (qwenError == "EXISTS") modelsAlreadyExisted++
+
+                                // Report whether all models already existed or were newly downloaded
+                                if (modelsAlreadyExisted == totalModels) {
+                                    Log.i(TAG, "ℹ️ All models already downloaded! (3/3 exist)")
+                                    onComplete(true, "EXISTS")
+                                } else {
+                                    Log.i(TAG, "✅ All models downloaded successfully! (3/3)")
+                                    onComplete(true, "")
+                                }
+                            }
+                        )
+                        }, 500) // 500ms delay before Qwen
+                    }
+                )
+                }, 500) // 500ms delay before Memory model
+            }
+        )
+    }
+
+    /**
      * Download a single model file from HuggingFace (ONNX/BIN)
      *
      * Used internally by downloadQwenVLModel() for batch downloads.
@@ -229,7 +614,8 @@ class ModelDownloadManager(private val context: Context) {
             val fileSizeMB = existingFile.length() / 1024 / 1024
             Log.i(TAG, "✓ File already exists: $modelName (${fileSizeMB}MB)")
             Log.i(TAG, "   Skipping download")
-            onComplete(true, "")
+            // Return a special message indicating file already exists
+            onComplete(true, "EXISTS")
             return
         }
 

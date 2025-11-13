@@ -1,0 +1,210 @@
+# AILive Web Search Configuration (v1.4)
+# This file configures search providers, rate limits, caching, and behavior.
+
+# Global Settings
+global:
+  max_providers_per_query: 5
+  enable_summarization: true
+  enable_fact_verification: true
+  default_timeout_ms: 30000
+  default_language: "en"
+
+# Provider Configurations
+providers:
+  # Wikipedia - Free, no API key required
+  - name: "Wikipedia"
+    enabled: true
+    priority: 95
+    intents:
+      - PERSON_WHOIS
+      - GENERAL
+    rate_limit:
+      capacity: 100
+      refill_rate: 2.0  # 2 requests/second
+    cache_ttl_minutes: 120  # 2 hours
+    config:
+      language: "en"
+
+  # DuckDuckGo Instant Answer - Free, no API key required
+  - name: "DuckDuckGo"
+    enabled: true
+    priority: 75
+    intents:
+      - GENERAL
+      - PERSON_WHOIS
+    rate_limit:
+      capacity: 100
+      refill_rate: 5.0  # 5 requests/second
+    cache_ttl_minutes: 60
+
+  # wttr.in - Free weather service
+  - name: "wttr.in"
+    enabled: true
+    priority: 60
+    intents:
+      - WEATHER
+    rate_limit:
+      capacity: 50
+      refill_rate: 1.0
+    cache_ttl_minutes: 30  # Weather changes frequently
+
+  # OpenWeatherMap - Requires API key
+  - name: "OpenWeather"
+    enabled: false  # Enable after setting API key
+    priority: 90
+    intents:
+      - WEATHER
+    rate_limit:
+      capacity: 60
+      refill_rate: 1.0  # 60 requests/minute on free tier
+    cache_ttl_minutes: 30
+    config:
+      api_key: "${OPENWEATHER_API_KEY}"  # Set via environment or secure storage
+      base_url: "https://api.openweathermap.org/data/3.0/onecall"
+
+  # NewsAPI - Requires API key
+  - name: "NewsAPI"
+    enabled: false  # Enable after setting API key
+    priority: 95
+    intents:
+      - NEWS
+      - GENERAL
+    rate_limit:
+      capacity: 100
+      refill_rate: 0.0694  # 100 requests/day free tier
+    cache_ttl_minutes: 15  # News updates frequently
+    config:
+      api_key: "${NEWSAPI_KEY}"
+      base_url: "https://newsapi.org/v2/everything"
+
+  # SerpApi - Requires API key (paid)
+  - name: "SerpApi"
+    enabled: false  # Enable after setting API key
+    priority: 85
+    intents:
+      - GENERAL
+      - IMAGE
+      - VIDEO
+    rate_limit:
+      capacity: 100
+      refill_rate: 0.0694  # 100 requests/month free tier
+    cache_ttl_minutes: 60
+    config:
+      api_key: "${SERPAPI_KEY}"
+      engine: "google"
+      base_url: "https://serpapi.com/search"
+
+# Cache Configuration
+cache:
+  provider_cache:
+    max_size: 1000
+    ttl_minutes: 60
+
+  response_cache:
+    max_size: 500
+    ttl_minutes: 30
+
+  enable_disk_cache: false  # Future: persistent cache for offline access
+
+# Rate Limiting
+rate_limiting:
+  global:
+    capacity: 100
+    refill_rate: 10.0  # 10 requests/second globally
+
+  per_provider: true  # Enable per-provider limits defined above
+
+  backoff:
+    enabled: true
+    max_retries: 3
+    initial_delay_ms: 2000
+
+# Summarization Settings
+summarization:
+  brief_summary_sentences: 3
+  extended_summary_sentences: 10
+  max_attributions: 5
+  quote_max_words: 25
+
+# Fact Verification Settings
+fact_verification:
+  min_sources_required: 3
+  confidence_threshold: 0.7
+  enable_living_person_protection: true
+  require_source_agreement_ratio: 0.6
+
+# Intent Detection
+intent_detection:
+  confidence_threshold: 0.5  # Minimum confidence to use detected intent
+  fallback_intent: "GENERAL"
+
+# Security & Privacy
+security:
+  # Never send device IDs or PII to external providers
+  strip_device_identifiers: true
+
+  # Sanitize queries before sending to providers
+  sanitize_queries: true
+
+  # API keys storage
+  use_android_keystore: true  # Store API keys in Android Keystore
+
+  # TLS/SSL
+  enforce_tls: true
+  certificate_pinning: false  # Enable for production
+
+# Telemetry & Diagnostics
+telemetry:
+  enabled: true
+  log_level: "INFO"  # DEBUG, INFO, WARN, ERROR
+
+  metrics:
+    - query_count
+    - cache_hit_rate
+    - provider_success_rate
+    - average_latency
+    - error_count_by_provider
+
+  # Never log sensitive data
+  redact_queries: false  # Set to true for production
+  redact_api_keys: true
+
+# Fallback Behavior
+fallback:
+  # If all providers fail, return cached results if available
+  use_stale_cache: true
+  stale_cache_max_age_hours: 24
+
+  # Provider fallback order (if primary fails, try next)
+  weather_fallback:
+    - "OpenWeather"
+    - "wttr.in"
+
+  general_fallback:
+    - "SerpApi"
+    - "DuckDuckGo"
+    - "Wikipedia"
+
+  news_fallback:
+    - "NewsAPI"
+    - "DuckDuckGo"
+
+# Feature Flags
+features:
+  enable_web_search_tool: true
+  enable_multi_provider_queries: true
+  enable_result_ranking: true
+  enable_deduplication: true
+  enable_source_attribution: true
+  enable_fact_checking: true
+
+# Development & Testing
+development:
+  # Use MockWebServer for testing
+  use_mock_responses: false
+
+  # Record HTTP fixtures for tests
+  record_fixtures: false
+
+  # Enable verbose logging
+  verbose_logging: false

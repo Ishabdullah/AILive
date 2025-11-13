@@ -196,26 +196,34 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "🤖 Initializing Qwen2-VL with llama.cpp Android...")
             Log.i(TAG, "⏱️  This may take 10-15 seconds for model loading...")
 
-            // Check if Qwen2-VL GGUF model is available
+            // Check if ANY GGUF model is available (not just Qwen)
             if (!modelDownloadManager.isQwenVLModelAvailable()) {
-                val error = "Qwen2-VL GGUF model not found. Please download the model first."
+                val error = "No GGUF model found. Please download a model or import one from your device."
                 Log.e(TAG, "❌ $error")
-                Log.i(TAG, "   Required file: ${ModelDownloadManager.QWEN_VL_MODEL_GGUF}")
+                Log.i(TAG, "   Supported: Any .gguf model file")
+                Log.i(TAG, "   Recommended: ${ModelDownloadManager.QWEN_VL_MODEL_GGUF}")
                 initializationError = error
                 isInitializing = false
                 return@withContext false
             }
 
             Log.i(TAG, "✅ GGUF model file found in app-private storage")
-            currentModelName = "Qwen2-VL-2B-Instruct-Q4_K_M"
 
-            // Get model file path
-            val modelPath = modelDownloadManager.getModelPath(ModelDownloadManager.QWEN_VL_MODEL_GGUF)
-            val modelFile = java.io.File(modelPath)
+            // Get the actual model file to use (default or alternative)
+            val modelFile = modelDownloadManager.getActiveModelFile()
+            if (modelFile == null) {
+                val error = "Failed to load model file"
+                Log.e(TAG, "❌ $error")
+                initializationError = error
+                isInitializing = false
+                return@withContext false
+            }
+
+            currentModelName = modelFile.nameWithoutExtension
 
             Log.i(TAG, "📂 Loading model: ${modelFile.name}")
             Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
-            Log.i(TAG, "   Format: GGUF (Q4_K_M quantization)")
+            Log.i(TAG, "   Format: GGUF")
             Log.i(TAG, "   Engine: llama.cpp (official Android)")
 
             // Detect GPU acceleration (v1.1)
@@ -235,15 +243,16 @@ class LLMManager(private val context: Context) {
 
             // Load model using official llama.cpp Android
             Log.i(TAG, "📥 Loading llama.cpp model...")
-            llamaAndroid.load(modelPath)
+            llamaAndroid.load(modelFile.absolutePath)
 
             isInitialized = true
             isInitializing = false
 
-            Log.i(TAG, "✅ Qwen2-VL initialized successfully!")
+            Log.i(TAG, "✅ Model initialized successfully!")
             Log.i(TAG, "   Model: $currentModelName")
+            Log.i(TAG, "   File: ${modelFile.name}")
             Log.i(TAG, "   Backend: ${gpuInfo?.backend ?: "CPU"}")
-            Log.i(TAG, "   Capabilities: Text-only (vision coming with mmproj)")
+            Log.i(TAG, "   Capabilities: Text conversation")
             Log.i(TAG, "   Engine: llama.cpp (official Android bindings)")
             Log.i(TAG, "🎉 AI is ready!")
 
@@ -291,11 +300,31 @@ class LLMManager(private val context: Context) {
 
             Log.i(TAG, "🚀 Starting generation (Text-only): \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
 
-            // Create chat prompt with agent personality
-            val chatPrompt = createChatPrompt(prompt, agentName)
+            // Handle PersonalityEngine prompts vs simple prompts differently
+            val (messageToSend, useFormatChat) = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
+                                                       prompt.contains("===== CURRENT CONTEXT =====")) {
+                // PersonalityEngine formatted prompt - already contains full context in natural format
+                // These prompts have system instructions, context, history, and user input
+                // DO NOT use formatChat - pass the entire prompt as-is to preserve all context
+                Log.d(TAG, "✓ PersonalityEngine prompt detected - preserving full context")
+                Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
+                Log.d(TAG, "   Contains: system instructions, capabilities, context, history, user input")
+                Log.d(TAG, "   Using formatChat=FALSE to preserve natural language format")
 
-            // Generate response using llama.cpp (streaming)
-            val response = generateWithLlama(chatPrompt)
+                // Pass entire prompt without modification
+                // formatChat=FALSE means llama.cpp won't try to apply ChatML formatting
+                Pair(prompt, false)
+            } else {
+                // Simple prompt - let llama.cpp format it with ChatML
+                Log.d(TAG, "✓ Simple prompt - using llama.cpp auto-formatting")
+                Pair(prompt, true)
+            }
+
+            Log.d(TAG, "   Message length: ${messageToSend.length} chars")
+            Log.d(TAG, "   Using formatChat=$useFormatChat")
+
+            // Generate response using llama.cpp
+            val response = generateWithLlama(messageToSend, useFormatChat)
 
             val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
             Log.i(TAG, "✅ Generation complete in ${totalTime}s")
@@ -348,16 +377,45 @@ class LLMManager(private val context: Context) {
         settings = ModelSettings.load(context)
         Log.i(TAG, "   Using settings: maxTokens=${settings.maxTokens}, temp=${settings.temperature}")
 
-        // Create chat prompt
-        val chatPrompt = createChatPrompt(prompt, agentName)
-        Log.d(TAG, "   Chat prompt length: ${chatPrompt.length} chars")
+        // CRITICAL FIX: Let llama.cpp handle chat formatting automatically
+        // Each GGUF model has its own chat template embedded in the file
+        // - Qwen models use ChatML (<|im_start|>system\n...)
+        // - Llama models use [INST]...[/INST]
+        // - Mistral uses different format
+        // - etc.
+        //
+        // By using formatChat=true, llama.cpp will automatically apply the
+        // correct template for whatever model is loaded.
+
+        // Handle PersonalityEngine prompts vs simple prompts differently
+        val (messageToSend, useFormatChat) = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
+                                                   prompt.contains("===== CURRENT CONTEXT =====")) {
+            // PersonalityEngine formatted prompt - already contains full context in natural format
+            // These prompts have system instructions, context, history, and user input
+            // DO NOT use formatChat - pass the entire prompt as-is to preserve all context
+            Log.d(TAG, "✓ PersonalityEngine prompt detected - preserving full context")
+            Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
+            Log.d(TAG, "   Contains: system instructions, capabilities, context, history, user input")
+            Log.d(TAG, "   Using formatChat=FALSE to preserve natural language format")
+
+            // Pass entire prompt without modification
+            // formatChat=FALSE means llama.cpp won't try to apply ChatML formatting
+            Pair(prompt, false)
+        } else {
+            // Simple prompt - let llama.cpp format it with ChatML
+            Log.d(TAG, "✓ Simple prompt - using llama.cpp auto-formatting")
+            Pair(prompt, true)
+        }
+
+        Log.d(TAG, "   Message length: ${messageToSend.length} chars")
+        Log.d(TAG, "   Using formatChat=$useFormatChat")
 
         // Stream tokens directly from llama.cpp with configured max tokens
         var tokenCount = 0
         val backend = gpuInfo?.backend ?: "CPU"
 
         try {
-            llamaAndroid.send(chatPrompt, formatChat = false, maxTokens = settings.maxTokens)
+            llamaAndroid.send(messageToSend, formatChat = useFormatChat, maxTokens = settings.maxTokens)
                 .catch { e ->
                     Log.e(TAG, "❌ Streaming generation error", e)
                     throw e
@@ -476,7 +534,7 @@ class LLMManager(private val context: Context) {
      * @param prompt The formatted chat prompt
      * @return Generated text
      */
-    private suspend fun generateWithLlama(prompt: String): String {
+    private suspend fun generateWithLlama(prompt: String, useFormatChat: Boolean = true): String {
         val backend = gpuInfo?.backend ?: "CPU"
         Log.i(TAG, "🔷 Using llama.cpp for inference (backend: $backend)")
 
@@ -487,8 +545,9 @@ class LLMManager(private val context: Context) {
         // Reload settings in case they changed
         settings = ModelSettings.load(context)
 
-        // Use the official llama.cpp Android Flow API with configured max tokens
-        llamaAndroid.send(prompt, formatChat = false, maxTokens = settings.maxTokens)
+        // IMPORTANT: formatChat lets llama.cpp apply the model's built-in chat template
+        // This works with any model (Qwen, Llama, Mistral, etc.)
+        llamaAndroid.send(prompt, formatChat = useFormatChat, maxTokens = settings.maxTokens)
             .catch { e ->
                 Log.e(TAG, "❌ Generation error", e)
                 throw e

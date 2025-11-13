@@ -2,6 +2,7 @@ package com.ailive.ui
 
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -14,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import com.ailive.R
 import com.ailive.ai.llm.ModelSettings
+import com.ailive.ai.llm.ModelDownloadManager
 import com.ailive.settings.AISettings
 
 /**
@@ -23,6 +25,7 @@ import com.ailive.settings.AISettings
  * - Sampling parameters (temperature, top_p, top_k, penalties)
  * - Generation parameters (context size, max tokens)
  * - Advanced features (Mirostat sampling)
+ * - Model management (download, view models)
  *
  * Real-time RAM usage estimation warns users if settings may cause instability.
  * All settings are persisted to SharedPreferences.
@@ -57,11 +60,15 @@ class ModelSettingsActivity : AppCompatActivity() {
     private lateinit var btnSave: Button
     private lateinit var btnReset: Button
     private lateinit var btnClose: Button
+    private lateinit var btnDownloadModels: Button
+    private lateinit var btnViewModels: Button
+    private lateinit var tvModelStatus: TextView
 
     // Current settings
     private var settings: ModelSettings = ModelSettings.getDefaults()
     private lateinit var aiSettings: AISettings
     private var totalDeviceRamMB: Int = 0
+    private lateinit var modelDownloadManager: ModelDownloadManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,11 +77,15 @@ class ModelSettingsActivity : AppCompatActivity() {
         // Get device RAM
         totalDeviceRamMB = getTotalRAM()
 
+        // Initialize model download manager
+        modelDownloadManager = ModelDownloadManager(this)
+
         // Initialize UI
         initializeViews()
         loadSettings()
         setupListeners()
         updateUI()
+        updateModelStatus()
     }
 
     private fun initializeViews() {
@@ -117,6 +128,16 @@ class ModelSettingsActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSave)
         btnReset = findViewById(R.id.btnReset)
         btnClose = findViewById(R.id.btnClose)
+
+        // Model Management UI (will fail gracefully if not in layout)
+        try {
+            btnDownloadModels = findViewById(R.id.btnDownloadModels)
+            btnViewModels = findViewById(R.id.btnViewModels)
+            tvModelStatus = findViewById(R.id.tvModelStatus)
+        } catch (e: Exception) {
+            // Layout doesn't have model management UI yet - that's OK
+            android.util.Log.d(TAG, "Model management UI not in layout (will add)")
+        }
     }
 
     private fun loadSettings() {
@@ -254,6 +275,19 @@ class ModelSettingsActivity : AppCompatActivity() {
                 "Location awareness ${if (isChecked) "enabled" else "disabled"}",
                 Toast.LENGTH_SHORT
             ).show()
+        }
+
+        // Model Management buttons
+        if (::btnDownloadModels.isInitialized) {
+            btnDownloadModels.setOnClickListener {
+                openDownloadModelsDialog()
+            }
+        }
+
+        if (::btnViewModels.isInitialized) {
+            btnViewModels.setOnClickListener {
+                showDownloadedModels()
+            }
         }
     }
 
@@ -396,5 +430,136 @@ class ModelSettingsActivity : AppCompatActivity() {
             maxTokens <= 1500 -> 19 + ((maxTokens - 1000) / 50)
             else -> 29 + ((maxTokens - 1500) / 50)
         }.coerceIn(0, 39)
+    }
+
+    /**
+     * Update model status display
+     */
+    private fun updateModelStatus() {
+        if (!::tvModelStatus.isInitialized) return
+
+        val activeModel = modelDownloadManager.getActiveModelFile()
+        val ggufModels = modelDownloadManager.getAvailableModelsInDownloads()
+        val bgeAvailable = modelDownloadManager.isBGEModelAvailable()
+
+        val statusText = buildString {
+            append("Active Model:\n")
+            if (activeModel != null) {
+                val sizeMB = activeModel.length() / 1024 / 1024
+                append("● ${activeModel.name} (${sizeMB}MB)\n\n")
+            } else {
+                append("✗ No model loaded\n\n")
+            }
+
+            append("Available GGUF Models: ${ggufModels.size}\n")
+            append("BGE Embeddings: ${if (bgeAvailable) "✓ Ready" else "✗ Missing"}\n\n")
+
+            append("Tap 'View Models' to switch models")
+        }
+
+        tvModelStatus.text = statusText
+    }
+
+    /**
+     * Open dialog to download models
+     */
+    private fun openDownloadModelsDialog() {
+        val options = arrayOf(
+            "1. BGE Embedding Model (~133MB)",
+            "2. Memory Model / TinyLlama (~700MB)",
+            "3. Qwen Main Model (~986MB)",
+            "4. Download All Models (~1.9GB)"
+        )
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Download Models")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> startDownload("BGE")
+                    1 -> startDownload("Memory")
+                    2 -> startDownload("Qwen")
+                    3 -> startDownload("All")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /**
+     * Start downloading a specific model
+     */
+    private fun startDownload(modelType: String) {
+        Toast.makeText(this, "Starting $modelType model download...", Toast.LENGTH_SHORT).show()
+
+        // Return to MainActivity and trigger download there
+        // (ModelSetupDialog needs to be handled by MainActivity)
+        val intent = Intent().apply {
+            putExtra("download_model", modelType)
+        }
+        setResult(RESULT_OK, intent)
+        finish()
+    }
+
+    /**
+     * Show list of downloaded models with selection option
+     * Updated: Shows ALL GGUF models, allows switching active model
+     */
+    private fun showDownloadedModels() {
+        // Get all GGUF models
+        val ggufModels = modelDownloadManager.getAvailableModelsInDownloads()
+        val activeModel = modelDownloadManager.getActiveModelFile()
+
+        if (ggufModels.isEmpty()) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("No Models Found")
+                .setMessage("No GGUF models found. Please download or import a model.")
+                .setPositiveButton("Download", { _, _ -> openDownloadModelsDialog() })
+                .setNegativeButton("Close", null)
+                .show()
+            return
+        }
+
+        // Build model list with selection markers
+        val modelNames = ggufModels.map { model ->
+            val sizeMB = model.length() / 1024 / 1024
+            val isActive = model.absolutePath == activeModel?.absolutePath
+            val marker = if (isActive) "● " else "○ "
+            val status = if (isActive) " (ACTIVE)" else ""
+            "$marker${model.name}$status\n   ${sizeMB}MB"
+        }.toTypedArray()
+
+        val modelsDir = modelDownloadManager.getModelsDirectory()
+
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Downloaded GGUF Models")
+            .setMessage("Select a model to set as active:\n\nStorage: $modelsDir\n")
+            .setItems(modelNames) { _, which ->
+                val selectedModel = ggufModels[which]
+                selectActiveModel(selectedModel)
+            }
+            .setNeutralButton("Import Model") { _, _ ->
+                Toast.makeText(this, "Use file picker in MainActivity to import models", Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /**
+     * Set selected model as the active model
+     * Saves preference and notifies user to restart app
+     */
+    private fun selectActiveModel(modelFile: java.io.File) {
+        // Save selected model to preferences
+        val prefs = getSharedPreferences("ailive_model_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("active_model_path", modelFile.absolutePath).apply()
+
+        Toast.makeText(
+            this,
+            "Active model set to:\n${modelFile.name}\n\nPlease restart AILive for changes to take effect.",
+            Toast.LENGTH_LONG
+        ).show()
+
+        // Update UI
+        updateModelStatus()
     }
 }
