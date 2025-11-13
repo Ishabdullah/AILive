@@ -196,26 +196,34 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "🤖 Initializing Qwen2-VL with llama.cpp Android...")
             Log.i(TAG, "⏱️  This may take 10-15 seconds for model loading...")
 
-            // Check if Qwen2-VL GGUF model is available
+            // Check if ANY GGUF model is available (not just Qwen)
             if (!modelDownloadManager.isQwenVLModelAvailable()) {
-                val error = "Qwen2-VL GGUF model not found. Please download the model first."
+                val error = "No GGUF model found. Please download a model or import one from your device."
                 Log.e(TAG, "❌ $error")
-                Log.i(TAG, "   Required file: ${ModelDownloadManager.QWEN_VL_MODEL_GGUF}")
+                Log.i(TAG, "   Supported: Any .gguf model file")
+                Log.i(TAG, "   Recommended: ${ModelDownloadManager.QWEN_VL_MODEL_GGUF}")
                 initializationError = error
                 isInitializing = false
                 return@withContext false
             }
 
             Log.i(TAG, "✅ GGUF model file found in app-private storage")
-            currentModelName = "Qwen2-VL-2B-Instruct-Q4_K_M"
 
-            // Get model file path
-            val modelPath = modelDownloadManager.getModelPath(ModelDownloadManager.QWEN_VL_MODEL_GGUF)
-            val modelFile = java.io.File(modelPath)
+            // Get the actual model file to use (default or alternative)
+            val modelFile = modelDownloadManager.getActiveModelFile()
+            if (modelFile == null) {
+                val error = "Failed to load model file"
+                Log.e(TAG, "❌ $error")
+                initializationError = error
+                isInitializing = false
+                return@withContext false
+            }
+
+            currentModelName = modelFile.nameWithoutExtension
 
             Log.i(TAG, "📂 Loading model: ${modelFile.name}")
             Log.i(TAG, "   Size: ${modelFile.length() / 1024 / 1024}MB")
-            Log.i(TAG, "   Format: GGUF (Q4_K_M quantization)")
+            Log.i(TAG, "   Format: GGUF")
             Log.i(TAG, "   Engine: llama.cpp (official Android)")
 
             // Detect GPU acceleration (v1.1)
@@ -235,15 +243,16 @@ class LLMManager(private val context: Context) {
 
             // Load model using official llama.cpp Android
             Log.i(TAG, "📥 Loading llama.cpp model...")
-            llamaAndroid.load(modelPath)
+            llamaAndroid.load(modelFile.absolutePath)
 
             isInitialized = true
             isInitializing = false
 
-            Log.i(TAG, "✅ Qwen2-VL initialized successfully!")
+            Log.i(TAG, "✅ Model initialized successfully!")
             Log.i(TAG, "   Model: $currentModelName")
+            Log.i(TAG, "   File: ${modelFile.name}")
             Log.i(TAG, "   Backend: ${gpuInfo?.backend ?: "CPU"}")
-            Log.i(TAG, "   Capabilities: Text-only (vision coming with mmproj)")
+            Log.i(TAG, "   Capabilities: Text conversation")
             Log.i(TAG, "   Engine: llama.cpp (official Android bindings)")
             Log.i(TAG, "🎉 AI is ready!")
 
