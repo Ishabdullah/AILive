@@ -162,28 +162,44 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
-     * Check if Qwen2-VL GGUF model exists in models folder
-     * Much simpler than ONNX - just one file!
+     * Check if ANY GGUF model exists in models folder
+     * Accepts any valid GGUF file, not just Qwen2-VL
+     *
+     * This allows users to use custom models like:
+     * - The_Elder-v2.gguf
+     * - Mistral-7B-Q4.gguf
+     * - Llama-2-7B.gguf
+     * etc.
      */
     fun isQwenVLModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
-        val modelFile = File(downloadsDir, QWEN_VL_MODEL_GGUF)
 
-        if (!modelFile.exists()) {
-            Log.i(TAG, "❌ Missing required file: $QWEN_VL_MODEL_GGUF")
+        // First check if the default Qwen model exists
+        val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
+        if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            val sizeMB = defaultModel.length() / 1024 / 1024
+            Log.i(TAG, "✅ Default model available: $QWEN_VL_MODEL_GGUF (${sizeMB}MB)")
+            return true
+        }
+
+        // If default doesn't exist, check for ANY valid GGUF model
+        val ggufModels = getAvailableModelsInDownloads()
+
+        if (ggufModels.isEmpty()) {
+            Log.i(TAG, "❌ No GGUF models found in ${downloadsDir.absolutePath}")
             return false
         }
 
-        val sizeMB = modelFile.length() / 1024 / 1024
-        Log.d(TAG, "✓ Found GGUF model: $QWEN_VL_MODEL_GGUF (${sizeMB}MB)")
-
-        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
-            Log.e(TAG, "❌ Model file too small (${sizeMB}MB), likely corrupted")
-            return false
+        // Use the largest GGUF model (likely the main conversation model)
+        val largestModel = ggufModels.maxByOrNull { it.length() }
+        if (largestModel != null && largestModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            val sizeMB = largestModel.length() / 1024 / 1024
+            Log.i(TAG, "✅ Found alternative GGUF model: ${largestModel.name} (${sizeMB}MB)")
+            return true
         }
 
-        Log.i(TAG, "✅ Qwen2-VL GGUF model available (${sizeMB}MB)")
-        return true
+        Log.i(TAG, "❌ No valid GGUF models found (all too small)")
+        return false
     }
 
     /**
@@ -284,6 +300,35 @@ class ModelDownloadManager(private val context: Context) {
     fun getModelPath(modelName: String = QWEN_VL_MODEL_GGUF): String {
         val downloadsDir = getModelsDir()
         return File(downloadsDir, modelName).absolutePath
+    }
+
+    /**
+     * Get the actual GGUF model to use for LLM inference
+     * Returns the default Qwen model if available, otherwise returns the largest GGUF model
+     *
+     * This allows users to use custom models without renaming them
+     */
+    fun getActiveModelFile(): File? {
+        val downloadsDir = getModelsDir()
+
+        // First try the default Qwen model
+        val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
+        if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            Log.i(TAG, "Using default model: ${defaultModel.name}")
+            return defaultModel
+        }
+
+        // Otherwise, find the largest GGUF model (likely the main conversation model)
+        val ggufModels = getAvailableModelsInDownloads()
+        val largestModel = ggufModels.maxByOrNull { it.length() }
+
+        if (largestModel != null && largestModel.length() >= MIN_MODEL_SIZE_BYTES) {
+            Log.i(TAG, "Using alternative model: ${largestModel.name} (${largestModel.length() / 1024 / 1024}MB)")
+            return largestModel
+        }
+
+        Log.e(TAG, "No valid GGUF models found")
+        return null
     }
 
     /**
