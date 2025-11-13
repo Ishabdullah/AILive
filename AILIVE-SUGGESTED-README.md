@@ -7,7 +7,7 @@
 **A fully autonomous AI companion that lives in your phone, not the cloud.**
 
 [![Build Status](https://github.com/Ishabdullah/AILive/actions/workflows/android.yml/badge.svg)](https://github.com/Ishabdullah/AILive/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9.22-blue.svg)](https://kotlinlang.org)
 
@@ -406,36 +406,44 @@ Yes! ONNX models can be loaded via settings. GGUF support coming after CMake fix
 
 Different use cases. AILive prioritizes privacy, offline use, and tool integration. ChatGPT has superior language understanding (175B vs 135M params). Choose based on your needs.
 
-### Can I sell apps built with AILive?
+### Can I use AILive commercially?
 
-Yes! AILive is MIT licensed. You can use it commercially, modify it, and redistribute it.
+No. AILive is licensed under CC BY-NC-SA 4.0 (Non-Commercial). You can use it for personal, educational, and research purposes. For commercial use, please contact the developer.
 
 ---
 
 ## License
 
-AILive is released under the **MIT License**.
+AILive is released under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0)**.
+
+### You are free to:
+
+- ✅ **Share** - Copy and redistribute the material in any medium or format
+- ✅ **Adapt** - Remix, transform, and build upon the material
+- ✅ **Personal Use** - Use for personal projects and learning
+- ✅ **Research** - Use for academic and research purposes
+- ✅ **Open Source** - Contribute to this project
+
+### Under the following terms:
+
+- 📝 **Attribution** - You must give appropriate credit, provide a link to the license, and indicate if changes were made
+- 🚫 **NonCommercial** - You may not use the material for commercial purposes without explicit written permission
+- 🔄 **ShareAlike** - If you remix, transform, or build upon the material, you must distribute your contributions under the same license
+
+### Commercial Use
+
+For commercial licensing, enterprise deployment, or commercial applications, please contact:
+- **Email:** ismail.t.abdullah@gmail.com
+- **Subject:** "AILive Commercial License Inquiry"
+
+Full license text: https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 ```
 Copyright (c) 2025 Ismail Abdullah
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International License. To view a copy of this license, visit:
+http://creativecommons.org/licenses/by-nc-sa/4.0/
 ```
 
 ---
