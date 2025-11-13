@@ -796,6 +796,36 @@ class ModelSetupDialog(
         Log.i(TAG, "Model setup marked complete")
     }
 
+    // ===== PUBLIC API for triggering downloads from Settings =====
+
+    /**
+     * Public method to download BGE model (called from MainActivity)
+     */
+    fun triggerBGEDownload() {
+        downloadBGEModelOnly {}
+    }
+
+    /**
+     * Public method to download Memory model (called from MainActivity)
+     */
+    fun triggerMemoryDownload() {
+        downloadMemoryModelOnly {}
+    }
+
+    /**
+     * Public method to download Qwen model (called from MainActivity)
+     */
+    fun triggerQwenDownload() {
+        downloadQwenVLModel {}
+    }
+
+    /**
+     * Public method to download all models (called from MainActivity)
+     */
+    fun triggerAllModelsDownload() {
+        downloadAllModels {}
+    }
+
     /**
      * Cleanup
      */
