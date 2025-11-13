@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.StatFs
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.core.net.toUri
@@ -295,6 +296,40 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     /**
+     * Check if sufficient storage space is available for downloads
+     * @param requiredSpaceGB Required space in GB (default 2GB for safety margin)
+     * @return Pair of (hasSpace, availableGB)
+     */
+    fun checkStorageSpace(requiredSpaceGB: Float = 2.0f): Pair<Boolean, Float> {
+        return try {
+            val downloadsDir = getModelsDir()
+            val stat = StatFs(downloadsDir.absolutePath)
+
+            val availableBytes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                stat.availableBlocksLong * stat.blockSizeLong
+            } else {
+                @Suppress("DEPRECATION")
+                stat.availableBlocks.toLong() * stat.blockSize.toLong()
+            }
+
+            val availableGB = availableBytes / (1024f * 1024f * 1024f)
+            val hasSpace = availableGB >= requiredSpaceGB
+
+            if (!hasSpace) {
+                Log.w(TAG, "⚠️ Low storage: ${availableGB}GB available, ${requiredSpaceGB}GB required")
+            } else {
+                Log.d(TAG, "✓ Storage check: ${availableGB}GB available")
+            }
+
+            Pair(hasSpace, availableGB)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check storage space", e)
+            // Return pessimistic result on error
+            Pair(false, 0f)
+        }
+    }
+
+    /**
      * Get the path to a model file in Downloads folder
      */
     fun getModelPath(modelName: String = QWEN_VL_MODEL_GGUF): String {
@@ -511,6 +546,15 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "   Total models: 3")
         Log.i(TAG, "   Total size: ~1.9GB")
         Log.i(TAG, "   Order: BGE (133MB) → Memory Model (700MB) → Qwen (986MB)")
+
+        // Check if sufficient storage is available (~2GB required for safety)
+        val (hasSpace, availableGB) = checkStorageSpace(2.0f)
+        if (!hasSpace) {
+            val errorMsg = "Insufficient storage space. Available: ${String.format("%.2f", availableGB)}GB, Required: ~2GB"
+            Log.e(TAG, "❌ $errorMsg")
+            onComplete(false, errorMsg)
+            return
+        }
 
         var modelsAlreadyExisted = 0
         val totalModels = 3
