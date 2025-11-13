@@ -2,8 +2,11 @@ package com.ailive
 
 import android.Manifest
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -67,7 +70,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var audioManager: AudioManager
     private lateinit var speechProcessor: SpeechProcessor
     private lateinit var wakeWordDetector: WakeWordDetector
-    private lateinit var commandRouter: CommandRouter
 
     // UI
     private lateinit var cameraPreview: PreviewView
@@ -468,6 +470,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun continueInitialization() {
+        // Check offline mode status and show dialog if needed
+        checkOfflineMode()
+
         // Verify at least one model is available before continuing
         if (!modelDownloadManager.isModelAvailable(modelName = null)) {
             Log.e(TAG, "❌ No models available after setup dialog!")
@@ -699,7 +704,6 @@ class MainActivity : AppCompatActivity() {
 
             speechProcessor = SpeechProcessor(applicationContext)
             wakeWordDetector = WakeWordDetector(settings.wakePhrase, aiLiveCore.ttsManager)
-            commandRouter = CommandRouter(aiLiveCore)
 
             if (!speechProcessor.initialize()) {
                 Log.e(TAG, "❌ Speech processor failed to initialize")
@@ -772,8 +776,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // Note: commandRouter.onResponse is no longer used since we switched to streaming
-            // Voice commands now use the same streaming path as text commands
+            // Voice commands use the same streaming path as text commands (unified processing)
 
             // Mic starts OFF by default - user must enable manually
             currentAudioState = AudioState.IDLE
@@ -1452,17 +1455,90 @@ class MainActivity : AppCompatActivity() {
         if (isDashboardVisible) {
             dashboardContainer.visibility = View.VISIBLE
             if (dashboardFragment == null) {
+                // Create fragment once and add it (never replace)
+                // This preserves fragment state across show/hide cycles
                 dashboardFragment = DashboardFragment().apply {
                     aiLiveCore = this@MainActivity.aiLiveCore
                 }
                 supportFragmentManager.beginTransaction()
-                    .replace(R.id.dashboardContainer, dashboardFragment!!)
-                    .commit()
+                    .add(R.id.dashboardContainer, dashboardFragment!!, "dashboard")
+                    .commitAllowingStateLoss()
+            } else {
+                // Fragment already exists, just show it
+                supportFragmentManager.beginTransaction()
+                    .show(dashboardFragment!!)
+                    .commitAllowingStateLoss()
             }
             Log.i(TAG, "📊 Dashboard opened")
         } else {
             dashboardContainer.visibility = View.GONE
+            // Hide fragment but keep its state
+            dashboardFragment?.let {
+                supportFragmentManager.beginTransaction()
+                    .hide(it)
+                    .commitAllowingStateLoss()
+            }
             Log.i(TAG, "📊 Dashboard closed")
+        }
+    }
+
+    /**
+     * Check if device has network connectivity
+     * Used for offline mode detection
+     */
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+            return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } else {
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            return networkInfo?.isConnected == true
+        }
+    }
+
+    /**
+     * Check if essential models are available
+     * Shows offline mode dialog if network unavailable and no models present
+     */
+    private fun checkOfflineMode() {
+        val hasNetwork = isNetworkAvailable()
+        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+
+        // Check for essential GGUF model files
+        val hasLLMModel = downloadsDir?.listFiles()?.any {
+            it.name.endsWith(".gguf", ignoreCase = true)
+        } ?: false
+
+        if (!hasNetwork && !hasLLMModel) {
+            Log.w(TAG, "⚠️ Offline mode detected: No network and no local models")
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle("Offline Mode")
+                    .setMessage(
+                        "No network connection detected and no AI models found locally.\n\n" +
+                        "To use AILive:\n" +
+                        "1. Connect to Wi-Fi or mobile data\n" +
+                        "2. Download AI models from Settings\n\n" +
+                        "The app will continue with limited functionality."
+                    )
+                    .setPositiveButton("Open Settings") { _, _ ->
+                        settingsLauncher.launch(Intent(this, com.ailive.ui.ModelSettingsActivity::class.java))
+                    }
+                    .setNegativeButton("Continue", null)
+                    .setCancelable(true)
+                    .show()
+            }
+        } else if (!hasNetwork) {
+            Log.i(TAG, "📴 Offline mode: Using local models")
+            runOnUiThread {
+                Toast.makeText(this, "Offline mode: Using local models", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
