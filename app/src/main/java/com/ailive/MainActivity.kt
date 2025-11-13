@@ -10,8 +10,13 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.View
+import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -49,22 +54,22 @@ class MainActivity : AppCompatActivity() {
 
     // UI
     private lateinit var cameraPreview: PreviewView
-    private lateinit var appIconBackground: android.widget.ImageView
+    private lateinit var appIconBackground: ImageView
     private lateinit var appTitle: TextView
     private lateinit var classificationResult: TextView
-    private lateinit var responseScrollView: android.widget.ScrollView
+    private lateinit var responseScrollView: ScrollView
     private lateinit var confidenceText: TextView
     private lateinit var inferenceTime: TextView
     private lateinit var statusIndicator: TextView
     private lateinit var typingIndicator: TextView
 
     // Manual controls
-    private lateinit var btnToggleMic: android.widget.Button
-    private lateinit var btnToggleCamera: android.widget.Button
-    private lateinit var editTextCommand: android.widget.EditText
-    private lateinit var btnSendCommand: android.widget.Button
-    private lateinit var btnCancelGeneration: android.widget.Button
-    private lateinit var btnSettings: android.widget.Button
+    private lateinit var btnToggleMic: Button
+    private lateinit var btnToggleCamera: Button
+    private lateinit var editTextCommand: EditText
+    private lateinit var btnSendCommand: Button
+    private lateinit var btnCancelGeneration: Button
+    private lateinit var btnSettings: Button
     private lateinit var btnToggleDashboard: FloatingActionButton
     private lateinit var dashboardContainer: FrameLayout
 
@@ -101,6 +106,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Reset callback counter on fresh start
+        callbackCount = 0
 
         // Register file picker BEFORE UI operations (you had this right; keep it)
         filePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -177,29 +185,47 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
 
-        // Init UI references (ensure activity_main contains these IDs)
+        // Init UI references with null checks to ensure all IDs exist in activity_main.xml
         cameraPreview = findViewById(R.id.cameraPreview)
+            ?: throw IllegalStateException("cameraPreview not found in layout")
         appIconBackground = findViewById(R.id.appIconBackground)
+            ?: throw IllegalStateException("appIconBackground not found in layout")
         appTitle = findViewById(R.id.appTitle)
+            ?: throw IllegalStateException("appTitle not found in layout")
         classificationResult = findViewById(R.id.classificationResult)
+            ?: throw IllegalStateException("classificationResult not found in layout")
         responseScrollView = findViewById(R.id.responseScrollView)
+            ?: throw IllegalStateException("responseScrollView not found in layout")
         confidenceText = findViewById(R.id.confidenceText)
+            ?: throw IllegalStateException("confidenceText not found in layout")
         inferenceTime = findViewById(R.id.inferenceTime)
+            ?: throw IllegalStateException("inferenceTime not found in layout")
         statusIndicator = findViewById(R.id.statusIndicator)
+            ?: throw IllegalStateException("statusIndicator not found in layout")
         typingIndicator = findViewById(R.id.typingIndicator)
+            ?: throw IllegalStateException("typingIndicator not found in layout")
 
         btnToggleMic = findViewById(R.id.btnToggleMic)
+            ?: throw IllegalStateException("btnToggleMic not found in layout")
         btnToggleCamera = findViewById(R.id.btnToggleCamera)
+            ?: throw IllegalStateException("btnToggleCamera not found in layout")
         editTextCommand = findViewById(R.id.editTextCommand)
+            ?: throw IllegalStateException("editTextCommand not found in layout")
         btnSendCommand = findViewById(R.id.btnSendCommand)
+            ?: throw IllegalStateException("btnSendCommand not found in layout")
         btnCancelGeneration = findViewById(R.id.btnCancelGeneration)
+            ?: throw IllegalStateException("btnCancelGeneration not found in layout")
         btnSettings = findViewById(R.id.btnSettings)
+            ?: throw IllegalStateException("btnSettings not found in layout")
         btnToggleDashboard = findViewById(R.id.btnToggleDashboard)
+            ?: throw IllegalStateException("btnToggleDashboard not found in layout")
         dashboardContainer = findViewById(R.id.dashboardContainer)
+            ?: throw IllegalStateException("dashboardContainer not found in layout")
 
         setupManualControls()
         setupDashboard()
         setupSettingsButton()
+        setupAccessibility()
 
         appTitle.text = "${settings.aiName} (Vision + Audio)"
 
@@ -719,8 +745,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Setup accessibility content descriptions for all interactive UI elements
+     */
+    private fun setupAccessibility() {
+        btnToggleMic.contentDescription = "Toggle microphone on or off"
+        btnToggleCamera.contentDescription = "Toggle camera on or off"
+        btnSendCommand.contentDescription = "Send text command to AI"
+        btnCancelGeneration.contentDescription = "Cancel AI response generation"
+        btnSettings.contentDescription = "Open settings"
+        btnToggleDashboard.contentDescription = "Toggle dashboard visibility"
+        editTextCommand.contentDescription = "Enter text command for AI assistant"
+    }
+
     override fun onResume() {
         super.onResume()
+        // Reset callback counter on resume to prevent overflow
+        callbackCount = 0
         // Reload settings when returning from settings activity
         if (::aiLiveCore.isInitialized) {
             aiLiveCore.llmManager.reloadSettings()
@@ -737,10 +778,10 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 statusIndicator.text = "● INITIALIZING..."
                 classificationResult.text = "System is still initializing. Please wait..."
-                android.widget.Toast.makeText(
+                Toast.makeText(
                     this,
                     "Please wait for initialization to complete",
-                    android.widget.Toast.LENGTH_SHORT
+                    Toast.LENGTH_SHORT
                 ).show()
             }
             return
