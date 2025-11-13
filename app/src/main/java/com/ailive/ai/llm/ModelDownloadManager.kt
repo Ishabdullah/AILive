@@ -304,21 +304,40 @@ class ModelDownloadManager(private val context: Context) {
 
     /**
      * Get the actual GGUF model to use for LLM inference
-     * Returns the default Qwen model if available, otherwise returns the largest GGUF model
+     * Priority:
+     * 1. User-selected model (from Settings)
+     * 2. Default Qwen model
+     * 3. Largest available GGUF model
      *
-     * This allows users to use custom models without renaming them
+     * This allows users to switch between models easily
      */
     fun getActiveModelFile(): File? {
         val downloadsDir = getModelsDir()
 
-        // First try the default Qwen model
+        // 1. Check if user has selected a specific model in Settings
+        val prefs = context.getSharedPreferences("ailive_model_prefs", Context.MODE_PRIVATE)
+        val selectedModelPath = prefs.getString("active_model_path", null)
+
+        if (selectedModelPath != null) {
+            val selectedModel = File(selectedModelPath)
+            if (selectedModel.exists() && selectedModel.length() >= MIN_MODEL_SIZE_BYTES) {
+                Log.i(TAG, "Using user-selected model: ${selectedModel.name}")
+                return selectedModel
+            } else {
+                Log.w(TAG, "User-selected model not found or invalid, falling back to default")
+                // Clear invalid preference
+                prefs.edit().remove("active_model_path").apply()
+            }
+        }
+
+        // 2. Try the default Qwen model
         val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
         if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
             Log.i(TAG, "Using default model: ${defaultModel.name}")
             return defaultModel
         }
 
-        // Otherwise, find the largest GGUF model (likely the main conversation model)
+        // 3. Otherwise, find the largest GGUF model (likely the main conversation model)
         val ggufModels = getAvailableModelsInDownloads()
         val largestModel = ggufModels.maxByOrNull { it.length() }
 
