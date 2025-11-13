@@ -121,12 +121,12 @@ class MainActivity : AppCompatActivity() {
             if (result.resultCode == RESULT_OK) {
                 result.data?.getStringExtra("download_model")?.let { modelType ->
                     Log.i(TAG, "📥 Download request from settings: $modelType")
-                    // Trigger download via ModelSetupDialog
+                    // Trigger download via ModelSetupDialog public API
                     when (modelType) {
-                        "BGE" -> modelSetupDialog.downloadBGEModel()
-                        "Memory" -> modelSetupDialog.downloadMemoryModel()
-                        "Qwen" -> modelSetupDialog.downloadQwenModel()
-                        "All" -> modelSetupDialog.downloadAllModels()
+                        "BGE" -> modelSetupDialog.triggerBGEDownload()
+                        "Memory" -> modelSetupDialog.triggerMemoryDownload()
+                        "Qwen" -> modelSetupDialog.triggerQwenDownload()
+                        "All" -> modelSetupDialog.triggerAllModelsDownload()
                     }
                 }
             }
