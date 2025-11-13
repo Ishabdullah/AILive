@@ -40,6 +40,17 @@ import com.ailive.ai.llm.ModelDownloadManager
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
 
+/**
+ * Audio state machine for wake word and command processing
+ */
+enum class AudioState {
+    IDLE,                    // Not listening
+    LISTENING_WAKE_WORD,     // Listening for wake word
+    LISTENING_COMMAND,       // Listening for command after wake word
+    PROCESSING_COMMAND,      // Processing voice command
+    STOPPING                 // Transitioning to stopped state
+}
+
 class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
 
@@ -97,7 +108,12 @@ class MainActivity : AppCompatActivity() {
     private var isInitialized = false
     private var isModelsReady = false
     private var isCoreReady = false
-    private var isListeningForWakeWord = false
+
+    // Audio state machine
+    private var currentAudioState = AudioState.IDLE
+    private val isListeningForWakeWord: Boolean
+        get() = currentAudioState == AudioState.LISTENING_WAKE_WORD
+
     private var isMicEnabled = false
     private var isCameraEnabled = false
 
@@ -700,54 +716,55 @@ class MainActivity : AppCompatActivity() {
                     editTextCommand.setText(text)
                     Log.d(TAG, "Final transcription: '$text'")
 
-                    if (isListeningForWakeWord) {
-                        if (!wakeWordDetector.processText(text)) {
-                            restartWakeWordListening()
+                    when (currentAudioState) {
+                        AudioState.LISTENING_WAKE_WORD -> {
+                            if (!wakeWordDetector.processText(text)) {
+                                restartWakeWordListening()
+                            }
                         }
-                    } else {
-                        processVoiceCommand(text)
+                        AudioState.LISTENING_COMMAND -> {
+                            processVoiceCommand(text)
+                        }
+                        else -> {
+                            Log.d(TAG, "Ignoring speech result in state: $currentAudioState")
+                        }
                     }
                 }
             }
 
             speechProcessor.onReadyForSpeech = {
                 runOnUiThread {
-                    statusIndicator.text = if (isListeningForWakeWord) "● LISTENING" else "● COMMAND"
+                    statusIndicator.text = when (currentAudioState) {
+                        AudioState.LISTENING_WAKE_WORD -> "● LISTENING"
+                        AudioState.LISTENING_COMMAND -> "● COMMAND"
+                        else -> "●"
+                    }
                 }
             }
 
             speechProcessor.onError = { error ->
                 runOnUiThread {
-                    Log.w(TAG, "Speech error: $error")
-                    if (isMicEnabled) {
-                        isListeningForWakeWord = true
-                        restartWakeWordListening()
+                    Log.w(TAG, "Speech error: $error (state: $currentAudioState)")
+
+                    // Only restart if mic is enabled and we were actively listening
+                    if (isMicEnabled && currentAudioState != AudioState.IDLE) {
+                        // Don't restart if we're processing a command
+                        if (currentAudioState != AudioState.PROCESSING_COMMAND) {
+                            restartWakeWordListening()
+                        } else {
+                            Log.d(TAG, "Processing command, ignoring error")
+                        }
+                    } else {
+                        currentAudioState = AudioState.IDLE
                     }
                 }
             }
 
-            commandRouter.onResponse = { response ->
-                runOnUiThread {
-                    classificationResult.text = response
-                    confidenceText.text = "Voice Command Response"
-                    // wait for TTS to finish
-                    lifecycleScope.launch {
-                        aiLiveCore.ttsManager.state.collect { ttsState ->
-                            if (ttsState == com.ailive.audio.TTSManager.TTSState.READY) {
-                                delay(500)
-                                if (isMicEnabled) {
-                                    isListeningForWakeWord = true
-                                    restartWakeWordListening()
-                                }
-                                return@collect
-                            }
-                        }
-                    }
-                }
-            }
+            // Note: commandRouter.onResponse is no longer used since we switched to streaming
+            // Voice commands now use the same streaming path as text commands
 
             // Mic starts OFF by default - user must enable manually
-            isListeningForWakeWord = false
+            currentAudioState = AudioState.IDLE
             isMicEnabled = false
             // Don't start wake word listening automatically
 
@@ -760,7 +777,7 @@ class MainActivity : AppCompatActivity() {
                 aiLiveCore.ttsManager.state.collect { ttsState ->
                     when (ttsState) {
                         com.ailive.audio.TTSManager.TTSState.SPEAKING -> {
-                            if (!isListeningForWakeWord) {
+                            if (currentAudioState != AudioState.LISTENING_WAKE_WORD) {
                                 statusIndicator.text = "● SPEAKING"
                             }
                         }
@@ -777,48 +794,220 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startWakeWordListening() {
+        if (currentAudioState == AudioState.LISTENING_WAKE_WORD) {
+            Log.d(TAG, "Already listening for wake word, ignoring duplicate call")
+            return
+        }
+
+        currentAudioState = AudioState.LISTENING_WAKE_WORD
         editTextCommand.setText("")
         editTextCommand.hint = "Say \"${settings.wakePhrase}\" or type..."
         speechProcessor.startListening(continuous = false)
-        Log.i(TAG, "Listening for wake word...")
+        Log.i(TAG, "🎤 Started listening for wake word")
     }
 
     private fun restartWakeWordListening() {
-        lifecycleScope.launch {
-            delay(500)
-            if (isListeningForWakeWord && isMicEnabled) startWakeWordListening()
+        // Only restart if mic is enabled and we're not already listening
+        if (!isMicEnabled) {
+            Log.d(TAG, "Mic disabled, not restarting wake word listening")
+            currentAudioState = AudioState.IDLE
+            return
         }
+
+        if (currentAudioState == AudioState.LISTENING_WAKE_WORD) {
+            Log.d(TAG, "Already listening for wake word, skipping restart")
+            return
+        }
+
+        // Don't restart if actively processing a command
+        if (currentAudioState == AudioState.PROCESSING_COMMAND) {
+            Log.d(TAG, "Processing command, not restarting wake word listening")
+            return
+        }
+
+        Log.d(TAG, "Restarting wake word listening")
+        startWakeWordListening()
     }
 
     private fun onWakeWordDetected() {
         Log.i(TAG, "🎯 Wake word detected!")
-        isListeningForWakeWord = false
+
+        // Transition state without stopping/restarting to prevent buffer overlap
+        currentAudioState = AudioState.LISTENING_COMMAND
+
         editTextCommand.setText("")
         editTextCommand.hint = "Listening for command..."
         statusIndicator.text = "● COMMAND"
 
-        speechProcessor.stopListening()
-        lifecycleScope.launch {
-            delay(500)
-            speechProcessor.startListening(continuous = false)
-        }
+        // Continue listening without interruption - the speech processor is already active
+        // The onFinalResult callback will handle the command when user finishes speaking
+        Log.d(TAG, "🎤 Now listening for command (no audio restart needed)")
     }
 
     private fun processVoiceCommand(command: String) {
-        Log.i(TAG, "Processing command: '$command'")
-        statusIndicator.text = "● PROCESSING"
-        lifecycleScope.launch(Dispatchers.Default) {
-            commandRouter.processCommand(command)
+        Log.i(TAG, "🗣️ Processing voice command: '$command'")
+
+        // Set state to processing
+        currentAudioState = AudioState.PROCESSING_COMMAND
+
+        // Check if AILive core is initialized
+        if (!::aiLiveCore.isInitialized) {
+            Log.w(TAG, "⚠️ System not initialized yet")
+            runOnUiThread {
+                statusIndicator.text = "● ERROR"
+                classificationResult.text = "System is still initializing. Please wait..."
+                // Return to listening after error
+                restartWakeWordListening()
+            }
+            return
+        }
+
+        // Show processing indicator
+        runOnUiThread {
+            statusIndicator.text = "● PROCESSING..."
+            classificationResult.text = "⏳ Generating response..."
+            confidenceText.text = ""
+            inferenceTime.text = ""
+            typingIndicator.visibility = View.VISIBLE
+            btnCancelGeneration.visibility = View.VISIBLE
+            btnSendCommand.isEnabled = false
+        }
+
+        // Use streaming response like text commands (unified processing)
+        generationJob = lifecycleScope.launch {
+            try {
+                val responseBuilder = StringBuilder()
+                val sentenceBuffer = StringBuilder()
+                var tokenCount = 0
+                val startTime = System.currentTimeMillis()
+                val streamingSpeechEnabled = settings.streamingSpeechEnabled
+
+                // Use PersonalityEngine for proper context (unified with text commands)
+                aiLiveCore.personalityEngine.generateStreamingResponse(command)
+                    .collect { token ->
+                        tokenCount++
+                        responseBuilder.append(token)
+                        sentenceBuffer.append(token)
+
+                        // Update UI with streaming text
+                        withContext(Dispatchers.Main) {
+                            classificationResult.text = responseBuilder.toString()
+
+                            // Auto-scroll to bottom
+                            responseScrollView.post {
+                                responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
+                            }
+
+                            // Update performance stats
+                            if (tokenCount % 5 == 0) {
+                                val elapsed = System.currentTimeMillis() - startTime
+                                val tokensPerSec = if (elapsed > 0) {
+                                    (tokenCount.toFloat() / elapsed) * 1000
+                                } else {
+                                    0f
+                                }
+                                inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
+                                statusIndicator.text = "● 🔊 SPEAKING..."
+                            }
+
+                            // Streaming TTS
+                            if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                                val currentText = sentenceBuffer.toString()
+                                val shouldSpeak = currentText.endsWith(". ") ||
+                                                  currentText.endsWith("! ") ||
+                                                  currentText.endsWith("? ") ||
+                                                  currentText.endsWith(".\n") ||
+                                                  currentText.endsWith("!\n") ||
+                                                  currentText.endsWith("?\n") ||
+                                                  (currentText.length > 80 && token == " ")
+
+                                if (shouldSpeak && currentText.length > 10) {
+                                    val sentenceToSpeak = currentText.trim()
+                                    Log.d(TAG, "🔊 Voice: Streaming TTS (${sentenceToSpeak.length} chars)")
+                                    aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
+                                    sentenceBuffer.clear()
+                                }
+                            }
+                        }
+                    }
+
+                // Generation complete
+                val totalTime = System.currentTimeMillis() - startTime
+                val tokensPerSec = if (totalTime > 0) {
+                    (tokenCount.toFloat() / totalTime) * 1000
+                } else {
+                    0f
+                }
+
+                withContext(Dispatchers.Main) {
+                    statusIndicator.text = "●"
+                    confidenceText.text = "Completed"
+                    inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | ${totalTime}ms"
+                    typingIndicator.visibility = View.GONE
+                    btnCancelGeneration.visibility = View.GONE
+                    btnSendCommand.isEnabled = true
+                    Log.i(TAG, "✅ Voice command complete: $tokenCount tokens in ${totalTime}ms")
+
+                    // Add to conversation history
+                    if (::aiLiveCore.isInitialized) {
+                        aiLiveCore.personalityEngine.addToHistory(
+                            com.ailive.personality.ConversationTurn(
+                                role = com.ailive.personality.Role.USER,
+                                content = command,
+                                timestamp = startTime
+                            )
+                        )
+                        aiLiveCore.personalityEngine.addToHistory(
+                            com.ailive.personality.ConversationTurn(
+                                role = com.ailive.personality.Role.ASSISTANT,
+                                content = responseBuilder.toString(),
+                                timestamp = System.currentTimeMillis()
+                            )
+                        )
+                    }
+
+                    // Speak remaining buffered text
+                    if (streamingSpeechEnabled && ::aiLiveCore.isInitialized && sentenceBuffer.isNotEmpty()) {
+                        val remaining = sentenceBuffer.toString().trim()
+                        if (remaining.isNotEmpty()) {
+                            Log.d(TAG, "🔊 Voice: Speaking final buffer (${remaining.length} chars)")
+                            aiLiveCore.ttsManager.speakIncremental(remaining)
+                        }
+                    } else if (!streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                        aiLiveCore.ttsManager.speak(responseBuilder.toString(), com.ailive.audio.TTSManager.Priority.NORMAL)
+                    }
+
+                    // Return to wake word listening after completion
+                    restartWakeWordListening()
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Voice command streaming failed", e)
+                withContext(Dispatchers.Main) {
+                    statusIndicator.text = "● ERROR"
+                    classificationResult.text = "Error: ${e.message}"
+                    inferenceTime.text = ""
+                    typingIndicator.visibility = View.GONE
+                    btnCancelGeneration.visibility = View.GONE
+                    btnSendCommand.isEnabled = true
+
+                    // Return to wake word listening after error
+                    restartWakeWordListening()
+                }
+            } finally {
+                generationJob = null
+            }
         }
     }
 
     private fun setupManualControls() {
         btnToggleMic.setOnClickListener {
             if (isMicEnabled) {
+                // Stop listening and transition to IDLE
                 if (::speechProcessor.isInitialized) {
                     speechProcessor.stopListening()
-                    isListeningForWakeWord = false
                 }
+                currentAudioState = AudioState.IDLE
                 isMicEnabled = false
                 btnToggleMic.text = "🎤 MIC OFF"
                 btnToggleMic.setBackgroundResource(R.drawable.button_toggle_off)
@@ -827,12 +1016,10 @@ class MainActivity : AppCompatActivity() {
                 editTextCommand.hint = "Type your command..."
                 Log.d(TAG, "🎤 Microphone manually disabled")
             } else {
+                // Enable mic and start listening for wake word
+                isMicEnabled = true
                 if (::speechProcessor.isInitialized) {
-                    isListeningForWakeWord = true
-                    isMicEnabled = true
                     startWakeWordListening()
-                } else {
-                    isMicEnabled = true
                 }
                 btnToggleMic.text = "🎤 MIC ON"
                 btnToggleMic.setBackgroundResource(R.drawable.button_toggle_on)
