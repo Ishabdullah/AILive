@@ -433,6 +433,7 @@ class ModelDownloadManager(private val context: Context) {
     /**
      * Handle download completion - verify file in Downloads folder
      * BUGFIX: Prevent duplicate invocations from both BroadcastReceiver and polling
+     * BUGFIX v2: Properly reset state BEFORE callback to allow sequential downloads
      */
     private fun handleDownloadComplete(modelName: String) {
         // Guard against duplicate calls (can happen when both BroadcastReceiver and polling fire)
@@ -459,9 +460,8 @@ class ModelDownloadManager(private val context: Context) {
             downloadReceiver = null
         }
 
-        // Store callback locally and clear it immediately to prevent duplicate invocations
+        // Store callback locally (but DON'T clear it yet - clear AFTER state reset)
         val callback = downloadCompleteCallback
-        downloadCompleteCallback = null
 
         try {
             val query = DownloadManager.Query().setFilterById(downloadId)
@@ -490,33 +490,39 @@ class ModelDownloadManager(private val context: Context) {
                                     Log.i(TAG, "✅ File verified in Downloads: ${modelFile.absolutePath}")
                                     Log.i(TAG, "   Size: ${sizeMB}MB")
 
-                                    // Reset state BEFORE callback (callback may trigger next download)
+                                    // CRITICAL FIX: Reset ALL state BEFORE invoking callback
+                                    // This allows the callback to immediately start a new download
                                     downloadId = -1
                                     currentModelName = null
+                                    downloadCompleteCallback = null
                                     isHandlingCompletion = false
 
+                                    // Now safe to invoke callback (which may trigger next download)
                                     callback?.invoke(true, "")
+                                    return  // Exit early to avoid finally block resetting flag again
                                 } else {
-                                    val sizeMB = modelFile.length() / 1024 / 1024
+                                    val sizeMB = if (modelFile.exists()) modelFile.length() / 1024 / 1024 else 0
                                     Log.e(TAG, "❌ File missing or too small in Downloads!")
                                     Log.e(TAG, "   Expected at least ${MIN_MODEL_SIZE_BYTES / 1024 / 1024}MB, got ${sizeMB}MB")
 
-                                    // Reset state BEFORE callback
                                     downloadId = -1
                                     currentModelName = null
+                                    downloadCompleteCallback = null
                                     isHandlingCompletion = false
 
                                     callback?.invoke(false, "Download verification failed")
+                                    return
                                 }
                             } else {
                                 Log.e(TAG, "❌ URI is null!")
 
-                                // Reset state BEFORE callback
                                 downloadId = -1
                                 currentModelName = null
+                                downloadCompleteCallback = null
                                 isHandlingCompletion = false
 
                                 callback?.invoke(false, "Download URI is null")
+                                return
                             }
                         }
                         DownloadManager.STATUS_FAILED -> {
@@ -526,49 +532,54 @@ class ModelDownloadManager(private val context: Context) {
                             val errorMessage = getDownloadErrorMessage(reason)
                             Log.e(TAG, "❌ Download failed with reason: $reason - $errorMessage")
 
-                            // Reset state BEFORE callback
                             downloadId = -1
                             currentModelName = null
+                            downloadCompleteCallback = null
                             isHandlingCompletion = false
 
                             callback?.invoke(false, errorMessage)
+                            return
                         }
                         else -> {
                             Log.w(TAG, "⚠️ Download status: $status")
 
-                            // Reset state BEFORE callback
                             downloadId = -1
                             currentModelName = null
+                            downloadCompleteCallback = null
                             isHandlingCompletion = false
 
                             callback?.invoke(false, "Unexpected download status: $status")
+                            return
                         }
                     }
                 } else {
                     Log.e(TAG, "❌ Cursor is empty!")
 
-                    // Reset state BEFORE callback
                     downloadId = -1
                     currentModelName = null
+                    downloadCompleteCallback = null
                     isHandlingCompletion = false
 
                     callback?.invoke(false, "Could not query download status")
+                    return
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling download completion", e)
 
-            // Reset state BEFORE callback
             downloadId = -1
             currentModelName = null
+            downloadCompleteCallback = null
             isHandlingCompletion = false
 
             callback?.invoke(false, "Error: ${e.message}")
+            return
         } finally {
-            // Only reset the guard flag in finally (state reset happens before callbacks now)
-            // This prevents duplicate calls but allows batch downloads to proceed
-            isHandlingCompletion = false
-            Log.d(TAG, "📥 Completion handling finished")
+            // Safety net: only reset if not already reset (shouldn't happen due to early returns)
+            if (isHandlingCompletion) {
+                isHandlingCompletion = false
+                Log.d(TAG, "📥 Completion handling finished (via finally)")
+            }
         }
     }
 
