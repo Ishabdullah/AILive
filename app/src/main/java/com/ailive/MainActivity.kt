@@ -37,8 +37,10 @@ import com.ailive.testing.TestScenarios
 import com.ailive.ui.dashboard.DashboardFragment
 import com.ailive.ui.ModelSetupDialog
 import com.ailive.ai.llm.ModelDownloadManager
+import com.ailive.personality.SentenceDetector
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
+import java.util.concurrent.CancellationException
 
 /**
  * Audio state machine for wake word and command processing
@@ -119,6 +121,10 @@ class MainActivity : AppCompatActivity() {
 
     // LLM generation control
     private var generationJob: Job? = null
+
+    // Track pending conversation turns for cancel handling
+    private var pendingUserTurn: com.ailive.personality.ConversationTurn? = null
+    private var pendingAssistantTurn: com.ailive.personality.ConversationTurn? = null
 
     companion object {
         private const val TAG_COMPANION = "MainActivity.Companion"
@@ -844,6 +850,44 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "🎤 Now listening for command (no audio restart needed)")
     }
 
+    /**
+     * Remove pending conversation turns from PersonalityEngine history
+     * Used when cancellation occurs mid-stream to prevent history corruption
+     */
+    private fun removeConversationTurns(
+        userTurn: com.ailive.personality.ConversationTurn?,
+        assistantTurn: com.ailive.personality.ConversationTurn?
+    ) {
+        if (!::aiLiveCore.isInitialized) return
+
+        // Access conversation history via reflection (PersonalityEngine doesn't expose removeFromHistory)
+        // This is a workaround - ideally PersonalityEngine should have a removeFromHistory method
+        try {
+            val personalityEngine = aiLiveCore.personalityEngine
+            val historyField = personalityEngine.javaClass.getDeclaredField("conversationHistory")
+            historyField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val history = historyField.get(personalityEngine) as? MutableList<com.ailive.personality.ConversationTurn>
+
+            if (history != null) {
+                var removed = 0
+                if (userTurn != null && history.remove(userTurn)) {
+                    removed++
+                    Log.d(TAG, "✓ Removed pending USER turn from history")
+                }
+                if (assistantTurn != null && history.remove(assistantTurn)) {
+                    removed++
+                    Log.d(TAG, "✓ Removed pending ASSISTANT turn from history")
+                }
+                if (removed > 0) {
+                    Log.i(TAG, "Cleaned up $removed pending turn(s) from conversation history")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not remove pending turns from history: ${e.message}")
+        }
+    }
+
     private fun processVoiceCommand(command: String) {
         Log.i(TAG, "🗣️ Processing voice command: '$command'")
 
@@ -875,61 +919,91 @@ class MainActivity : AppCompatActivity() {
 
         // Use streaming response like text commands (unified processing)
         generationJob = lifecycleScope.launch {
+            // Track pending turns for cancel handling
+            val userTurn = com.ailive.personality.ConversationTurn(
+                role = com.ailive.personality.Role.USER,
+                content = command,
+                timestamp = System.currentTimeMillis()
+            )
+            pendingUserTurn = userTurn
+
             try {
                 val responseBuilder = StringBuilder()
                 val sentenceBuffer = StringBuilder()
                 var tokenCount = 0
                 val startTime = System.currentTimeMillis()
                 val streamingSpeechEnabled = settings.streamingSpeechEnabled
+                var lastTTSTime = 0L  // For debouncing
+
+                // Add user turn to history immediately
+                if (::aiLiveCore.isInitialized) {
+                    aiLiveCore.personalityEngine.addToHistory(userTurn)
+                    Log.d(TAG, "Added USER turn to history (pending completion)")
+                }
 
                 // Use PersonalityEngine for proper context (unified with text commands)
-                aiLiveCore.personalityEngine.generateStreamingResponse(command)
-                    .collect { token ->
-                        tokenCount++
-                        responseBuilder.append(token)
-                        sentenceBuffer.append(token)
+                try {
+                    aiLiveCore.personalityEngine.generateStreamingResponse(command)
+                        .collect { token ->
+                            tokenCount++
+                            responseBuilder.append(token)
+                            sentenceBuffer.append(token)
 
-                        // Update UI with streaming text
-                        withContext(Dispatchers.Main) {
-                            classificationResult.text = responseBuilder.toString()
+                            // Update UI with streaming text
+                            withContext(Dispatchers.Main) {
+                                classificationResult.text = responseBuilder.toString()
 
-                            // Auto-scroll to bottom
-                            responseScrollView.post {
-                                responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
-                            }
-
-                            // Update performance stats
-                            if (tokenCount % 5 == 0) {
-                                val elapsed = System.currentTimeMillis() - startTime
-                                val tokensPerSec = if (elapsed > 0) {
-                                    (tokenCount.toFloat() / elapsed) * 1000
-                                } else {
-                                    0f
+                                // Auto-scroll to bottom
+                                responseScrollView.post {
+                                    responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
                                 }
-                                inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
-                                statusIndicator.text = "● 🔊 SPEAKING..."
-                            }
 
-                            // Streaming TTS
-                            if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
-                                val currentText = sentenceBuffer.toString()
-                                val shouldSpeak = currentText.endsWith(". ") ||
-                                                  currentText.endsWith("! ") ||
-                                                  currentText.endsWith("? ") ||
-                                                  currentText.endsWith(".\n") ||
-                                                  currentText.endsWith("!\n") ||
-                                                  currentText.endsWith("?\n") ||
-                                                  (currentText.length > 80 && token == " ")
+                                // Update performance stats
+                                if (tokenCount % 5 == 0) {
+                                    val elapsed = System.currentTimeMillis() - startTime
+                                    val tokensPerSec = if (elapsed > 0) {
+                                        (tokenCount.toFloat() / elapsed) * 1000
+                                    } else {
+                                        0f
+                                    }
+                                    inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
+                                    statusIndicator.text = "● 🔊 SPEAKING..."
+                                }
 
-                                if (shouldSpeak && currentText.length > 10) {
-                                    val sentenceToSpeak = currentText.trim()
-                                    Log.d(TAG, "🔊 Voice: Streaming TTS (${sentenceToSpeak.length} chars)")
-                                    aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
-                                    sentenceBuffer.clear()
+                                // IMPROVED: Streaming TTS with intelligent sentence detection + debouncing
+                                if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                                    val currentText = sentenceBuffer.toString()
+
+                                    // Use SentenceDetector for smarter boundary detection (handles abbreviations)
+                                    val isCompleteSentence = SentenceDetector.isCompleteSentence(
+                                        currentText,
+                                        minLength = 10,
+                                        longPhraseThreshold = 80
+                                    )
+
+                                    // Debounce: Wait at least 300ms between TTS calls for smoother pacing
+                                    val now = System.currentTimeMillis()
+                                    val timeSinceLastTTS = now - lastTTSTime
+
+                                    if (isCompleteSentence && timeSinceLastTTS > 300) {
+                                        val sentenceToSpeak = currentText.trim()
+                                        Log.d(TAG, "🔊 Voice: Streaming TTS (${sentenceToSpeak.length} chars)")
+                                        aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
+                                        sentenceBuffer.clear()
+                                        lastTTSTime = now
+                                    }
                                 }
                             }
                         }
-                    }
+                } catch (e: CancellationException) {
+                    // User cancelled - this is expected, rethrow to be handled in outer catch
+                    Log.d(TAG, "Voice command streaming cancelled by user")
+                    throw e
+                } catch (e: Exception) {
+                    // Mid-stream error (network, model, etc.)
+                    Log.e(TAG, "❌ Mid-stream error during voice command generation", e)
+                    throw e
+                }
 
                 // Generation complete
                 val totalTime = System.currentTimeMillis() - startTime
@@ -948,22 +1022,20 @@ class MainActivity : AppCompatActivity() {
                     btnSendCommand.isEnabled = true
                     Log.i(TAG, "✅ Voice command complete: $tokenCount tokens in ${totalTime}ms")
 
-                    // Add to conversation history
+                    // Add assistant turn to conversation history
                     if (::aiLiveCore.isInitialized) {
-                        aiLiveCore.personalityEngine.addToHistory(
-                            com.ailive.personality.ConversationTurn(
-                                role = com.ailive.personality.Role.USER,
-                                content = command,
-                                timestamp = startTime
-                            )
+                        val assistantTurn = com.ailive.personality.ConversationTurn(
+                            role = com.ailive.personality.Role.ASSISTANT,
+                            content = responseBuilder.toString(),
+                            timestamp = System.currentTimeMillis()
                         )
-                        aiLiveCore.personalityEngine.addToHistory(
-                            com.ailive.personality.ConversationTurn(
-                                role = com.ailive.personality.Role.ASSISTANT,
-                                content = responseBuilder.toString(),
-                                timestamp = System.currentTimeMillis()
-                            )
-                        )
+                        pendingAssistantTurn = assistantTurn
+                        aiLiveCore.personalityEngine.addToHistory(assistantTurn)
+                        Log.d(TAG, "✓ Added ASSISTANT turn to history")
+
+                        // Clear pending turns (successful completion)
+                        pendingUserTurn = null
+                        pendingAssistantTurn = null
                     }
 
                     // Speak remaining buffered text
@@ -981,8 +1053,23 @@ class MainActivity : AppCompatActivity() {
                     restartWakeWordListening()
                 }
 
+            } catch (e: CancellationException) {
+                // User cancelled - pending turns will be removed by cancel button handler
+                Log.d(TAG, "Voice command cancelled - pending turns will be cleaned up")
+                withContext(Dispatchers.Main) {
+                    // Cancel button handler already does UI cleanup and history removal
+                    // Just ensure we return to wake word listening
+                    restartWakeWordListening()
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Voice command streaming failed", e)
+                // Mid-stream or generation error - rollback history
+                Log.e(TAG, "❌ Voice command streaming failed: ${e.message}", e)
+
+                // Remove pending turns from history on error
+                removeConversationTurns(pendingUserTurn, pendingAssistantTurn)
+                pendingUserTurn = null
+                pendingAssistantTurn = null
+
                 withContext(Dispatchers.Main) {
                     statusIndicator.text = "● ERROR"
                     classificationResult.text = "Error: ${e.message}"
@@ -1073,6 +1160,15 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "🛑 User requested cancellation")
             generationJob?.cancel()
             generationJob = null  // Prevent memory leak
+
+            // Remove pending turns from conversation history to prevent corruption
+            if (pendingUserTurn != null || pendingAssistantTurn != null) {
+                Log.d(TAG, "Removing pending conversation turns from history")
+                removeConversationTurns(pendingUserTurn, pendingAssistantTurn)
+                pendingUserTurn = null
+                pendingAssistantTurn = null
+            }
+
             runOnUiThread {
                 typingIndicator.visibility = View.GONE
                 btnCancelGeneration.visibility = View.GONE
@@ -1162,64 +1258,91 @@ class MainActivity : AppCompatActivity() {
 
         // Stream response in real-time with incremental TTS (store Job for cancellation)
         generationJob = lifecycleScope.launch {
+            // Track pending turns for cancel handling
+            val userTurn = com.ailive.personality.ConversationTurn(
+                role = com.ailive.personality.Role.USER,
+                content = command,
+                timestamp = System.currentTimeMillis()
+            )
+            pendingUserTurn = userTurn
+
             try {
                 val responseBuilder = StringBuilder()
                 val sentenceBuffer = StringBuilder()
                 var tokenCount = 0
                 val startTime = System.currentTimeMillis()
                 val streamingSpeechEnabled = settings.streamingSpeechEnabled
+                var lastTTSTime = 0L  // For debouncing
+
+                // Add user turn to history immediately
+                if (::aiLiveCore.isInitialized) {
+                    aiLiveCore.personalityEngine.addToHistory(userTurn)
+                    Log.d(TAG, "Added USER turn to history (pending completion)")
+                }
 
                 // Use PersonalityEngine for proper context (name, time, location)
-                aiLiveCore.personalityEngine.generateStreamingResponse(command)
-                    .collect { token ->
-                        tokenCount++
-                        responseBuilder.append(token)
-                        sentenceBuffer.append(token)
+                try {
+                    aiLiveCore.personalityEngine.generateStreamingResponse(command)
+                        .collect { token ->
+                            tokenCount++
+                            responseBuilder.append(token)
+                            sentenceBuffer.append(token)
 
-                        // Update UI with streaming text
-                        withContext(Dispatchers.Main) {
-                            classificationResult.text = responseBuilder.toString()
+                            // Update UI with streaming text
+                            withContext(Dispatchers.Main) {
+                                classificationResult.text = responseBuilder.toString()
 
-                            // Auto-scroll to bottom to show new content
-                            responseScrollView.post {
-                                responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
-                            }
-
-                            // Update performance stats every 5 tokens
-                            if (tokenCount % 5 == 0) {
-                                val elapsed = System.currentTimeMillis() - startTime
-                                val tokensPerSec = if (elapsed > 0) {
-                                    (tokenCount.toFloat() / elapsed) * 1000
-                                } else {
-                                    0f
+                                // Auto-scroll to bottom to show new content
+                                responseScrollView.post {
+                                    responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
                                 }
-                                inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
-                                statusIndicator.text = "● 🔊 LIVE SPEAKING..."
-                            }
 
-                            // STREAMING TTS: Speak sentence as soon as it's complete
-                            if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
-                                val currentText = sentenceBuffer.toString()
+                                // Update performance stats every 5 tokens
+                                if (tokenCount % 5 == 0) {
+                                    val elapsed = System.currentTimeMillis() - startTime
+                                    val tokensPerSec = if (elapsed > 0) {
+                                        (tokenCount.toFloat() / elapsed) * 1000
+                                    } else {
+                                        0f
+                                    }
+                                    inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
+                                    statusIndicator.text = "● 🔊 LIVE SPEAKING..."
+                                }
 
-                                // Check if we have a complete sentence or phrase
-                                val shouldSpeak = currentText.endsWith(". ") ||
-                                                  currentText.endsWith("! ") ||
-                                                  currentText.endsWith("? ") ||
-                                                  currentText.endsWith(".\n") ||
-                                                  currentText.endsWith("!\n") ||
-                                                  currentText.endsWith("?\n") ||
-                                                  (currentText.length > 80 && token == " ")  // Long phrase, speak at word boundary
+                                // IMPROVED: Streaming TTS with intelligent sentence detection + debouncing
+                                if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                                    val currentText = sentenceBuffer.toString()
 
-                                if (shouldSpeak && currentText.length > 10) {
-                                    // Speak this sentence incrementally (queues, doesn't interrupt)
-                                    val sentenceToSpeak = currentText.trim()
-                                    Log.d(TAG, "🔊 Streaming TTS: Speaking sentence of ${sentenceToSpeak.length} chars")
-                                    aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
-                                    sentenceBuffer.clear()
+                                    // Use SentenceDetector for smarter boundary detection (handles abbreviations)
+                                    val isCompleteSentence = SentenceDetector.isCompleteSentence(
+                                        currentText,
+                                        minLength = 10,
+                                        longPhraseThreshold = 80
+                                    )
+
+                                    // Debounce: Wait at least 300ms between TTS calls for smoother pacing
+                                    val now = System.currentTimeMillis()
+                                    val timeSinceLastTTS = now - lastTTSTime
+
+                                    if (isCompleteSentence && timeSinceLastTTS > 300) {
+                                        val sentenceToSpeak = currentText.trim()
+                                        Log.d(TAG, "🔊 Text: Streaming TTS (${sentenceToSpeak.length} chars)")
+                                        aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
+                                        sentenceBuffer.clear()
+                                        lastTTSTime = now
+                                    }
                                 }
                             }
                         }
-                    }
+                } catch (e: CancellationException) {
+                    // User cancelled - this is expected, rethrow to be handled in outer catch
+                    Log.d(TAG, "Text command streaming cancelled by user")
+                    throw e
+                } catch (e: Exception) {
+                    // Mid-stream error (network, model, etc.)
+                    Log.e(TAG, "❌ Mid-stream error during text command generation", e)
+                    throw e
+                }
 
                 // Generation complete
                 val totalTime = System.currentTimeMillis() - startTime
@@ -1238,23 +1361,20 @@ class MainActivity : AppCompatActivity() {
                     btnSendCommand.isEnabled = true
                     Log.i(TAG, "✅ Streaming complete: $tokenCount tokens in ${totalTime}ms")
 
-                    // Add to conversation history for PersonalityEngine
+                    // Add assistant turn to conversation history
                     if (::aiLiveCore.isInitialized) {
-                        aiLiveCore.personalityEngine.addToHistory(
-                            com.ailive.personality.ConversationTurn(
-                                role = com.ailive.personality.Role.USER,
-                                content = command,
-                                timestamp = startTime
-                            )
+                        val assistantTurn = com.ailive.personality.ConversationTurn(
+                            role = com.ailive.personality.Role.ASSISTANT,
+                            content = responseBuilder.toString(),
+                            timestamp = System.currentTimeMillis()
                         )
-                        aiLiveCore.personalityEngine.addToHistory(
-                            com.ailive.personality.ConversationTurn(
-                                role = com.ailive.personality.Role.ASSISTANT,
-                                content = responseBuilder.toString(),
-                                timestamp = System.currentTimeMillis()
-                            )
-                        )
-                        Log.d(TAG, "📝 Added conversation to history")
+                        pendingAssistantTurn = assistantTurn
+                        aiLiveCore.personalityEngine.addToHistory(assistantTurn)
+                        Log.d(TAG, "✓ Added ASSISTANT turn to history")
+
+                        // Clear pending turns (successful completion)
+                        pendingUserTurn = null
+                        pendingAssistantTurn = null
                     }
 
                     // Speak any remaining buffered text
@@ -1270,8 +1390,22 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+            } catch (e: CancellationException) {
+                // User cancelled - pending turns will be removed by cancel button handler
+                Log.d(TAG, "Text command cancelled - pending turns will be cleaned up")
+                withContext(Dispatchers.Main) {
+                    // Cancel button handler already does UI cleanup and history removal
+                    // Nothing additional needed here
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Streaming generation failed", e)
+                // Mid-stream or generation error - rollback history
+                Log.e(TAG, "❌ Text command streaming failed: ${e.message}", e)
+
+                // Remove pending turns from history on error
+                removeConversationTurns(pendingUserTurn, pendingAssistantTurn)
+                pendingUserTurn = null
+                pendingAssistantTurn = null
+
                 withContext(Dispatchers.Main) {
                     statusIndicator.text = "● ERROR"
                     classificationResult.text = "Error: ${e.message}"
