@@ -19,8 +19,10 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.ailive.ai.models.ModelManager
@@ -114,7 +116,7 @@ class MainActivity : AppCompatActivity() {
         filePickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
                 result.data?.data?.let { uri ->
-                    Log.i(TAG, "File picker selected: $uri")
+                    Log.d(TAG, "File picker selected: $uri")
                     val onComplete = filePickerOnComplete
                     if (onComplete != null) {
                         modelSetupDialog.handleFilePickerResult(uri, onComplete)
@@ -128,7 +130,7 @@ class MainActivity : AppCompatActivity() {
         settingsLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
                 result.data?.getStringExtra("download_model")?.let { modelType ->
-                    Log.i(TAG, "📥 Download request from settings: $modelType")
+                    Log.d(TAG, "📥 Download request from settings: $modelType")
                     // Trigger download via ModelSetupDialog public API
                     when (modelType) {
                         "BGE" -> modelSetupDialog.triggerBGEDownload()
@@ -140,44 +142,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Register permissions launcher - single modern path
+        // Register permissions launcher - handles partial denials and "don't ask again"
         permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
             // results: map of permission -> Boolean
-            val allGranted = results.values.all { it }
-            if (allGranted) {
-                Log.i(TAG, "✓ All requested permissions granted (launcher)")
+            val granted = results.filterValues { it }.keys
+            val denied = results.filterValues { !it }.keys
+
+            if (denied.isEmpty()) {
+                Log.d(TAG, "✓ All requested permissions granted")
                 // After permissions granted, check if model setup is needed
                 proceedAfterPermissions()
             } else {
-                Log.e(TAG, "✗ One or more permissions denied: $results")
-                runOnUiThread {
-                    statusIndicator?.text = "● PERMISSION DENIED"
-                    classificationResult?.text = "Permissions required for full functionality"
-
-                    // Show explanation dialog with option to open settings
-                    AlertDialog.Builder(this)
-                        .setTitle("Permissions Required")
-                        .setMessage("AILive needs:\n• Camera & Microphone - for voice/video interaction\n• Location - for contextual awareness\n• Storage - to import custom models\n\nPlease grant these permissions to continue.")
-                        .setPositiveButton("Open Settings") { _, _ ->
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.fromParts("package", packageName, null)
-                            }
-                            startActivity(intent)
-                            finish()
-                        }
-                        .setNegativeButton("Exit") { _, _ ->
-                            finish()
-                        }
-                        .setCancelable(false)
-                        .show()
-                }
+                Log.w(TAG, "Permissions denied: $denied")
+                handlePartialOrDeniedPermissions(denied.toList())
             }
         }
 
         // Initialize settings
         settings = AISettings(this)
         if (!settings.isSetupComplete) {
-            Log.i(TAG, "Setup bypassed - using defaults")
+            Log.d(TAG, "Setup bypassed - using defaults")
             settings.isSetupComplete = true
         }
 
@@ -242,40 +226,38 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Build list of permissions based on Android version
+     * Requests only essential permissions for core functionality
      */
     private fun buildPermissionList(): List<String> {
         val permissionsToRequest = mutableListOf<String>()
+
+        // Core permissions - always required
         permissionsToRequest.add(Manifest.permission.CAMERA)
         permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
 
-        // Location permissions for GPS/Location Awareness (v1.2)
+        // Location permissions for contextual awareness (used by LocationManager)
         permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
         permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
 
-        // Storage permissions:
-        // We store models in PUBLIC Downloads folder (Environment.DIRECTORY_DOWNLOADS)
-        // Android 13+ uses granular READ_MEDIA_* permissions
-        // Android 10-12 uses READ_EXTERNAL_STORAGE
-        // Android 9- uses WRITE_EXTERNAL_STORAGE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ - need granular media permissions to read model files
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_VIDEO)
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_AUDIO)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // Storage permissions for model files in Downloads folder
+        // Note: For Android 13+, we use scoped storage (MediaStore) which doesn't require
+        // READ_MEDIA_* permissions for Downloads folder access. Only legacy paths need permissions.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             // Android 10-12 - need READ_EXTERNAL_STORAGE for Downloads access
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        } else {
+        } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             // Android 9 and below - need both READ and WRITE
             permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
             permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
+        // Android 13+ uses scoped storage - no permissions needed for Downloads folder
 
         return permissionsToRequest
     }
 
     /**
      * Request all necessary permissions before proceeding with initialization
+     * Shows rationale if user previously denied permissions
      */
     private fun requestInitialPermissions() {
         val permissionsToRequest = buildPermissionList()
@@ -286,15 +268,145 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (missing.isEmpty()) {
-            Log.i(TAG, "✓ Permissions already granted")
+            Log.d(TAG, "✓ All permissions already granted")
             proceedAfterPermissions()
         } else {
-            Log.i(TAG, "Requesting permissions: $missing")
-            statusIndicator.text = "● REQUESTING PERMISSIONS..."
-            classificationResult.text = "Please allow camera, microphone, location, and storage access"
-            // Launch modern permission flow
-            permissionLauncher.launch(missing.toTypedArray())
+            Log.d(TAG, "Missing permissions (${missing.size}): ${missing.joinToString()}")
+
+            // Check if we should show rationale for any of the missing permissions
+            val shouldShowRationale = missing.any { permission ->
+                ActivityCompat.shouldShowRequestPermissionRationale(this, permission)
+            }
+
+            if (shouldShowRationale) {
+                // User previously denied - show explanation before re-requesting
+                showPermissionRationale(missing)
+            } else {
+                // First time request or "Don't ask again" - proceed with request
+                statusIndicator.text = "● REQUESTING PERMISSIONS..."
+                classificationResult.text = "Please allow camera, microphone, location, and storage access"
+                permissionLauncher.launch(missing.toTypedArray())
+            }
         }
+    }
+
+    /**
+     * Show rationale dialog explaining why permissions are needed
+     * Called when user previously denied permissions
+     */
+    private fun showPermissionRationale(permissions: List<String>) {
+        val permissionDescriptions = buildPermissionDescriptions(permissions)
+
+        AlertDialog.Builder(this)
+            .setTitle("Permissions Needed")
+            .setMessage("AILive requires the following permissions to function properly:\n\n$permissionDescriptions\n\nWould you like to grant these permissions?")
+            .setPositiveButton("Grant Permissions") { _, _ ->
+                statusIndicator.text = "● REQUESTING PERMISSIONS..."
+                classificationResult.text = "Please allow the requested permissions"
+                permissionLauncher.launch(permissions.toTypedArray())
+            }
+            .setNegativeButton("Continue with Limited Features") { _, _ ->
+                // Allow app to continue with limited functionality
+                Log.w(TAG, "User chose to continue without granting all permissions")
+                proceedAfterPermissions()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Handle permissions that were denied or partially granted
+     * Distinguishes between "denied" and "don't ask again" states
+     */
+    private fun handlePartialOrDeniedPermissions(deniedPermissions: List<String>) {
+        // Categorize denied permissions by type
+        val criticalPermissions = deniedPermissions.filter {
+            it == Manifest.permission.CAMERA || it == Manifest.permission.RECORD_AUDIO
+        }
+
+        // Check if any permission has "don't ask again" status
+        val permanentlyDenied = deniedPermissions.filter { permission ->
+            !ActivityCompat.shouldShowRequestPermissionRationale(this, permission)
+        }
+
+        runOnUiThread {
+            statusIndicator?.text = "● PERMISSION ISSUE"
+
+            val permissionDescriptions = buildPermissionDescriptions(deniedPermissions)
+
+            val message = if (permanentlyDenied.isNotEmpty()) {
+                // User selected "Don't ask again" - must open settings
+                "Some permissions were permanently denied. To use all features:\n\n$permissionDescriptions\n\nPlease enable them in app settings."
+            } else {
+                // Temporarily denied - can retry
+                "The following permissions are needed:\n\n$permissionDescriptions"
+            }
+
+            if (criticalPermissions.isNotEmpty()) {
+                // Critical permissions denied - show mandatory dialog
+                classificationResult?.text = "Core permissions required for functionality"
+
+                AlertDialog.Builder(this)
+                    .setTitle("Critical Permissions Required")
+                    .setMessage(message)
+                    .setPositiveButton(if (permanentlyDenied.isNotEmpty()) "Open Settings" else "Retry") { _, _ ->
+                        if (permanentlyDenied.isNotEmpty()) {
+                            // Open app settings
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            }
+                            startActivity(intent)
+                        } else {
+                            // Retry permission request
+                            requestInitialPermissions()
+                        }
+                    }
+                    .setNegativeButton("Exit") { _, _ ->
+                        finish()
+                    }
+                    .setCancelable(false)
+                    .show()
+            } else {
+                // Non-critical permissions denied - allow continuation with limited features
+                classificationResult?.text = "Some features may be unavailable"
+
+                AlertDialog.Builder(this)
+                    .setTitle("Optional Permissions")
+                    .setMessage("$message\n\nYou can continue with limited functionality or grant permissions for full features.")
+                    .setPositiveButton(if (permanentlyDenied.isNotEmpty()) "Open Settings" else "Grant") { _, _ ->
+                        if (permanentlyDenied.isNotEmpty()) {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            }
+                            startActivity(intent)
+                        } else {
+                            requestInitialPermissions()
+                        }
+                    }
+                    .setNegativeButton("Continue") { _, _ ->
+                        proceedAfterPermissions()
+                    }
+                    .setCancelable(false)
+                    .show()
+            }
+        }
+    }
+
+    /**
+     * Build user-friendly descriptions for requested permissions
+     */
+    private fun buildPermissionDescriptions(permissions: List<String>): String {
+        return permissions.mapNotNull { permission ->
+            when (permission) {
+                Manifest.permission.CAMERA -> "• Camera - for visual AI analysis"
+                Manifest.permission.RECORD_AUDIO -> "• Microphone - for voice commands and wake word detection"
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION -> "• Location - for contextual awareness (time zones, local info)"
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE -> "• Storage - to access AI model files"
+                else -> null
+            }
+        }.distinct().joinToString("\n")
     }
 
     /**
@@ -308,13 +420,13 @@ class MainActivity : AppCompatActivity() {
             classificationResult.text = "Let's set up your AI assistant!"
 
             filePickerOnComplete = {
-                Log.i(TAG, "Model setup complete, continuing initialization")
+                Log.d(TAG, "Model setup complete, continuing initialization")
                 continueInitialization()
             }
 
             // Show AI name customization first, then model setup
             modelSetupDialog.showNameSetupDialog {
-                Log.i(TAG, "Setup complete, continuing initialization")
+                Log.d(TAG, "Setup complete, continuing initialization")
                 continueInitialization()
             }
             // stop further initialization until user completes model setup
@@ -338,9 +450,9 @@ class MainActivity : AppCompatActivity() {
 
         // Log which models are available
         val models = modelDownloadManager.getAvailableModels()
-        Log.i(TAG, "✅ Found ${models.size} model(s) available:")
+        Log.d(TAG, "✅ Found ${models.size} model(s) available:")
         models.forEach { model ->
-            Log.i(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
+            Log.d(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
         }
 
         // Initialize core early (keeps your previous design)
@@ -427,7 +539,7 @@ class MainActivity : AppCompatActivity() {
 
             cameraManager.onClassificationResult = { label, confidence, time ->
                 callbackCount++
-                Log.i(TAG, ">>> Classification #$callbackCount: $label")
+                Log.d(TAG, ">>> Classification #$callbackCount: $label")
                 updateUI(label, confidence, time)
             }
 
@@ -438,7 +550,7 @@ class MainActivity : AppCompatActivity() {
                 cameraManager = cameraManager
             )
             aiLiveCore.personalityEngine.registerTool(visionTool)
-            Log.i(TAG, "✓ VisionAnalysisTool registered")
+            Log.d(TAG, "✓ VisionAnalysisTool registered")
 
             runOnUiThread {
                 statusIndicator.text = "●"
@@ -503,7 +615,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
-            Log.i(TAG, "✓ Speech processor ready")
+            Log.d(TAG, "✓ Speech processor ready")
 
             wakeWordDetector.onWakeWordDetected = {
                 runOnUiThread {
@@ -523,7 +635,7 @@ class MainActivity : AppCompatActivity() {
             speechProcessor.onFinalResult = { text ->
                 runOnUiThread {
                     editTextCommand.setText(text)
-                    Log.i(TAG, "Final transcription: '$text'")
+                    Log.d(TAG, "Final transcription: '$text'")
 
                     if (isListeningForWakeWord) {
                         if (!wakeWordDetector.processText(text)) {
@@ -651,7 +763,7 @@ class MainActivity : AppCompatActivity() {
                 statusIndicator.text = "●"
                 statusIndicator.textSize = 16f
                 editTextCommand.hint = "Type your command..."
-                Log.i(TAG, "🎤 Microphone manually disabled")
+                Log.d(TAG, "🎤 Microphone manually disabled")
             } else {
                 if (::speechProcessor.isInitialized) {
                     isListeningForWakeWord = true
@@ -664,7 +776,7 @@ class MainActivity : AppCompatActivity() {
                 btnToggleMic.setBackgroundResource(R.drawable.button_toggle_on)
                 statusIndicator.text = "●"
                 statusIndicator.textSize = 16f
-                Log.i(TAG, "🎤 Microphone manually enabled")
+                Log.d(TAG, "🎤 Microphone manually enabled")
             }
         }
 
@@ -683,7 +795,7 @@ class MainActivity : AppCompatActivity() {
                 classificationResult.text = "Camera is OFF. Enable to use vision features."
                 confidenceText.text = ""
                 inferenceTime.text = ""
-                Log.i(TAG, "📷 Camera manually disabled")
+                Log.d(TAG, "📷 Camera manually disabled")
             } else {
                 cameraPreview.visibility = View.VISIBLE
                 appIconBackground.visibility = View.GONE
@@ -696,7 +808,7 @@ class MainActivity : AppCompatActivity() {
                 statusIndicator.text = "●"
                 statusIndicator.textSize = 16f
                 classificationResult.text = "Point camera at objects to analyze"
-                Log.i(TAG, "📷 Camera manually enabled")
+                Log.d(TAG, "📷 Camera manually enabled")
             }
         }
 
@@ -709,7 +821,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnCancelGeneration.setOnClickListener {
-            Log.i(TAG, "🛑 User requested cancellation")
+            Log.d(TAG, "🛑 User requested cancellation")
             generationJob?.cancel()
             runOnUiThread {
                 typingIndicator.visibility = View.GONE
@@ -739,7 +851,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun setupSettingsButton() {
         btnSettings.setOnClickListener {
-            Log.i(TAG, "⚙️ Opening Model Settings")
+            Log.d(TAG, "⚙️ Opening Model Settings")
             val intent = Intent(this, com.ailive.ui.ModelSettingsActivity::class.java)
             settingsLauncher.launch(intent)  // Use launcher to receive download requests
         }
@@ -765,7 +877,7 @@ class MainActivity : AppCompatActivity() {
         // Reload settings when returning from settings activity
         if (::aiLiveCore.isInitialized) {
             aiLiveCore.llmManager.reloadSettings()
-            Log.i(TAG, "⚙️ Settings reloaded on resume")
+            Log.d(TAG, "⚙️ Settings reloaded on resume")
         }
     }
 
