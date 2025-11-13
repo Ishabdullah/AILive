@@ -181,3 +181,8 @@
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
+
+# Caffeine cache library uses System.Logger (Java 9+) not available on Android
+# Caffeine has fallback implementations, so these warnings are safe to ignore
+-dontwarn java.lang.System$Logger
+-dontwarn java.lang.System$Logger$Level
