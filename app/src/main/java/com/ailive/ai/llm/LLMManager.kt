@@ -346,6 +346,7 @@ class LLMManager(private val context: Context) {
 
         // Reload settings in case they changed
         settings = ModelSettings.load(context)
+        Log.i(TAG, "   Using settings: maxTokens=${settings.maxTokens}, temp=${settings.temperature}")
 
         // Check if prompt is already in chat template format (from PersonalityEngine)
         // PersonalityEngine sends pre-formatted prompts with system message + context + history
@@ -382,44 +383,59 @@ class LLMManager(private val context: Context) {
             createChatPrompt(prompt, agentName)
         }
 
+        Log.d(TAG, "   Chat prompt length: ${chatPrompt.length} chars")
+
         // Stream tokens directly from llama.cpp with configured max tokens
         var tokenCount = 0
         val backend = gpuInfo?.backend ?: "CPU"
 
-        llamaAndroid.send(chatPrompt, formatChat = false, maxTokens = settings.maxTokens)
-            .catch { e ->
-                Log.e(TAG, "❌ Streaming generation error", e)
-                throw e
-            }
-            .collect { token ->
-                tokenCount++
-                emit(token)  // Emit each token to the UI
-
-                // Log progress every 10 tokens
-                if (tokenCount % 10 == 0) {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val tokensPerSec = if (elapsed > 0) {
-                        (tokenCount.toFloat() / elapsed) * 1000
-                    } else {
-                        0f
-                    }
-                    Log.d(TAG, "   Token $tokenCount (${String.format("%.1f", tokensPerSec)} tok/s)")
+        try {
+            llamaAndroid.send(chatPrompt, formatChat = false, maxTokens = settings.maxTokens)
+                .catch { e ->
+                    Log.e(TAG, "❌ Streaming generation error", e)
+                    throw e
                 }
+                .collect { token ->
+                    tokenCount++
+                    emit(token)  // Emit each token to the UI
+
+                    // Log progress every 10 tokens
+                    if (tokenCount % 10 == 0) {
+                        val elapsed = System.currentTimeMillis() - startTime
+                        val tokensPerSec = if (elapsed > 0) {
+                            (tokenCount.toFloat() / elapsed) * 1000
+                        } else {
+                            0f
+                        }
+                        Log.d(TAG, "   Token $tokenCount (${String.format("%.1f", tokensPerSec)} tok/s)")
+                    }
+                }
+
+            // Check if we got any tokens
+            if (tokenCount == 0) {
+                Log.w(TAG, "⚠️ No tokens generated! Check if model is loaded correctly.")
+                throw IllegalStateException("Model generated no tokens. Please restart the app.")
             }
 
-        // Record final performance
-        val totalTime = System.currentTimeMillis() - startTime
-        performanceMonitor.recordInference(tokenCount, totalTime, backend)
+            // Record final performance
+            val totalTime = System.currentTimeMillis() - startTime
+            performanceMonitor.recordInference(tokenCount, totalTime, backend)
 
-        val tokensPerSec = if (totalTime > 0) {
-            (tokenCount.toFloat() / totalTime) * 1000
-        } else {
-            0f
+            val tokensPerSec = if (totalTime > 0) {
+                (tokenCount.toFloat() / totalTime) * 1000
+            } else {
+                0f
+            }
+
+            Log.i(TAG, "✓ Streamed $tokenCount tokens in ${totalTime}ms")
+            Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tokens/second")
+            Log.i(TAG, "   Average speed (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error during streaming generation", e)
+            Log.e(TAG, "   Tokens generated before error: $tokenCount")
+            Log.e(TAG, "   Settings: maxTokens=${settings.maxTokens}, ctxSize=${settings.ctxSize}")
+            throw e
         }
-
-        Log.i(TAG, "✓ Streamed $tokenCount tokens in ${totalTime}ms")
-        Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tokens/second")
-        Log.i(TAG, "   Average speed (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
     }
 
     /**
