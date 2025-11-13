@@ -24,7 +24,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.ailive.ai.models.ModelManager
 import com.ailive.audio.AudioManager
 import com.ailive.audio.CommandRouter
@@ -627,7 +629,9 @@ class MainActivity : AppCompatActivity() {
                 updateUI(label, confidence, time)
             }
 
-            cameraManager.startCamera(cameraPreview)
+            // Camera will be started lazily when user toggles it ON
+            // This prevents binding camera hardware when not in use (battery drain)
+            // See btnToggleCamera.setOnClickListener for camera start logic
 
             // Register VisionAnalysisTool with PersonalityEngine before core starts
             val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
@@ -648,14 +652,16 @@ class MainActivity : AppCompatActivity() {
             cameraPreview.visibility = View.GONE
             appIconBackground.visibility = View.VISIBLE
 
-            // Debug counter coroutine - use lifecycleScope so it's cancelled with Activity
+            // Debug counter coroutine - respects lifecycle (pauses when app backgrounded)
             lifecycleScope.launch {
-                var seconds = 0
-                while (isActive) {
-                    delay(1000)
-                    seconds++
-                    if (callbackCount == 0) {
-                        statusIndicator.text = "● WAITING ${seconds}s (0 results)"
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    var seconds = 0
+                    while (isActive) {
+                        delay(1000)
+                        seconds++
+                        if (callbackCount == 0) {
+                            statusIndicator.text = "● WAITING ${seconds}s (0 results)"
+                        }
                     }
                 }
             }
@@ -1133,6 +1139,14 @@ class MainActivity : AppCompatActivity() {
                 inferenceTime.text = ""
                 Log.d(TAG, "📷 Camera manually disabled")
             } else {
+                // Check camera permission before enabling
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    Log.w(TAG, "Camera permission not granted, cannot enable camera")
+                    classificationResult.text = "Camera permission required. Please grant in settings."
+                    return@setOnClickListener
+                }
+
                 cameraPreview.visibility = View.VISIBLE
                 appIconBackground.visibility = View.GONE
                 if (::cameraManager.isInitialized) {
@@ -1222,8 +1236,14 @@ class MainActivity : AppCompatActivity() {
         callbackCount = 0
         // Reload settings when returning from settings activity
         if (::aiLiveCore.isInitialized) {
-            aiLiveCore.llmManager.reloadSettings()
-            Log.d(TAG, "⚙️ Settings reloaded on resume")
+            try {
+                // Check that llmManager is initialized before calling methods on it
+                val llmManager = aiLiveCore.llmManager
+                llmManager.reloadSettings()
+                Log.d(TAG, "⚙️ Settings reloaded on resume")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to reload settings on resume: ${e.message}")
+            }
         }
     }
 
