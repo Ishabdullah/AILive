@@ -16,6 +16,41 @@ import java.io.File
  * Provides memory storage/retrieval capabilities with actual on-device storage.
  *
  * Phase 5: Enhanced with JSON-based storage for lightweight on-device memory
+ *
+ * ⚠️ CRITICAL ISSUE: DUPLICATE MEMORY SYSTEM
+ * ================================
+ * PROBLEM: This tool duplicates functionality of UnifiedMemoryManager
+ *          and uses a separate JSON file (memories.json) instead of Room database.
+ *
+ * EVIDENCE OF DUPLICATION:
+ * 1. This file: /data/data/com.ailive/files/memories.json (max 200 entries)
+ * 2. MemoryAI: /data/data/com.ailive/files/memory/entries.json (vector-based)
+ * 3. UnifiedMemoryManager: Room database (ailive_memory_db)
+ * 4. MemoryAI also has VectorDB (in-memory)
+ *
+ * RESULT: AILive has 3+ separate memory storage systems that don't sync!
+ *
+ * CURRENT USAGE:
+ * - PersonalityEngine uses UnifiedMemoryManager for context (BUT IT'S DROPPED!)
+ * - MemoryAI is instantiated but never used in production
+ * - This tool is registered but unclear if PersonalityEngine actually calls it
+ * - SearchHistoryManager uses its own SharedPreferences for web search history
+ *
+ * IMPACT:
+ * - Memory fragmentation across multiple stores
+ * - No single source of truth
+ * - Duplication and inconsistency
+ * - Wasted storage and confusion
+ *
+ * RECOMMENDATION:
+ * 1. Deprecate MemoryAI's JSON-based storage
+ * 2. Deprecate this tool's memories.json
+ * 3. Consolidate everything into UnifiedMemoryManager (Room DB)
+ * 4. Fix UnifiedPrompt to actually USE memory context
+ * 5. Use lightweight LLM for semantic search over Room DB
+ *
+ * TODO: Consolidate to single memory system ASAP
+ * ================================
  */
 class MemoryRetrievalTool(
     private val memoryAI: MemoryAI,
