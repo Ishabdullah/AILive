@@ -300,11 +300,9 @@ class LLMManager(private val context: Context) {
 
             Log.i(TAG, "🚀 Starting generation (Text-only): \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
 
-            // Create chat prompt with agent personality
-            val chatPrompt = createChatPrompt(prompt, agentName)
-
-            // Generate response using llama.cpp (streaming)
-            val response = generateWithLlama(chatPrompt)
+            // Generate response using llama.cpp with automatic chat formatting
+            // Note: formatChat=true is set in generateWithLlama to use model's template
+            val response = generateWithLlama(prompt)
 
             val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
             Log.i(TAG, "✅ Generation complete in ${totalTime}s")
@@ -357,49 +355,52 @@ class LLMManager(private val context: Context) {
         settings = ModelSettings.load(context)
         Log.i(TAG, "   Using settings: maxTokens=${settings.maxTokens}, temp=${settings.temperature}")
 
-        // Check if prompt is already in chat template format (from PersonalityEngine)
-        // PersonalityEngine sends pre-formatted prompts with system message + context + history
-        val chatPrompt = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
-                            prompt.contains("===== CURRENT CONTEXT =====") ||
-                            prompt.contains("User:") && prompt.contains("$agentName:")) {
-            // Prompt is already formatted by PersonalityEngine - use Qwen2-VL chat template
-            Log.d(TAG, "✓ Using PersonalityEngine formatted prompt with Qwen2-VL template")
-            buildString {
-                append("<|im_start|>system\n")
-                // Extract system message (everything before "===== CURRENT CONTEXT =====" or "User:")
-                val systemEnd = prompt.indexOf("===== CURRENT CONTEXT =====")
-                val userStart = prompt.indexOf("User:")
-                val splitPoint = when {
-                    systemEnd > 0 -> systemEnd
-                    userStart > 0 -> userStart
-                    else -> prompt.length
-                }
-                val systemMessage = prompt.substring(0, splitPoint).trim()
-                val restOfPrompt = prompt.substring(splitPoint).trim()
+        // CRITICAL FIX: Let llama.cpp handle chat formatting automatically
+        // Each GGUF model has its own chat template embedded in the file
+        // - Qwen models use ChatML (<|im_start|>system\n...)
+        // - Llama models use [INST]...[/INST]
+        // - Mistral uses different format
+        // - etc.
+        //
+        // By using formatChat=true, llama.cpp will automatically apply the
+        // correct template for whatever model is loaded.
 
-                append(systemMessage)
-                append("<|im_end|>\n")
+        // Extract just the user message from PersonalityEngine's formatted prompt
+        val userMessage = if (prompt.contains("===== YOUR CAPABILITIES =====") ||
+                              prompt.contains("===== CURRENT CONTEXT =====")) {
+            // PersonalityEngine formatted - extract the actual user input
+            Log.d(TAG, "✓ Extracting user message from PersonalityEngine prompt")
 
-                // Add the rest (context, history, user input)
-                append("<|im_start|>user\n")
-                append(restOfPrompt)
-                append("<|im_end|>\n")
-                append("<|im_start|>assistant\n")
+            // Find the last "User:" line which contains the actual user input
+            val userPattern = "User:(.+?)(?=\n|$)".toRegex()
+            val matches = userPattern.findAll(prompt)
+            val lastUserInput = matches.lastOrNull()?.groupValues?.get(1)?.trim()
+
+            if (lastUserInput != null && lastUserInput.isNotEmpty()) {
+                Log.d(TAG, "   Extracted user input: \"${lastUserInput.take(50)}...\"")
+                lastUserInput
+            } else {
+                // Fallback: use the whole prompt
+                Log.w(TAG, "   Could not extract user input, using full prompt")
+                prompt
             }
         } else {
-            // Simple prompt - use basic chat template
-            Log.d(TAG, "✓ Using basic chat template for simple prompt")
-            createChatPrompt(prompt, agentName)
+            // Simple prompt - use as-is
+            Log.d(TAG, "✓ Using simple prompt directly")
+            prompt
         }
 
-        Log.d(TAG, "   Chat prompt length: ${chatPrompt.length} chars")
+        Log.d(TAG, "   Message length: ${userMessage.length} chars")
+        Log.d(TAG, "   Using model's built-in chat template (formatChat=true)")
 
         // Stream tokens directly from llama.cpp with configured max tokens
         var tokenCount = 0
         val backend = gpuInfo?.backend ?: "CPU"
 
         try {
-            llamaAndroid.send(chatPrompt, formatChat = false, maxTokens = settings.maxTokens)
+            // IMPORTANT: formatChat=true lets llama.cpp apply the correct template
+            // for whatever model is loaded (Qwen, Llama, Mistral, etc.)
+            llamaAndroid.send(userMessage, formatChat = true, maxTokens = settings.maxTokens)
                 .catch { e ->
                     Log.e(TAG, "❌ Streaming generation error", e)
                     throw e
@@ -529,8 +530,9 @@ class LLMManager(private val context: Context) {
         // Reload settings in case they changed
         settings = ModelSettings.load(context)
 
-        // Use the official llama.cpp Android Flow API with configured max tokens
-        llamaAndroid.send(prompt, formatChat = false, maxTokens = settings.maxTokens)
+        // IMPORTANT: formatChat=true lets llama.cpp apply the model's built-in chat template
+        // This works with any model (Qwen, Llama, Mistral, etc.)
+        llamaAndroid.send(prompt, formatChat = true, maxTokens = settings.maxTokens)
             .catch { e ->
                 Log.e(TAG, "❌ Generation error", e)
                 throw e
