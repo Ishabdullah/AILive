@@ -504,10 +504,9 @@ class MainActivity : AppCompatActivity() {
                         statusIndicator.text = "● STARTING CAMERA..."
                         classificationResult.text = "Initializing camera..."
 
-                        delay(500)
+                        // Initialize camera and audio sequentially
+                        // No artificial delays needed - proper error handling ensures stability
                         initializeCamera()
-
-                        delay(500)
                         initializeAudio()
 
                         // Mark models as ready
@@ -572,7 +571,15 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                delay(2000)  // Give systems time to stabilize
+                // Brief delay to ensure all async initialization completes
+                delay(1000)  // Reduced from 2000ms - proper state checks make long delays unnecessary
+
+                // Double-check system state before running tests
+                if (!::aiLiveCore.isInitialized || !::modelManager.isInitialized) {
+                    Log.w(TAG, "⚠️ Skipping tests - core components not initialized")
+                    return@launch
+                }
+
                 Log.i(TAG, "🧪 Running integration tests...")
                 val tests = TestScenarios(aiLiveCore)
                 tests.runAllTests()
@@ -608,17 +615,16 @@ class MainActivity : AppCompatActivity() {
             aiLiveCore.personalityEngine.registerTool(visionTool)
             Log.i(TAG, "✓ Phase 2.2: Camera & VisionAnalysisTool registered")
 
-            runOnUiThread {
-                statusIndicator.text = "●"
-                classificationResult.text = "Ready for input..."
+            // Already on Main thread from withContext(Dispatchers.Main) - no need for runOnUiThread
+            statusIndicator.text = "●"
+            classificationResult.text = "Ready for input..."
 
-                // Camera starts OFF by default - user must enable manually
-                isCameraEnabled = false
-                btnToggleCamera.text = "📷 CAM OFF"
-                btnToggleCamera.setBackgroundResource(R.drawable.button_toggle_off)
-                cameraPreview.visibility = View.GONE
-                appIconBackground.visibility = View.VISIBLE
-            }
+            // Camera starts OFF by default - user must enable manually
+            isCameraEnabled = false
+            btnToggleCamera.text = "📷 CAM OFF"
+            btnToggleCamera.setBackgroundResource(R.drawable.button_toggle_off)
+            cameraPreview.visibility = View.GONE
+            appIconBackground.visibility = View.VISIBLE
 
             // Debug counter coroutine - use lifecycleScope so it's cancelled with Activity
             lifecycleScope.launch {
@@ -649,10 +655,11 @@ class MainActivity : AppCompatActivity() {
             inferenceTime.text = "${time}ms | Frame #$callbackCount"
             statusIndicator.text = "● LIVE ($callbackCount frames)"
 
+            // Use custom theme colors instead of android.R.color for better theming
             val colorRes = when {
-                confidence > 0.7f -> android.R.color.holo_green_light
-                confidence > 0.4f -> android.R.color.holo_orange_light
-                else -> android.R.color.holo_red_light
+                confidence > 0.7f -> R.color.colorConfidenceHigh
+                confidence > 0.4f -> R.color.colorConfidenceMedium
+                else -> R.color.colorConfidenceLow
             }
             classificationResult.setTextColor(ContextCompat.getColor(this, colorRes))
         }
@@ -878,6 +885,7 @@ class MainActivity : AppCompatActivity() {
         btnCancelGeneration.setOnClickListener {
             Log.d(TAG, "🛑 User requested cancellation")
             generationJob?.cancel()
+            generationJob = null  // Prevent memory leak
             runOnUiThread {
                 typingIndicator.visibility = View.GONE
                 btnCancelGeneration.visibility = View.GONE
@@ -1085,6 +1093,9 @@ class MainActivity : AppCompatActivity() {
                     btnCancelGeneration.visibility = View.GONE
                     btnSendCommand.isEnabled = true
                 }
+            } finally {
+                // Always null the job reference to prevent memory leak
+                generationJob = null
             }
         }
     }
