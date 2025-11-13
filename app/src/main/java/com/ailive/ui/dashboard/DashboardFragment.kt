@@ -32,6 +32,11 @@ import java.io.File
  */
 class DashboardFragment : Fragment(), ToolExecutionListener {
 
+    companion object {
+        private const val KEY_TOTAL_EXECUTIONS = "total_executions"
+        private const val KEY_SUCCESSFUL_EXECUTIONS = "successful_executions"
+    }
+
     private val TAG = "DashboardFragment"
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -75,6 +80,13 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
         // Initialize visualization views (Phase 6.2)
         patternGraphView = view.findViewById(R.id.patternGraphView)
         feedbackChartView = view.findViewById(R.id.feedbackChartView)
+
+        // Restore state if available
+        savedInstanceState?.let {
+            totalExecutions = it.getInt(KEY_TOTAL_EXECUTIONS, 0)
+            successfulExecutions = it.getInt(KEY_SUCCESSFUL_EXECUTIONS, 0)
+            Log.i(TAG, "Restored state: $totalExecutions executions, $successfulExecutions successful")
+        }
 
         // Generate test data if needed (for Phase 6.2 testing)
         generateTestDataIfNeeded()
@@ -254,6 +266,14 @@ class DashboardFragment : Fragment(), ToolExecutionListener {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Save dashboard state for configuration changes and fragment recreation
+        outState.putInt(KEY_TOTAL_EXECUTIONS, totalExecutions)
+        outState.putInt(KEY_SUCCESSFUL_EXECUTIONS, successfulExecutions)
+        Log.d(TAG, "Saved state: $totalExecutions executions, $successfulExecutions successful")
     }
 
     override fun onDestroyView() {
