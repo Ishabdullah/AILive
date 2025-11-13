@@ -21,10 +21,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- Android 13+ granular media permissions (for reading model files) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Note: Android 13+ uses scoped storage - no additional permissions needed for Downloads folder -->
+    <!-- Removed READ_MEDIA_* permissions as they're not required for .bin/.gguf model files -->
 
     <!-- Location permissions for contextual awareness -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
