@@ -158,7 +158,7 @@ AILive includes multiple AI tools that execute autonomously based on user intent
 | **ModelSetupDialog** | `ui/ModelSetupDialog.kt` | Model download wizard |
 | **AILiveApplication** | `AILiveApplication.kt` | Application class with crash reporting |
 
-**Total:** 117 Kotlin files, ~20,000+ lines of production code
+**Total:** 117 Kotlin files, ~26,000+ lines of production code
 
 ### Technology Stack
 
