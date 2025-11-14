@@ -224,23 +224,29 @@ class PersonalityEngine(
                 null
             }
 
-            // Get memory context if available
-            val memoryContext = memoryManager?.let {
-                withContext(Dispatchers.IO) {
-                    try {
-                        it.generateContextForPrompt(
-                            userInput = input,
-                            includeProfile = true,
-                            includeRecentContext = true,
-                            includeFacts = true,
-                            maxContextLength = 800  // Keep under 1000 chars to avoid bloating prompt
-                        )
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to generate memory context: ${e.message}")
-                        null
-                    }
-                }
-            }
+            // TEMPORARY FIX: Disable memory extraction to prevent blocking
+            // Memory extraction was causing 7+ second delays before user response
+            // TODO: Make this async/non-blocking in future update
+            val memoryContext: String? = null
+            Log.d(TAG, "⚠️ Memory extraction temporarily disabled for faster responses")
+
+            // Get memory context if available (DISABLED FOR NOW)
+            // val memoryContext = memoryManager?.let {
+            //     withContext(Dispatchers.IO) {
+            //         try {
+            //             it.generateContextForPrompt(
+            //                 userInput = input,
+            //                 includeProfile = true,
+            //                 includeRecentContext = true,
+            //                 includeFacts = true,
+            //                 maxContextLength = 800  // Keep under 1000 chars to avoid bloating prompt
+            //             )
+            //         } catch (e: Exception) {
+            //             Log.w(TAG, "Failed to generate memory context: ${e.message}")
+            //             null
+            //         }
+            //     }
+            // }
 
             if (memoryContext != null) {
                 Log.d(TAG, "✓ Generated memory context: ${memoryContext.length} chars")
