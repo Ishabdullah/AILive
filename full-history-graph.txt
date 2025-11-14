@@ -1,0 +1,329 @@
+* ad503d1 (HEAD -> main, origin/main, origin/HEAD) git push origin main  # Pushes the revert commit to GitHubRevert "Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H"
+| * 0eeb407 (tag: pre-restore-backup, origin/full-backup-main, full-backup-main) fix: disable memory extraction to fix 'no tokens' error
+| * 93225e5 docs: update README line count accuracy
+|/  
+*   d521e6f Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H
+|\  
+| * 3c14a12 (origin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H, claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H) docs: add complete file dependency analysis and cleanup guide
+| * 966d6e3 docs: update README to reflect v1.0 production state
+| * e039926 fix: add ProGuard rules for Caffeine cache System.Logger
+| * ccaba70 feat: production polish - fragment management, crashlytics, tests, offline mode
+| * c2b551d fix: resolve camera resource leak and lifecycle issues
+| * 281a964 fix: resolve streaming response garbling and history corruption issues
+| * d4bdc86 fix: implement audio state machine and resolve wake word buffer overlap
+| * 7bf3fdf fix: improve UI threading, eliminate delays, and add storage checks
+| * 291e993 fix: resolve initialization race conditions and callback logic flaws
+| * 0565c51 fix: improve permission handling and logging best practices
+| * 1ded12e fix: improve null safety and accessibility in MainActivity
+|/  
+* 9037e50 docs: add repository cleanup summary
+* 14fb398 docs: update to non-commercial license and replace README
+*   e692a6a feat: merge web search integration and model improvements to main
+|\  
+| * b252ea8 docs: add comprehensive codebase analysis and documentation
+| * a0e566c fix: preserve full PersonalityEngine prompt context by disabling formatChat
+| * 7f5a09e fix: correct PersonalityEngine prompt handling to preserve full context
+| * c90f730 feat: add model switching UI in Settings
+| * 59ec068 fix: use model's built-in chat template instead of forcing Qwen format
+| * 1f548d7 feat: support any GGUF model, not just Qwen2-VL
+| * 70eeb32 fix: correct BGE model tokenizer and config URLs
+| * 6c09e18 fix: resolve model download sequencing and response generation issues
+| * c97e3b9 fix: add public API methods to ModelSetupDialog for Settings integration
+| * 7fa0b83 fix: add missing UI elements for model management in Settings
+| * 72cba44 feat: add model management UI, fix download race conditions, and enable Qwen-powered memory
+| * 28edf25 fix: correct chat template formatting to enable response generation
+| * 0c588b4 fix: properly handle already-downloaded models in download UI
+| * 0746480 fix: correct compilation errors in LocationTool and UserCorrectionTool
+| * 38d456e feat: complete AI capability awareness and user feedback system (v1.4)
+| * 67b9f73 fix: disable TinyLlama initialization to resolve llama.cpp singleton conflict
+| * c675b69 fix: explicitly set dialog size to ensure model list is visible
+| * 65213af feat: integrate BGE-small-en-v1.5 ONNX for real semantic embeddings (Phase 2)
+| * c16023d fix: remove conflicting setMessage that hides model list
+| * 7791140 fix: improve model selection dialog layout
+| * 902669f feat: add TinyLlama memory model download integration
+| * c0daeaa fix: resolve compilation errors in MemoryModelManager
+| * 6e0742b feat: fix memory system failures and add intelligent memory model
+| * fbd8d73 fix: resolve Kotlin type mismatch errors in WebSearchTool
+| * ddb7185 docs: update README and CHANGELOG for intelligent search detection
+| * 8b0afdd feat: add Intelligent Web Search Detection system
+| * dadda7c feat: implement v1.4 Web Search Integration subsystem
+* | dd5361b fix: resolve model download sequencing and response generation issues
+|/  
+*   a15b28c Merge pull request #1 from Ishabdullah/claude/ui-permissions-system-setup-011CV151iy1M7uMsmcQq8wrx
+|\  
+| * 5d2c1a0 docs: update CHANGELOG with KSP version fix
+| * 11de42d fix: upgrade KSP to 2.0.0-1.0.21 for Kotlin 2.0.0 compatibility
+| * b897c5b feat: implement v1.3 persistent memory system with Room database
+| * fbfc6ef fix: reduce system prompt size and add comprehensive error logging
+| * e5b124b fix: make context awareness instructions much more explicit
+| * e54b9d9 fix: use PersonalityEngine for all text commands with full context
+| * f511069 feat: make AI fully aware of its name, location, and time
+| * d41d646 fix: add location permissions to runtime permission request
+| * 9eb5599 fix: add Google Play Services Location dependency for GPS features
+| * a99005d docs: update README and CHANGELOG for v1.2 release
+| * 6296f82 feat: add custom AI name, temporal awareness, GPS location, and statistics tracking
+| * 9b5d760 fix: resolve model loading failure by using app-private storage for all Android versions
+| * 02395f3 fix: resolve infinite recursion in ModelDownloadManager.getModelsDir()
+| * e46504d feat: add real-time token-to-speech streaming for AILive
+| * a15292f feat: implement UI improvements, permission flow, and unified system instruction
+|/  
+* 1247c6e fix: correct aiLiveCore typo and add Model Settings Panel documentation
+* 47e084a fix: XML syntax error in activity_model_settings.xml line 327
+* 77c7fa3 feat: add dynamic Model Settings Panel with RAM usage monitoring
+* 8fcdbd4 fix: replace ModelManager TensorFlow code with no-op stub for v1.1 compatibility
+* bc67c65 ci: add New-Main-AILive-branch and Claude-New-Main-AILive-branch to GitHub Actions triggers
+* 52ba683 perf: v1.1 Week 4 - Cleanup & Optimization complete
+* 8e13777 feat: add typing indicator and cancel button for LLM generation (v1.1)
+* a90cdf1 fix: update GitHub Actions workflow for CPU build variant
+* fb80c08 feat: add streaming token display with auto-scroll and keyboard fix
+* b8882fc feat: add GPU/CPU build variants with side-by-side installation
+* a524150 fix: catch UnsatisfiedLinkError for GPU detection fallback
+* d3aaef0 fix: make OpenCL GPU acceleration optional for CI builds
+* c343b4b docs: add comprehensive GPU implementation status report
+* eadac6f feat: add GPU fallback and comprehensive performance tracking (v1.1)
+* fe163e7 docs: add comprehensive OpenCL GPU implementation guide
+* a8167f4 feat: implement OpenCL GPU acceleration for Adreno 750 (v1.1)
+* 76712e6 docs: create v1.0 backup and restore guide
+* 61ea16d docs: add comprehensive GPU acceleration research and update README for v1.1
+* 8cd8e06 docs: reorganize v1.1 to prioritize performance (GPU + streaming + cleanup)
+* 54f788b docs: add complete feature roadmap and version rollout plan
+* 17c9a8b docs: add comprehensive vision implementation research
+* 8d70982 docs: update build log and add comprehensive roadmap
+* 86087b4 fix: correct CMakeLists.txt path to point to root llama.cpp submodule
+* 22ace48 docs: add comprehensive build log documenting llama.cpp fixes
+* bb2ab87 feat: re-add llama.cpp submodule for native library source
+* d93cbed chore: remove unused llama.cpp root submodule
+* 84a071b fix: convert llama.cpp from submodule to direct source with 512 token limit
+* b3b19db fix: remove suspend modifier from LLMManager.close() for compatibility
+* 180be03 fix: update minSdk to 33 for llama.cpp Android compatibility
+* 6345b65 feat: switch to official llama.cpp Android with native ARM64 support
+* aa2898d fix: correct java-llama.cpp API calls for compilation
+* e9ee23a feat: migrate from ONNX Runtime to llama.cpp with GGUF model
+* ef430d1 feat: switch from ONNX to GGUF format with llama.cpp
+* 8a03e0a fix: update session options to match Python inference script
+* da4a0a8 fix: reset download state before callback to fix batch download stalling
+* 12f49ee docs: update quick status with download optimization fixes
+* cab5862 fix: optimize download mechanism to prevent glitchy behavior
+* 465a2d5 docs: add Test Session 3 with NNAPI incompatibility analysis
+* 4f1e9c2 fix: disable NNAPI to fix ArgMax(13) operation incompatibility
+* 83faed3 fix: correct Build.VERSION_CODES syntax in MainActivity
+* 2857ac2 docs: update session log with app-private storage test plan
+* c0d418e fix: use app-private storage for Android 13+ (scoped storage compliance)
+* 36499c7 fix: add comprehensive storage permissions for all Android versions
+* 5e3e6c5 docs: add comprehensive session tracking and quick status
+* 093f0df docs: add complete Qwen2-VL implementation plan based on official infer.py
+* 958649b docs: add comprehensive Qwen2-VL status report
+* d3ce58f fix: correct ONNX Runtime version to 1.19.2 (1.20.1 doesn't exist)
+* ef0402c fix: update initial download progress display from 0/6 to 0/8
+* 1816fa4 fix: upgrade ONNX Runtime to 1.20.1 for IR version 10 support
+* 2588bb1 fix: update UI references from 6 files to 8 files and add download polling
+* b4770a2 fix: add READ_EXTERNAL_STORAGE permission for Downloads folder access
+* 1336bc3 fix: update CommandRouter to use new generate() signature with named parameters
+* d3bb167 fix: correct Qwen2-VL preprocessing to 960x960 and add models C/D
+* 210f34b fix: skip already downloaded files in batch download
+* 470d835 feat: add vision preprocessing utilities for Qwen2-VL (Phase 2.3)
+* 888ec15 feat: implement vision encoder lazy loading for Qwen2-VL (Phase 2.2)
+* d54c3ff feat: migrate LLMManager to Qwen2-VL text-only mode (Phase 2.1)
+* cb23498 fix: remove GPT-2 references and update UI for Qwen2-VL downloads
+* c769d24 docs: emphasize unified multimodal architecture and resource management
+* 89a3ac5 docs: add Vision-Chat module architecture design
+* cbdac6a feat: upgrade to Qwen2-VL-2B vision-language model with persistent downloads
+* 400ecd9 fix: implement multinomial sampling instead of greedy sampling
+* a4ac2b6 fix: use exact GPT-2 byte encoder implementation
+* 71502db docs: add enhanced BPE tokenizer logging for debugging
+* 71766cb fix: implement proper BPE tokenization to fix nonsensical outputs
+* 2c48349 perf: increase MAX_LENGTH to 40 tokens for better response quality
+* 87da4f2 docs: update README with critical prompt fix details
+* c3953c1 fix: remove 596-token personality prompt causing model loop
+* f08a984 docs: update documentation for 20-token balanced responses
+* 0596ff2 perf: increase MAX_LENGTH to 20 tokens for better response quality
+* 0c31708 docs: update all documentation for 5-token ultra-fast responses
+* 61a6c88 perf: reduce MAX_LENGTH to 5 tokens for ultra-fast responses (~12s)
+* cd8c111 perf: add comprehensive logging and further speed optimizations
+* 60b37d4 perf: optimize GPT-2 for fastest possible response times
+* 6d4c3b7 fix: resolve compilation errors in SimpleGPT2Tokenizer
+* 1ea8898 feat: add comprehensive logging to SimpleGPT2Tokenizer
+* 73175c9 fix: replace DJL tokenizer with Android-compatible implementation
+* 1519aa0 feat: add comprehensive GPT-2 diagnostics and enhanced logging
+* 4ad567f feat: make app icon fill entire background when camera is OFF
+* 3a1b6a3 feat: make mic/camera OFF by default with user-friendly controls
+* 86fd512 feat: redesign UI with neon blue futuristic theme
+* 62b3c79 fix: add GPT-2 specific tokens and attention_mask for proper inference
+* e1ccf6c fix: use correct GPT-2 model file (decoder_model.onnx)
+* 848d84d fix: replace remaining ONNX_360M references with GPT2 constants
+* ea11907 docs: add GPT-2 testing guide with diagnostic commands
+* d75cb6b fix: switch from SmolLM2 to GPT-2 for ONNX compatibility
+* e511cde debug: add Toast error messages to diagnose LLM failures
+* 3a1abfd docs: add final build summary and testing guide
+* 1a20f96 docs: update README with LLM fixes and SmolLM2 information
+* 4bab9b0 fix: complete LLM pipeline overhaul - SmolLM2 compatibility
+* 4423e21 docs: add detailed LLM initialization fix documentation
+* 6dce2b3 fix: LLM initialization race condition causing generic responses
+* 4d2f491 ci: enable builds on claude/** branches for automated testing
+* 33be207 docs: add comprehensive fixes and optimizations summary
+* f4e7732 fix: comprehensive bug fixes and performance optimizations
+* d1f66d2 docs: session complete summary and next session guide
+* 3e8eb45 fix: compilation errors in LLMManager
+* dbfd05c fix: implement proper HuggingFace tokenization for LLM
+* 54e5179 docs: diagnose LLM tokenization issue + add tokenizer
+* 8e82fd3 fix: lifecycle registration error and send button crash
+* bd796fd fix: download to public Downloads folder (like SmolChat)
+* 8a51d98 fix: use INT8 quantized ONNX models (model_int8.onnx)
+* 6ac6f00 fix: correct HuggingFace model URLs for SmolLM2
+* f0a5e9a feat: add custom AILive app icon
+* 0cc3f38 docs: Phase 7.10 complete summary
+* e668efb feat: Phase 7.10 - ONNX-only quick deployment
+* b7aadf9 feat: Phase 7.10 - ONNX-only quick deployment
+* 933e2e0 fix: Update to latest llama.cpp API (non-deprecated functions)
+* c52d5f0 fix: Checkout llama.cpp submodule in GitHub Actions
+* 1636a40 feat: Add GGUF support via llama.cpp JNI (SmolChat architecture)
+* 6deb57a fix: Revert to ONNX-only support, remove unstable llamacpp dependency
+* 7839f71 feat: Add GGUF model support via llama.cpp
+* 5c972c5 fix: Model detection and download completion issues
+* a5d09c2 fix: Download completion and app crash issues
+* 6c08b86 fix: Model download completion and import issues
+* 8cf6035 fix: handle nullable Bitmap.Config for Android SDK 35
+* 329d8d2 fix: update compileSdk and targetSdk to 35
+* ad6a0cc feat: add GGUF model support via llama.cpp
+* 2c36a75 refactor: improve storage permissions and error handling
+* 1983a97 fix: add missing lifecycle-runtime-ktx dependency for lifecycleScope
+* 744bcbc fix: resolve model download/import issues with permission handling
+* 3d4ff1e fix(phase7.7): Remove unnecessary storage permission request
+* 62dacf0 fix(phase7.6): Fix 2 critical bugs - storage permission and GGUF import crash
+* 26daea0 Fix: replace MainActivity.kt with corrected functional version
+* ffdf99f Restore and fix MainActivity from backup with proper imports
+* e2e258d Fix: update Android permission imports to resolve conflicts in MainActivity
+* 69a0a4a Fix: Remove conflicting imports and add single proper import block in MainActivity.kt
+* fe767ae Fix: Move lifecycle registrations from onResume to onStart in MainActivity
+* 1dd9aa7 Fix: Remove duplicate imports and properly add storage permission imports
+* 60f154e Fix: Add runtime storage permission request in ModelDownloadManager before download
+* 11dd2b0 docs(phase7): Add comprehensive handoff documentation for next developer
+* f246492 fix(phase7.5): Remove deprecated onActivityResult method
+* 2a997d6 fix(phase7.5): Fix dialog display and lifecycle registration errors
+* 44a3571 feat(phase7.4): Integrate model setup dialog into MainActivity
+* 206e368 feat(phase7.3): Add model setup dialog UI
+* 678a070 feat(phase7.2): Add model download infrastructure
+* 584d2fb fix(phase7): Configure Gradle to include large ONNX model in APK
+* 9fbb8f2 fix(phase7): Copy model from assets to filesDir on first run
+* e8e9a4d feat(phase7): Integrate SmolLM2-360M model for on-device inference
+* 2175778 docs: Create unified NEXT_PHASE.md - single source of truth
+* 8ae3b40 docs: Consolidate documentation and correct audit findings
+* 4db5722 docs: Complete Phase 0 audit verification with code-first analysis
+* 659137c fix(phase6.2): Add missing JSONArray imports
+* f5f858f fix(phase6.2): Fix chart data loading and add test data generator
+* eb71f09 fix(phase6.2): Remove duplicate ToolExecutionListener interface definition
+* edac679 feat(phase6.2): Implement data visualization with charts and graphs
+* 9c4d7a9 fix: Update Gradle wrapper to 8.9 and use wrapper in CI
+* ece468d fix: Use gradle-8.9-all.zip to force Gradle 8.9 update
+* ae9cf16 fix: Update Gradle wrapper to 8.9 for AGP 8.7.0 compatibility
+* d92512b feat(phase6.1): Implement AI tool dashboard with real-time monitoring
+* 370e8d0 docs: Clean up repository and update documentation for Phase 5 completion
+* bf6c840 chore: Remove large model file from git, add to gitignore
+* 5350c1c fix: Move PatternAnalysisTool and FeedbackTrackingTool registration to AILiveCore
+| * 3b1ace7 chore: Remove large model file from git, add to gitignore
+| * 00a0c66 fix: Move PatternAnalysisTool and FeedbackTrackingTool registration to AILiveCore
+|/  
+* ec5a8e9 feat: Phase 5 Part 3 - Pattern Analysis, Memory Storage, and Feedback Learning
+* eee544f fix: Remove invalid 'suggestion' parameter from ToolResult.Unavailable
+* f7b775e feat: Phase 5 Part 2 - VisionAnalysisTool integration + regression fix
+* c3bf229 feat: Phase 5 Tool Expansion - Vision Analysis (Part 1)
+* 5d2971d docs: Update session status with Phase 4 completion
+* 4b0bff8 docs: Add Phase 4 completion summary
+* c80d479 feat: Phase 4 Performance Optimization - LLM improvements
+* 3e1eaed docs: Add quick test guide for v3
+* 49012d3 docs: Add second round UX fixes documentation
+* 3260251 fix: Resolve three UX issues from second round of testing
+* f1ee054 docs: Add session status report
+* 96a8757 docs: Add UX fixes testing guide and summary
+* db9c13a fix: Resolve three critical UX issues reported in testing
+* 0c5f07d docs: Add comprehensive code consistency verification
+* 29e3f10 fix: Resolve remaining compilation errors (lateinit and type mismatch)
+* bf4aad4 fix: Resolve compilation errors in PersonalityEngine integration
+* 8a2f53d feat: Integrate PersonalityEngine - Phase 2 Complete
+* 90613ee refactor: Implement PersonalityEngine - Phase 1 Complete
+* b59e303 refactor: Redesign UI layout based on user feedback
+* 9186685 docs: Update all documentation for v0.5.1 with manual controls
+* ebffe7f feat: Add manual control UI for testing and debugging
+* fc16c0e fix: Wait for TTS completion before restarting speech recognition
+* 77609a4 docs: Add comprehensive Session Handoff for Oct 29
+* b7b33a1 fix: Resolve LLMManager compilation errors
+* e805860 docs: Update all documentation for Phase 2.6 completion
+* 2cc66a7 feat: Phase 2.6 - Add ONNX Runtime LLM integration
+* 9a8ac76 docs: Add comprehensive session handoff for Oct 28
+* b130930 docs: Revert to Phase 2.4 documentation
+* d1d57cc revert: Remove Phase 2.6 LLM integration (library API issues)
+* e851ad0 fix: Set model path in ModelParameters before constructor
+* ccb818d fix: Use correct LlamaModel constructor API
+* 43695d3 fix: LLMManager API compatibility with llama library
+* 7033c2f docs: Update for Phase 2.6 - SmolLM2 integration
+* 886ce59 feat: Phase 2.6 - Connect SmolLM2 Language Model for Real AI
+* e1f63f9 docs: Update README to v0.4.0 - Phase 2.4 complete
+* 587351d fix: Remove duplicate setter methods in TTSManager
+* e041bdb docs: Update Executive Handoff for Phase 2.4 completion
+* 0809a17 feat: Phase 2.4 - Add Text-to-Speech responses
+* 9b9ffea fix: Initialize AILiveCore early to avoid lifecycle crash
+* 1fe4b4a fix: Remove duplicate getMessageBus() method
+* 05b26cc fix: Simplify CommandRouter to avoid MessageBus complexity
+* 4a501ee docs: Update README and EXECUTIVE_HANDOFF for Phase 2.3
+* b6fec80 feat: Phase 2.3 - Complete audio integration pipeline
+* a155157 Fix: Bypass setup wizard to prevent crashes
+* ba1e0a5 Fix: Add AppCompat theme
+* c9cece1 Fix: Initialize settings before setContentView
+* 6a480dd Fix: Import typo in SetupActivity
+* fa683bc Fix: Crash-proof setup with fallback
+* b17aff5 Fix: Remove references to missing resources
+* 557f02a Fix: Clean AndroidManifest.xml
+* 958c2bc Phase 2.3a: Custom AI Name & Wake Word System
+* 9340700 Phase 2.2: S24 Ultra optimizations + diagnostics
+* 54a788b Simplify: Use MainExecutor for analyzer
+* 997598e Fix: Proper permission flow for camera
+* 990d66d Fix: Camera analyzer not triggering + lifecycle issue
+* ff41004 Debug: Add on-screen status messages
+* 74a7d31 Fix: Proper YUV to RGB conversion in CameraManager
+* d7a5ae6 Phase 2.2 Complete: Camera + Vision Integration
+* 79e9784 Phase 2.2 Step 1-2: Add CameraX + CameraManager
+* ce82e3a Docs: Update for Phase 2.1 completion
+* b7961e5 Fix: TestScenarios import path for AILiveCore
+* 0ca17e9 Fix: Correct AILiveCore imports for existing agents
+* fa126eb Add missing AILiveCore - central coordinator
+* deee08f Complete restore: Phase 1+2 MainActivity with tests
+* 55a54a6 Restore Phase 1+2: Full AILive system in MainActivity
+* 9f139e9 Fix: Use default GpuDelegate constructor
+* f917d5c Fix: TensorFlow Lite GPU delegate API compatibility
+* 62962f1 Phase 2.1: TensorFlow Lite integration complete
+* 7306f23 Phase 2.1: Add TensorFlow Lite integration
+* 808a968 Ultra-minimal logging test - log to all levels
+* ce499e7 Add debug logging to MainActivity to pinpoint crash location
+* ced986f Documentation update: Phase 1.1 complete with UI, all issues resolved
+* 2e6be5a Add UI layout and fix MainActivity to include setContentView
+* 1657ff1 Add basic UI layout so app stays open
+* bab5fa4 Fix: Remove duplicate MemoryRecalled line and add missing closing paren
+* 0a4bc22 Fix: Map to MemoryResult in MemoryRecalled and remove duplicate line
+* e8a70ae Fix final build errors: MemoryResult, duplicate params, violationType
+* 8f5c71f Fix: Update all calling code to match Message.kt data class changes
+* 5e087a7 Complete Message.kt with all supporting classes and enums
+* 13b4f6d Add comprehensive executive handoff document with Phases 6-7 expansion plans
+* 949bd67 Add missing data classes (MemoryResult, PredictedScenario) and fix field names
+* 2ce8034 Fix Message.kt: remove duplicate enums, fix data class fields, add missing ActionType values
+* 33f0055 Fix: Use companion object helper for timestamps - clean Kotlin approach
+* 8409b92 Fix: Fully qualify System.currentTimeMillis() as java.lang.System
+* 838e8a4 Add explicit System import for Kotlin compiler
+* bc2a85d Disable Gradle cache for clean build
+* f682f8f Fix: System.currentTimeMillis(), ContentType namespace, remove TermuxRunner
+* b6f7db3 Fix compilation errors: System.currentTimeMillis(), ContentType import, clean test files
+* bab8210 Add clean README.md (fixed corruption)
+* a418264 Remove corrupted README.md
+* 9858c04 Fix: Remove app icon references (will add later)
+* 8715751 Replace MiniLM with BGE-small-en-v1.5 (MIT license) + Add comprehensive model credits
+* 40ae4a5 Fix: Enable AndroidX in gradle.properties
+* 06cfaf1 Add Non-Commercial License and comprehensive project description
+* 777e44e Fix: Specify exact Gradle version 8.0.2
+* 1ec9f4b Fix: Use gradle command directly (no wrapper)
+* cfc250c Fix: Use gradle-build-action instead of wrapper
+* c37e479 Fix: Use Gradle wrapper from GitHub mirror
+* f3f8861 Fix: Use official Gradle wrapper JAR from gradle.org
+* d53e1e1 Add gradle-wrapper.jar for GitHub Actions build
+* 2bf7b64 Add proper Gradle wrapper for GitHub Actions
+* 01ebeee Fix: Update GitHub Actions to v4 (v3 deprecated)
+* 74df737 Add GitHub Actions workflow for automatic APK builds
+* c6b856c Initial commit: AILive synthetic brain architecture

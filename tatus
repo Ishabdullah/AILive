@@ -1,0 +1,8 @@
+[33md521e6f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H
+[33m3c14a12[m[33m ([m[1;31morigin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H[m[33m, [m[1;32mclaude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H[m[33m)[m docs: add complete file dependency analysis and cleanup guide
+[33m966d6e3[m docs: update README to reflect v1.0 production state
+[33me039926[m fix: add ProGuard rules for Caffeine cache System.Logger
+[33mccaba70[m feat: production polish - fragment management, crashlytics, tests, offline mode
+[33mad503d1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m git push origin main  # Pushes the revert commit to GitHubRevert "Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H"
+[33md521e6f[m Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H
+[33m3c14a12[m[33m ([m[1;31morigin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H[m[33m, [m[1;32mclaude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H[m[33m)[m docs: add complete file dependency analysis and cleanup guide

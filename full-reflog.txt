@@ -1,0 +1,413 @@
+ad503d1 refs/remotes/origin/main@{0}: update by push
+ad503d1 refs/heads/main@{0}: revert: git push origin main # Pushes the revert commit to GitHubRevert "Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H"
+ad503d1 HEAD@{0}: revert: git push origin main # Pushes the revert commit to GitHubRevert "Merge pull request #3 from Ishabdullah/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H"
+d521e6f HEAD@{1}: checkout: moving from main to main
+d521e6f refs/heads/main@{1}: reset: moving to d521e6f
+d521e6f HEAD@{2}: reset: moving to d521e6f
+0eeb407 HEAD@{3}: checkout: moving from full-backup-main to main
+0eeb407 refs/remotes/origin/full-backup-main@{0}: update by push
+0eeb407 refs/heads/full-backup-main@{0}: branch: Created from HEAD
+0eeb407 HEAD@{4}: checkout: moving from main to full-backup-main
+0eeb407 refs/remotes/origin/main@{1}: update by push
+0eeb407 refs/heads/main@{2}: commit: fix: disable memory extraction to fix 'no tokens' error
+0eeb407 HEAD@{5}: commit: fix: disable memory extraction to fix 'no tokens' error
+93225e5 refs/remotes/origin/main@{2}: update by push
+93225e5 refs/heads/main@{3}: commit: docs: update README line count accuracy
+93225e5 HEAD@{6}: commit: docs: update README line count accuracy
+d521e6f refs/heads/main@{4}: pull --rebase origin main (finish): refs/heads/main onto d521e6f23697066535ce7fb57fc8717ef842d092
+d521e6f refs/remotes/origin/main@{3}: pull --rebase origin main: fast-forward
+d521e6f HEAD@{7}: pull --rebase origin main (finish): returning to refs/heads/main
+d521e6f HEAD@{8}: pull --rebase origin main (start): checkout d521e6f23697066535ce7fb57fc8717ef842d092
+914e5b8 refs/heads/main@{5}: commit: docs: add complete file dependency analysis from null-safety branch
+914e5b8 HEAD@{9}: commit: docs: add complete file dependency analysis from null-safety branch
+9037e50 HEAD@{10}: checkout: moving from claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H to main
+3c14a12 refs/remotes/origin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H@{0}: update by push
+3c14a12 refs/heads/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H@{0}: pull --rebase origin claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H (finish): refs/heads/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H onto 966d6e33847e912381bd7db09221ffc68b530e52
+966d6e3 refs/remotes/origin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H@{1}: pull --rebase origin claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H: fast-forward
+3c14a12 HEAD@{11}: pull --rebase origin claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H (finish): returning to refs/heads/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H
+3c14a12 HEAD@{12}: pull --rebase origin claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H (pick): docs: add complete file dependency analysis and cleanup guide
+966d6e3 HEAD@{13}: pull --rebase origin claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H (start): checkout 966d6e33847e912381bd7db09221ffc68b530e52
+00cc52f refs/heads/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H@{1}: commit: docs: add complete file dependency analysis and cleanup guide
+00cc52f HEAD@{14}: commit: docs: add complete file dependency analysis and cleanup guide
+e039926 refs/heads/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H@{2}: branch: Created from refs/remotes/origin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H
+e039926 refs/remotes/origin/claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H@{2}: fetch origin: storing head
+e039926 HEAD@{15}: checkout: moving from main to claude/fix-ailive-null-safety-013v7HdZgNs4b6umbmqDWM1H
+9037e50 refs/remotes/origin/main@{4}: update by push
+9037e50 refs/heads/main@{6}: commit: docs: add repository cleanup summary
+9037e50 HEAD@{16}: commit: docs: add repository cleanup summary
+14fb398 refs/remotes/origin/main@{5}: update by push
+14fb398 refs/heads/main@{7}: commit: docs: update to non-commercial license and replace README
+14fb398 HEAD@{17}: commit: docs: update to non-commercial license and replace README
+e692a6a refs/remotes/origin/main@{6}: update by push
+e692a6a refs/heads/main@{8}: commit (merge): feat: merge web search integration and model improvements to main
+e692a6a HEAD@{18}: commit (merge): feat: merge web search integration and model improvements to main
+dd5361b HEAD@{19}: checkout: moving from claude/web-search-integration-subsystem-011CV35rpwoHngR4A3DKPFGf to main
+b252ea8 HEAD@{20}: pull --rebase origin claude/web-search-integration-subsystem-011CV35rpwoHngR4A3DKPFGf (finish): returning to refs/heads/claude/web-search-integration-subsystem-011CV35rpwoHngR4A3DKPFGf
+b252ea8 HEAD@{21}: pull --rebase origin claude/web-search-integration-subsystem-011CV35rpwoHngR4A3DKPFGf (pick): docs: add comprehensive codebase analysis and documentation
+a0e566c HEAD@{22}: pull --rebase origin claude/web-search-integration-subsystem-011CV35rpwoHngR4A3DKPFGf (start): checkout a0e566c4b5baac7ae8f758d94fdbbb8a5e9e2083
+dff7996 HEAD@{23}: commit: docs: add comprehensive codebase analysis and documentation
+c90f730 HEAD@{24}: commit: feat: add model switching UI in Settings
+59ec068 HEAD@{25}: commit: fix: use model's built-in chat template instead of forcing Qwen format
+1f548d7 HEAD@{26}: commit: feat: support any GGUF model, not just Qwen2-VL
+70eeb32 HEAD@{27}: commit: fix: correct BGE model tokenizer and config URLs
+6c09e18 HEAD@{28}: commit: fix: resolve model download sequencing and response generation issues
+c97e3b9 HEAD@{29}: checkout: moving from main to claude/web-search-integration-subsystem-011CV35rpwoHngR4A3DKPFGf
+dd5361b refs/remotes/origin/main@{7}: update by push
+dd5361b refs/heads/main@{9}: pull --rebase origin main (finish): refs/heads/main onto a15b28cc4f83305581600f5ef55ad2b10afb9df1
+a15b28c refs/remotes/origin/main@{8}: pull --rebase origin main: fast-forward
+dd5361b HEAD@{30}: pull --rebase origin main (finish): returning to refs/heads/main
+dd5361b HEAD@{31}: pull --rebase origin main (pick): fix: resolve model download sequencing and response generation issues
+a15b28c HEAD@{32}: pull --rebase origin main (start): checkout a15b28cc4f83305581600f5ef55ad2b10afb9df1
+bd26502 refs/heads/main@{10}: commit: fix: resolve model download sequencing and response generation issues
+bd26502 HEAD@{33}: commit: fix: resolve model download sequencing and response generation issues
+1247c6e HEAD@{34}: checkout: moving from main to main
+1247c6e HEAD@{35}: checkout: moving from main to main
+1247c6e HEAD@{36}: checkout: moving from main to main
+1247c6e HEAD@{37}: checkout: moving from main to main
+1247c6e refs/remotes/origin/main@{9}: update by push
+1247c6e refs/heads/main@{11}: merge origin/claude/teleport-session-011-011CUyNKauomCnL39khdRpaU: Fast-forward (no commit created; -m option ignored)
+d1f66d2 refs/heads/main@{12}: branch: Created from refs/remotes/origin/main
+1247c6e HEAD@{38}: merge origin/claude/teleport-session-011-011CUyNKauomCnL39khdRpaU: Fast-forward (no commit created; -m option ignored)
+d1f66d2 HEAD@{39}: checkout: moving from claude/teleport-session-011-011CUyNKauomCnL39khdRpaU to main
+1247c6e HEAD@{40}: commit: fix: correct aiLiveCore typo and add Model Settings Panel documentation
+47e084a HEAD@{41}: checkout: moving from New-Main-AILive-branch to claude/teleport-session-011-011CUyNKauomCnL39khdRpaU
+a90cdf1 HEAD@{42}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{43}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{44}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{45}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{46}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{47}: checkout: moving from Claude-New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{48}: checkout: moving from New-Main-AILive-branch to Claude-New-Main-AILive-branch
+a90cdf1 HEAD@{49}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{50}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{51}: checkout: moving from New-Main-AILive-branch to New-Main-AILive-branch
+a90cdf1 HEAD@{52}: Branch: renamed refs/heads/claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ to refs/heads/New-Main-AILive-branch
+a90cdf1 HEAD@{54}: checkout: moving from claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ to claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ
+a90cdf1 HEAD@{55}: pull origin claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ --rebase: Fast-forward
+6d4c3b7 HEAD@{56}: checkout: moving from main to claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ
+6d4c3b7 HEAD@{57}: pull origin claude/ailive-code-review-011CUseJ8kG4zVw12eyx4BsZ: Fast-forward
+d1f66d2 refs/remotes/origin/main@{10}: update by push
+d1f66d2 HEAD@{58}: commit: docs: session complete summary and next session guide
+3e8eb45 refs/remotes/origin/main@{11}: update by push
+3e8eb45 HEAD@{59}: commit: fix: compilation errors in LLMManager
+dbfd05c refs/remotes/origin/main@{12}: update by push
+dbfd05c HEAD@{60}: commit: fix: implement proper HuggingFace tokenization for LLM
+54e5179 refs/remotes/origin/main@{13}: update by push
+54e5179 HEAD@{61}: commit: docs: diagnose LLM tokenization issue + add tokenizer
+8e82fd3 refs/remotes/origin/main@{14}: update by push
+8e82fd3 HEAD@{62}: commit: fix: lifecycle registration error and send button crash
+bd796fd refs/remotes/origin/main@{15}: update by push
+bd796fd HEAD@{63}: commit: fix: download to public Downloads folder (like SmolChat)
+8a51d98 refs/remotes/origin/main@{16}: update by push
+8a51d98 HEAD@{64}: commit: fix: use INT8 quantized ONNX models (model_int8.onnx)
+6ac6f00 refs/remotes/origin/main@{17}: update by push
+6ac6f00 HEAD@{65}: commit: fix: correct HuggingFace model URLs for SmolLM2
+f0a5e9a refs/remotes/origin/main@{18}: update by push
+f0a5e9a HEAD@{66}: commit: feat: add custom AILive app icon
+0cc3f38 refs/remotes/origin/main@{19}: update by push
+0cc3f38 HEAD@{67}: commit: docs: Phase 7.10 complete summary
+e668efb refs/remotes/origin/main@{20}: update by push
+e668efb HEAD@{68}: pull --rebase (finish): returning to refs/heads/main
+e668efb HEAD@{69}: pull --rebase (pick): feat: Phase 7.10 - ONNX-only quick deployment
+b7aadf9 HEAD@{70}: pull --rebase (start): checkout b7aadf952ef029be395f474e5358b58b0787d897
+f09c117 HEAD@{71}: commit (amend): feat: Phase 7.10 - ONNX-only quick deployment
+b7aadf9 refs/remotes/origin/main@{21}: update by push
+b7aadf9 HEAD@{72}: commit: feat: Phase 7.10 - ONNX-only quick deployment
+933e2e0 refs/remotes/origin/main@{22}: update by push
+933e2e0 HEAD@{73}: commit: fix: Update to latest llama.cpp API (non-deprecated functions)
+c52d5f0 refs/remotes/origin/main@{23}: update by push
+c52d5f0 HEAD@{74}: commit: fix: Checkout llama.cpp submodule in GitHub Actions
+1636a40 refs/remotes/origin/main@{24}: update by push
+1636a40 HEAD@{75}: commit: feat: Add GGUF support via llama.cpp JNI (SmolChat architecture)
+6deb57a refs/remotes/origin/main@{25}: update by push
+6deb57a HEAD@{76}: commit: fix: Revert to ONNX-only support, remove unstable llamacpp dependency
+7839f71 refs/remotes/origin/main@{26}: update by push
+7839f71 HEAD@{77}: commit: feat: Add GGUF model support via llama.cpp
+5c972c5 refs/remotes/origin/main@{27}: update by push
+5c972c5 HEAD@{78}: commit: fix: Model detection and download completion issues
+a5d09c2 refs/remotes/origin/main@{28}: update by push
+a5d09c2 HEAD@{79}: commit: fix: Download completion and app crash issues
+6c08b86 refs/remotes/origin/main@{29}: update by push
+6c08b86 HEAD@{80}: commit: fix: Model download completion and import issues
+8cf6035 refs/remotes/origin/main@{30}: update by push
+8cf6035 HEAD@{81}: commit: fix: handle nullable Bitmap.Config for Android SDK 35
+329d8d2 refs/remotes/origin/main@{31}: update by push
+329d8d2 HEAD@{82}: commit: fix: update compileSdk and targetSdk to 35
+ad6a0cc refs/remotes/origin/main@{32}: update by push
+ad6a0cc HEAD@{83}: commit: feat: add GGUF model support via llama.cpp
+2c36a75 refs/remotes/origin/main@{33}: update by push
+2c36a75 HEAD@{84}: commit: refactor: improve storage permissions and error handling
+1983a97 refs/remotes/origin/main@{34}: update by push
+1983a97 HEAD@{85}: commit: fix: add missing lifecycle-runtime-ktx dependency for lifecycleScope
+744bcbc refs/remotes/origin/main@{35}: update by push
+744bcbc HEAD@{86}: commit: fix: resolve model download/import issues with permission handling
+3d4ff1e refs/remotes/origin/main@{36}: update by push
+3d4ff1e HEAD@{87}: commit: fix(phase7.7): Remove unnecessary storage permission request
+62dacf0 refs/remotes/origin/main@{37}: update by push
+62dacf0 HEAD@{88}: commit: fix(phase7.6): Fix 2 critical bugs - storage permission and GGUF import crash
+26daea0 refs/remotes/origin/main@{38}: update by push
+26daea0 HEAD@{89}: commit: Fix: replace MainActivity.kt with corrected functional version
+ffdf99f refs/remotes/origin/main@{39}: update by push
+ffdf99f HEAD@{90}: commit: Restore and fix MainActivity from backup with proper imports
+e2e258d refs/remotes/origin/main@{40}: update by push
+e2e258d HEAD@{91}: commit: Fix: update Android permission imports to resolve conflicts in MainActivity
+69a0a4a refs/remotes/origin/main@{41}: update by push
+69a0a4a HEAD@{92}: commit: Fix: Remove conflicting imports and add single proper import block in MainActivity.kt
+fe767ae refs/remotes/origin/main@{42}: update by push
+fe767ae HEAD@{93}: commit: Fix: Move lifecycle registrations from onResume to onStart in MainActivity
+1dd9aa7 refs/remotes/origin/main@{43}: update by push
+1dd9aa7 HEAD@{94}: commit: Fix: Remove duplicate imports and properly add storage permission imports
+60f154e refs/remotes/origin/main@{44}: update by push
+60f154e HEAD@{95}: commit: Fix: Add runtime storage permission request in ModelDownloadManager before download
+11dd2b0 refs/remotes/origin/main@{45}: update by push
+11dd2b0 HEAD@{96}: commit: docs(phase7): Add comprehensive handoff documentation for next developer
+f246492 refs/remotes/origin/main@{46}: update by push
+f246492 HEAD@{97}: commit: fix(phase7.5): Remove deprecated onActivityResult method
+2a997d6 refs/remotes/origin/main@{47}: update by push
+2a997d6 HEAD@{98}: commit: fix(phase7.5): Fix dialog display and lifecycle registration errors
+44a3571 refs/remotes/origin/main@{48}: update by push
+44a3571 HEAD@{99}: commit: feat(phase7.4): Integrate model setup dialog into MainActivity
+206e368 refs/remotes/origin/main@{49}: update by push
+206e368 HEAD@{100}: commit: feat(phase7.3): Add model setup dialog UI
+678a070 refs/remotes/origin/main@{50}: update by push
+678a070 HEAD@{101}: commit: feat(phase7.2): Add model download infrastructure
+584d2fb refs/remotes/origin/main@{51}: update by push
+584d2fb HEAD@{102}: commit: fix(phase7): Configure Gradle to include large ONNX model in APK
+9fbb8f2 refs/remotes/origin/main@{52}: update by push
+9fbb8f2 HEAD@{103}: commit: fix(phase7): Copy model from assets to filesDir on first run
+e8e9a4d refs/remotes/origin/main@{53}: update by push
+e8e9a4d HEAD@{104}: commit: feat(phase7): Integrate SmolLM2-360M model for on-device inference
+2175778 refs/remotes/origin/main@{54}: update by push
+2175778 HEAD@{105}: commit: docs: Create unified NEXT_PHASE.md - single source of truth
+8ae3b40 refs/remotes/origin/main@{55}: update by push
+8ae3b40 HEAD@{106}: commit: docs: Consolidate documentation and correct audit findings
+4db5722 refs/remotes/origin/main@{56}: update by push
+4db5722 HEAD@{107}: commit: docs: Complete Phase 0 audit verification with code-first analysis
+659137c refs/remotes/origin/main@{57}: update by push
+659137c HEAD@{108}: commit: fix(phase6.2): Add missing JSONArray imports
+f5f858f refs/remotes/origin/main@{58}: update by push
+f5f858f HEAD@{109}: commit: fix(phase6.2): Fix chart data loading and add test data generator
+eb71f09 refs/remotes/origin/main@{59}: update by push
+eb71f09 HEAD@{110}: commit: fix(phase6.2): Remove duplicate ToolExecutionListener interface definition
+edac679 refs/remotes/origin/main@{60}: update by push
+edac679 HEAD@{111}: commit: feat(phase6.2): Implement data visualization with charts and graphs
+9c4d7a9 refs/remotes/origin/main@{61}: update by push
+9c4d7a9 HEAD@{112}: commit: fix: Update Gradle wrapper to 8.9 and use wrapper in CI
+ece468d refs/remotes/origin/main@{62}: update by push
+ece468d HEAD@{113}: commit: fix: Use gradle-8.9-all.zip to force Gradle 8.9 update
+ae9cf16 refs/remotes/origin/main@{63}: update by push
+ae9cf16 HEAD@{114}: commit: fix: Update Gradle wrapper to 8.9 for AGP 8.7.0 compatibility
+d92512b refs/remotes/origin/main@{64}: update by push
+d92512b HEAD@{115}: commit: feat(phase6.1): Implement AI tool dashboard with real-time monitoring
+370e8d0 refs/remotes/origin/main@{65}: update by push
+370e8d0 HEAD@{116}: commit: docs: Clean up repository and update documentation for Phase 5 completion
+bf6c840 refs/remotes/origin/main@{66}: update by push
+bf6c840 HEAD@{117}: filter-branch: rewrite
+3b1ace7 HEAD@{118}: commit: chore: Remove large model file from git, add to gitignore
+00a0c66 HEAD@{119}: commit: fix: Move PatternAnalysisTool and FeedbackTrackingTool registration to AILiveCore
+ec5a8e9 refs/remotes/origin/main@{67}: update by push
+ec5a8e9 HEAD@{120}: commit: feat: Phase 5 Part 3 - Pattern Analysis, Memory Storage, and Feedback Learning
+eee544f refs/remotes/origin/main@{68}: update by push
+eee544f HEAD@{121}: commit: fix: Remove invalid 'suggestion' parameter from ToolResult.Unavailable
+f7b775e HEAD@{122}: commit: feat: Phase 5 Part 2 - VisionAnalysisTool integration + regression fix
+c3bf229 refs/remotes/origin/main@{69}: update by push
+c3bf229 HEAD@{123}: commit: feat: Phase 5 Tool Expansion - Vision Analysis (Part 1)
+5d2971d refs/remotes/origin/main@{70}: update by push
+5d2971d HEAD@{124}: commit: docs: Update session status with Phase 4 completion
+4b0bff8 refs/remotes/origin/main@{71}: update by push
+4b0bff8 HEAD@{125}: commit: docs: Add Phase 4 completion summary
+c80d479 refs/remotes/origin/main@{72}: update by push
+c80d479 HEAD@{126}: commit: feat: Phase 4 Performance Optimization - LLM improvements
+3e1eaed refs/remotes/origin/main@{73}: update by push
+3e1eaed HEAD@{127}: commit: docs: Add quick test guide for v3
+49012d3 refs/remotes/origin/main@{74}: update by push
+49012d3 HEAD@{128}: commit: docs: Add second round UX fixes documentation
+3260251 refs/remotes/origin/main@{75}: update by push
+3260251 HEAD@{129}: commit: fix: Resolve three UX issues from second round of testing
+f1ee054 refs/remotes/origin/main@{76}: update by push
+f1ee054 HEAD@{130}: commit: docs: Add session status report
+96a8757 refs/remotes/origin/main@{77}: update by push
+96a8757 HEAD@{131}: commit: docs: Add UX fixes testing guide and summary
+db9c13a refs/remotes/origin/main@{78}: update by push
+db9c13a HEAD@{132}: commit: fix: Resolve three critical UX issues reported in testing
+0c5f07d refs/remotes/origin/main@{79}: update by push
+0c5f07d HEAD@{133}: commit: docs: Add comprehensive code consistency verification
+29e3f10 refs/remotes/origin/main@{80}: update by push
+29e3f10 HEAD@{134}: commit: fix: Resolve remaining compilation errors (lateinit and type mismatch)
+bf4aad4 refs/remotes/origin/main@{81}: update by push
+bf4aad4 HEAD@{135}: commit: fix: Resolve compilation errors in PersonalityEngine integration
+8a2f53d refs/remotes/origin/main@{82}: update by push
+8a2f53d HEAD@{136}: commit: feat: Integrate PersonalityEngine - Phase 2 Complete
+90613ee refs/remotes/origin/main@{83}: update by push
+90613ee HEAD@{137}: commit: refactor: Implement PersonalityEngine - Phase 1 Complete
+b59e303 refs/remotes/origin/main@{84}: update by push
+b59e303 HEAD@{138}: commit: refactor: Redesign UI layout based on user feedback
+9186685 refs/remotes/origin/main@{85}: update by push
+9186685 HEAD@{139}: commit: docs: Update all documentation for v0.5.1 with manual controls
+ebffe7f refs/remotes/origin/main@{86}: update by push
+ebffe7f HEAD@{140}: commit: feat: Add manual control UI for testing and debugging
+fc16c0e refs/remotes/origin/main@{87}: update by push
+fc16c0e HEAD@{141}: commit: fix: Wait for TTS completion before restarting speech recognition
+77609a4 refs/remotes/origin/main@{88}: update by push
+77609a4 HEAD@{142}: commit: docs: Add comprehensive Session Handoff for Oct 29
+b7b33a1 refs/remotes/origin/main@{89}: update by push
+b7b33a1 HEAD@{143}: commit: fix: Resolve LLMManager compilation errors
+e805860 refs/remotes/origin/main@{90}: update by push
+e805860 HEAD@{144}: commit: docs: Update all documentation for Phase 2.6 completion
+2cc66a7 refs/remotes/origin/main@{91}: update by push
+2cc66a7 HEAD@{145}: commit: feat: Phase 2.6 - Add ONNX Runtime LLM integration
+9a8ac76 refs/remotes/origin/main@{92}: update by push
+9a8ac76 HEAD@{146}: commit: docs: Add comprehensive session handoff for Oct 28
+b130930 HEAD@{147}: commit: docs: Revert to Phase 2.4 documentation
+d1d57cc refs/remotes/origin/main@{93}: update by push
+d1d57cc HEAD@{148}: commit: revert: Remove Phase 2.6 LLM integration (library API issues)
+e851ad0 refs/remotes/origin/main@{94}: update by push
+e851ad0 HEAD@{149}: commit: fix: Set model path in ModelParameters before constructor
+ccb818d refs/remotes/origin/main@{95}: update by push
+ccb818d HEAD@{150}: commit: fix: Use correct LlamaModel constructor API
+43695d3 refs/remotes/origin/main@{96}: update by push
+43695d3 HEAD@{151}: commit: fix: LLMManager API compatibility with llama library
+7033c2f HEAD@{152}: commit: docs: Update for Phase 2.6 - SmolLM2 integration
+886ce59 refs/remotes/origin/main@{97}: update by push
+886ce59 HEAD@{153}: commit: feat: Phase 2.6 - Connect SmolLM2 Language Model for Real AI
+e1f63f9 refs/remotes/origin/main@{98}: update by push
+e1f63f9 HEAD@{154}: commit: docs: Update README to v0.4.0 - Phase 2.4 complete
+587351d refs/remotes/origin/main@{99}: update by push
+587351d HEAD@{155}: commit: fix: Remove duplicate setter methods in TTSManager
+e041bdb HEAD@{156}: commit: docs: Update Executive Handoff for Phase 2.4 completion
+0809a17 refs/remotes/origin/main@{100}: update by push
+0809a17 HEAD@{157}: commit: feat: Phase 2.4 - Add Text-to-Speech responses
+9b9ffea refs/remotes/origin/main@{101}: update by push
+9b9ffea HEAD@{158}: commit: fix: Initialize AILiveCore early to avoid lifecycle crash
+1fe4b4a refs/remotes/origin/main@{102}: update by push
+1fe4b4a HEAD@{159}: commit: fix: Remove duplicate getMessageBus() method
+05b26cc refs/remotes/origin/main@{103}: update by push
+05b26cc HEAD@{160}: commit: fix: Simplify CommandRouter to avoid MessageBus complexity
+4a501ee refs/remotes/origin/main@{104}: update by push
+4a501ee HEAD@{161}: commit: docs: Update README and EXECUTIVE_HANDOFF for Phase 2.3
+b6fec80 refs/remotes/origin/main@{105}: update by push
+b6fec80 HEAD@{162}: commit: feat: Phase 2.3 - Complete audio integration pipeline
+a155157 HEAD@{163}: commit: Fix: Bypass setup wizard to prevent crashes
+ba1e0a5 refs/remotes/origin/main@{106}: update by push
+ba1e0a5 HEAD@{164}: commit: Fix: Add AppCompat theme
+c9cece1 refs/remotes/origin/main@{107}: update by push
+c9cece1 HEAD@{165}: commit: Fix: Initialize settings before setContentView
+6a480dd refs/remotes/origin/main@{108}: update by push
+6a480dd HEAD@{166}: commit: Fix: Import typo in SetupActivity
+fa683bc refs/remotes/origin/main@{109}: update by push
+fa683bc HEAD@{167}: commit: Fix: Crash-proof setup with fallback
+b17aff5 refs/remotes/origin/main@{110}: update by push
+b17aff5 HEAD@{168}: commit: Fix: Remove references to missing resources
+557f02a refs/remotes/origin/main@{111}: update by push
+557f02a HEAD@{169}: commit: Fix: Clean AndroidManifest.xml
+958c2bc refs/remotes/origin/main@{112}: update by push
+958c2bc HEAD@{170}: commit: Phase 2.3a: Custom AI Name & Wake Word System
+9340700 refs/remotes/origin/main@{113}: update by push
+9340700 HEAD@{171}: commit: Phase 2.2: S24 Ultra optimizations + diagnostics
+54a788b refs/remotes/origin/main@{114}: update by push
+54a788b HEAD@{172}: commit: Simplify: Use MainExecutor for analyzer
+997598e refs/remotes/origin/main@{115}: update by push
+997598e HEAD@{173}: commit: Fix: Proper permission flow for camera
+990d66d refs/remotes/origin/main@{116}: update by push
+990d66d HEAD@{174}: commit: Fix: Camera analyzer not triggering + lifecycle issue
+ff41004 refs/remotes/origin/main@{117}: update by push
+ff41004 HEAD@{175}: commit: Debug: Add on-screen status messages
+74a7d31 refs/remotes/origin/main@{118}: update by push
+74a7d31 HEAD@{176}: commit: Fix: Proper YUV to RGB conversion in CameraManager
+d7a5ae6 refs/remotes/origin/main@{119}: update by push
+d7a5ae6 HEAD@{177}: commit: Phase 2.2 Complete: Camera + Vision Integration
+79e9784 refs/remotes/origin/main@{120}: update by push
+79e9784 HEAD@{178}: commit: Phase 2.2 Step 1-2: Add CameraX + CameraManager
+ce82e3a refs/remotes/origin/main@{121}: update by push
+ce82e3a HEAD@{179}: commit: Docs: Update for Phase 2.1 completion
+b7961e5 refs/remotes/origin/main@{122}: update by push
+b7961e5 HEAD@{180}: commit: Fix: TestScenarios import path for AILiveCore
+0ca17e9 refs/remotes/origin/main@{123}: update by push
+0ca17e9 HEAD@{181}: commit: Fix: Correct AILiveCore imports for existing agents
+fa126eb refs/remotes/origin/main@{124}: update by push
+fa126eb HEAD@{182}: commit: Add missing AILiveCore - central coordinator
+deee08f refs/remotes/origin/main@{125}: update by push
+deee08f HEAD@{183}: commit: Complete restore: Phase 1+2 MainActivity with tests
+55a54a6 refs/remotes/origin/main@{126}: update by push
+55a54a6 HEAD@{184}: commit: Restore Phase 1+2: Full AILive system in MainActivity
+9f139e9 refs/remotes/origin/main@{127}: update by push
+9f139e9 HEAD@{185}: commit: Fix: Use default GpuDelegate constructor
+f917d5c refs/remotes/origin/main@{128}: update by push
+f917d5c HEAD@{186}: commit: Fix: TensorFlow Lite GPU delegate API compatibility
+62962f1 refs/remotes/origin/main@{129}: update by push
+62962f1 HEAD@{187}: commit: Phase 2.1: TensorFlow Lite integration complete
+7306f23 refs/remotes/origin/main@{130}: update by push
+7306f23 HEAD@{188}: commit: Phase 2.1: Add TensorFlow Lite integration
+808a968 refs/remotes/origin/main@{131}: update by push
+808a968 HEAD@{189}: commit: Ultra-minimal logging test - log to all levels
+ce499e7 refs/remotes/origin/main@{132}: update by push
+ce499e7 HEAD@{190}: commit: Add debug logging to MainActivity to pinpoint crash location
+ced986f refs/remotes/origin/main@{133}: update by push
+ced986f HEAD@{191}: commit: Documentation update: Phase 1.1 complete with UI, all issues resolved
+2e6be5a refs/remotes/origin/main@{134}: update by push
+2e6be5a HEAD@{192}: commit: Add UI layout and fix MainActivity to include setContentView
+1657ff1 refs/remotes/origin/main@{135}: update by push
+1657ff1 HEAD@{193}: commit: Add basic UI layout so app stays open
+bab5fa4 refs/remotes/origin/main@{136}: update by push
+bab5fa4 HEAD@{194}: commit: Fix: Remove duplicate MemoryRecalled line and add missing closing paren
+0a4bc22 refs/remotes/origin/main@{137}: update by push
+0a4bc22 HEAD@{195}: commit: Fix: Map to MemoryResult in MemoryRecalled and remove duplicate line
+e8a70ae refs/remotes/origin/main@{138}: update by push
+e8a70ae HEAD@{196}: commit: Fix final build errors: MemoryResult, duplicate params, violationType
+8f5c71f refs/remotes/origin/main@{139}: update by push
+8f5c71f HEAD@{197}: commit: Fix: Update all calling code to match Message.kt data class changes
+5e087a7 refs/remotes/origin/main@{140}: update by push
+5e087a7 HEAD@{198}: commit: Complete Message.kt with all supporting classes and enums
+13b4f6d refs/remotes/origin/main@{141}: update by push
+13b4f6d HEAD@{199}: commit: Add comprehensive executive handoff document with Phases 6-7 expansion plans
+949bd67 refs/remotes/origin/main@{142}: update by push
+949bd67 HEAD@{200}: commit: Add missing data classes (MemoryResult, PredictedScenario) and fix field names
+2ce8034 refs/remotes/origin/main@{143}: update by push
+2ce8034 HEAD@{201}: commit: Fix Message.kt: remove duplicate enums, fix data class fields, add missing ActionType values
+33f0055 refs/remotes/origin/main@{144}: update by push
+33f0055 HEAD@{202}: commit: Fix: Use companion object helper for timestamps - clean Kotlin approach
+8409b92 refs/remotes/origin/main@{145}: update by push
+8409b92 HEAD@{203}: commit: Fix: Fully qualify System.currentTimeMillis() as java.lang.System
+838e8a4 refs/remotes/origin/main@{146}: update by push
+838e8a4 HEAD@{204}: commit: Add explicit System import for Kotlin compiler
+bc2a85d refs/remotes/origin/main@{147}: update by push
+bc2a85d HEAD@{205}: commit: Disable Gradle cache for clean build
+f682f8f refs/remotes/origin/HEAD@{0}: fetch
+f682f8f refs/remotes/origin/main@{148}: update by push
+f682f8f HEAD@{206}: commit: Fix: System.currentTimeMillis(), ContentType namespace, remove TermuxRunner
+b6f7db3 refs/remotes/origin/main@{149}: update by push
+b6f7db3 HEAD@{207}: commit: Fix compilation errors: System.currentTimeMillis(), ContentType import, clean test files
+bab8210 refs/remotes/origin/main@{150}: update by push
+bab8210 HEAD@{208}: commit: Add clean README.md (fixed corruption)
+a418264 refs/remotes/origin/main@{151}: update by push
+a418264 HEAD@{209}: commit: Remove corrupted README.md
+9858c04 refs/remotes/origin/main@{152}: update by push
+9858c04 HEAD@{210}: commit: Fix: Remove app icon references (will add later)
+8715751 refs/remotes/origin/main@{153}: update by push
+8715751 HEAD@{211}: commit: Replace MiniLM with BGE-small-en-v1.5 (MIT license) + Add comprehensive model credits
+40ae4a5 refs/remotes/origin/main@{154}: update by push
+40ae4a5 HEAD@{212}: commit: Fix: Enable AndroidX in gradle.properties
+06cfaf1 refs/remotes/origin/main@{155}: update by push
+06cfaf1 HEAD@{213}: commit: Add Non-Commercial License and comprehensive project description
+777e44e refs/remotes/origin/main@{156}: update by push
+777e44e HEAD@{214}: commit: Fix: Specify exact Gradle version 8.0.2
+1ec9f4b refs/remotes/origin/main@{157}: update by push
+1ec9f4b HEAD@{215}: commit: Fix: Use gradle command directly (no wrapper)
+cfc250c refs/remotes/origin/main@{158}: update by push
+cfc250c HEAD@{216}: commit: Fix: Use gradle-build-action instead of wrapper
+c37e479 refs/remotes/origin/main@{159}: update by push
+c37e479 HEAD@{217}: commit: Fix: Use Gradle wrapper from GitHub mirror
+f3f8861 refs/remotes/origin/main@{160}: update by push
+f3f8861 HEAD@{218}: commit: Fix: Use official Gradle wrapper JAR from gradle.org
+d53e1e1 refs/remotes/origin/main@{161}: update by push
+d53e1e1 HEAD@{219}: commit: Add gradle-wrapper.jar for GitHub Actions build
+2bf7b64 refs/remotes/origin/main@{162}: update by push
+2bf7b64 HEAD@{220}: commit: Add proper Gradle wrapper for GitHub Actions
+01ebeee refs/remotes/origin/main@{163}: update by push
+01ebeee HEAD@{221}: commit: Fix: Update GitHub Actions to v4 (v3 deprecated)
+74df737 refs/remotes/origin/main@{164}: update by push
+74df737 HEAD@{222}: commit: Add GitHub Actions workflow for automatic APK builds
+c6b856c refs/remotes/origin/main@{165}: update by push
+c6b856c HEAD@{223}: Branch: renamed refs/heads/main to refs/heads/main
+c6b856c HEAD@{225}: Branch: renamed refs/heads/master to refs/heads/main
+c6b856c HEAD@{227}: commit (initial): Initial commit: AILive synthetic brain architecture
