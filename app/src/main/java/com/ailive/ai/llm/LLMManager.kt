@@ -410,12 +410,9 @@ class LLMManager(private val context: Context) {
         Log.d(TAG, "   Message length: ${messageToSend.length} chars")
         Log.d(TAG, "   Using formatChat=$useFormatChat")
 
-        // Stream tokens with buffering to prevent subword garbling
-        // LLM emits subword tokens (e.g., "un", "believ", "able") which look garbled
-        // We buffer tokens and emit on word boundaries (space/punctuation) for smooth display
+        // Stream tokens directly from llama.cpp with configured max tokens
         var tokenCount = 0
         val backend = gpuInfo?.backend ?: "CPU"
-        val wordBuffer = StringBuilder()
 
         try {
             llamaAndroid.send(messageToSend, formatChat = useFormatChat, maxTokens = settings.maxTokens)
@@ -425,28 +422,7 @@ class LLMManager(private val context: Context) {
                 }
                 .collect { token ->
                     tokenCount++
-                    wordBuffer.append(token)
-
-                    // Emit buffer on word boundaries (space, newline, common punctuation)
-                    // This prevents garbled subwords from being displayed
-                    val shouldFlush = token.endsWith(" ") ||
-                                     token.endsWith("\n") ||
-                                     token.endsWith(".") ||
-                                     token.endsWith(",") ||
-                                     token.endsWith("!") ||
-                                     token.endsWith("?") ||
-                                     token.endsWith(";") ||
-                                     token.endsWith(":") ||
-                                     token.endsWith(")") ||
-                                     token.endsWith("]") ||
-                                     token.endsWith("}") ||
-                                     token.contains(" ") ||  // Multi-token with space
-                                     token.contains("\n")    // Multi-token with newline
-
-                    if (shouldFlush && wordBuffer.isNotEmpty()) {
-                        emit(wordBuffer.toString())
-                        wordBuffer.clear()
-                    }
+                    emit(token)  // Emit each token to the UI
 
                     // Log progress every 10 tokens
                     if (tokenCount % 10 == 0) {
@@ -459,12 +435,6 @@ class LLMManager(private val context: Context) {
                         Log.d(TAG, "   Token $tokenCount (${String.format("%.1f", tokensPerSec)} tok/s)")
                     }
                 }
-
-            // Flush any remaining buffered content
-            if (wordBuffer.isNotEmpty()) {
-                emit(wordBuffer.toString())
-                Log.d(TAG, "   Flushed final buffer: '${wordBuffer.toString().take(20)}'")
-            }
 
             // Check if we got any tokens
             if (tokenCount == 0) {
