@@ -57,37 +57,46 @@ class TTSManager(private val context: Context) {
 
     /**
      * Initialize the Piper TTS engine with a voice model.
+     * Falls back to Android system TTS if Piper is unavailable.
      */
     fun initialize(modelPath: String): Boolean {
-        Log.i(TAG, "Initializing Piper TTS engine...")
-        if (!nativeInitPiper(modelPath)) {
-            Log.e(TAG, "Failed to initialize Piper native component.")
-            _state.value = TTSState.ERROR
-            return false
-        }
+        Log.i(TAG, "Initializing TTS engine...")
 
-        val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
-        audioTrack = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AUDIO_FORMAT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(CHANNEL_CONFIG)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .build()
+        // Try to initialize Piper (will fail if native build is disabled)
+        val piperInitialized = nativeInitPiper(modelPath)
+
+        if (!piperInitialized) {
+            Log.w(TAG, "Piper TTS not available - will use Android system TTS fallback")
+            Log.i(TAG, "Note: Piper is temporarily disabled due to build system compatibility")
+            // Continue initialization with system TTS fallback
+            // The native methods will return stubs, and we'll use Android TTS in speak()
+        } else {
+            Log.i(TAG, "✓ Piper TTS engine initialized successfully.")
+
+            // Set up AudioTrack for Piper output
+            val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AUDIO_FORMAT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(CHANNEL_CONFIG)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize)
+                .build()
+
+            startPlaybackQueue()
+        }
 
         isInitialized = true
         _state.value = TTSState.READY
-        startPlaybackQueue()
-        Log.i(TAG, "✓ Piper TTS engine initialized successfully.")
         return true
     }
 
