@@ -30,7 +30,7 @@ class VisionAnalysisTool(
 
     override suspend fun isAvailable(): Boolean {
         // Check if camera is initialized and the LLM for vision is ready
-        return cameraManager.isInitialized() && visionManager.llmBridge.isReady()
+        return cameraManager.isInitialized() && visionManager.isReady()
     }
 
     override fun validateParams(params: Map<String, Any>): String? {
