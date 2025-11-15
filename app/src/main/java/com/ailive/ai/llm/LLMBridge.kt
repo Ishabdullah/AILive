@@ -46,6 +46,16 @@ class LLMBridge {
     external fun nativeGenerate(prompt: String, maxTokens: Int = 80): String
 
     /**
+     * Generate text completion with image input (multimodal)
+     *
+     * @param prompt Input text
+     * @param imageBytes Raw image data (e.g., JPEG, PNG)
+     * @param maxTokens Maximum tokens to generate
+     * @return Generated text
+     */
+    external fun nativeGenerateWithImage(prompt: String, imageBytes: ByteArray, maxTokens: Int = 80): String
+
+    /**
      * Generate an embedding for a given prompt.
      *
      * @param prompt Input text
