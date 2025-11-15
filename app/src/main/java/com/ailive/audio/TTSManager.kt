@@ -30,8 +30,12 @@ class TTSManager(private val context: Context) {
     private val _state = MutableStateFlow(TTSState.INITIALIZING)
     val state: StateFlow<TTSState> = _state
 
+    // Voice parameters for personality customization
+    var pitch: Float = 1.0f
+    var speechRate: Float = 1.0f
+
     data class SpeechRequest(val text: String, val priority: Priority = Priority.NORMAL)
-    enum class Priority { NORMAL, URGENT }
+    enum class Priority { LOW, NORMAL, HIGH, URGENT }
     enum class TTSState { INITIALIZING, READY, SPEAKING, ERROR, SHUTDOWN }
 
     companion object {
@@ -128,6 +132,27 @@ class TTSManager(private val context: Context) {
         // With this architecture, incremental streaming is handled by just adding to the queue.
         // The playback of each sentence will be sequential.
         speak(text, Priority.NORMAL)
+    }
+
+    fun speakAsAgent(text: String, agentName: String = "AILive") {
+        // Speak with agent personality (can be enhanced with different voices/params)
+        speak(text, Priority.NORMAL)
+    }
+
+    enum class FeedbackType {
+        WAKE_WORD_DETECTED,
+        COMMAND_RECEIVED,
+        ERROR,
+        SUCCESS
+    }
+
+    fun playFeedback(type: FeedbackType) {
+        when (type) {
+            FeedbackType.WAKE_WORD_DETECTED -> speak("Yes?", Priority.URGENT)
+            FeedbackType.COMMAND_RECEIVED -> {} // Optional acknowledgment sound
+            FeedbackType.ERROR -> speak("Sorry, I encountered an error", Priority.URGENT)
+            FeedbackType.SUCCESS -> speak("Done", Priority.NORMAL)
+        }
     }
 
     fun stop() {

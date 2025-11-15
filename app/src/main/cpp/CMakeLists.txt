@@ -44,6 +44,15 @@ set(PIPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 # Build piper which creates the piper executable with all dependencies
 add_subdirectory(${PIPER_DIR} piper)
 
+# Fix: Remove pthread from piper target on Android (it's built-in)
+if(ANDROID AND TARGET piper)
+    get_target_property(PIPER_LINK_LIBS piper LINK_LIBRARIES)
+    if(PIPER_LINK_LIBS)
+        list(REMOVE_ITEM PIPER_LINK_LIBS pthread)
+        set_target_properties(piper PROPERTIES LINK_LIBRARIES "${PIPER_LINK_LIBS}")
+    endif()
+endif()
+
 # Create our own static library from piper source
 # This allows us to link piper functionality without modifying the upstream submodule
 add_library(piper_lib STATIC ${PIPER_DIR}/src/cpp/piper.cpp)
