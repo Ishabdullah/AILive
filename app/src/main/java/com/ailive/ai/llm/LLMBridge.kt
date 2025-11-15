@@ -46,6 +46,14 @@ class LLMBridge {
     external fun nativeGenerate(prompt: String, maxTokens: Int = 80): String
 
     /**
+     * Generate an embedding for a given prompt.
+     *
+     * @param prompt Input text
+     * @return A float array representing the embedding, or null on failure.
+     */
+    external fun nativeGenerateEmbedding(prompt: String): FloatArray?
+
+    /**
      * Free model resources
      */
     external fun nativeFreeModel()
@@ -87,6 +95,20 @@ class LLMBridge {
         Log.d(TAG, "✨ Generated: ${result.take(50)}...")
 
         return result
+    }
+
+    /**
+     * Kotlin-friendly wrapper for embedding generation
+     */
+    fun generateEmbedding(prompt: String): List<Float>? {
+        if (!nativeIsLoaded()) {
+            Log.w(TAG, "⚠️ Model not loaded, cannot generate embedding")
+            return null
+        }
+
+        Log.d(TAG, "🧠 Generating embedding...")
+        val result = nativeGenerateEmbedding(prompt)
+        return result?.toList()
     }
 
     /**

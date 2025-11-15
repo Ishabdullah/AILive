@@ -75,6 +75,21 @@
         android:layout_marginTop="24dp"
         android:layout_marginStart="16dp" />
 
+    <!-- Memory Button (next to settings) -->
+    <Button
+        android:id="@+id/btnMemory"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:text="🧠"
+        android:textSize="24sp"
+        android:textColor="#00FFFF"
+        android:background="#25FFFFFF"
+        android:shadowColor="#00FFFF"
+        android:shadowRadius="5"
+        app:layout_constraintTop_toTopOf="@id/btnSettings"
+        app:layout_constraintStart_toEndOf="@id/btnSettings"
+        android:layout_marginStart="8dp" />
+
     <!-- Status Indicator (pulsing dot) -->
     <TextView
         android:id="@+id/statusIndicator"
