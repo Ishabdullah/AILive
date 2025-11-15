@@ -47,9 +47,16 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
         jstring model_path,
         jint n_ctx) {
 
-    if (g_model != nullptr) {
+    if (g_model != nullptr || g_ctx != nullptr) {
         LOGI("Model already loaded. Freeing old model first.");
-        Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(env, thiz);
+        if (g_ctx != nullptr) {
+            llama_free(g_ctx);
+            g_ctx = nullptr;
+        }
+        if (g_model != nullptr) {
+            llama_model_free(g_model);
+            g_model = nullptr;
+        }
     }
 
     const char* path = env->GetStringUTFChars(model_path, nullptr);
@@ -218,18 +225,6 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
         batch.logits[i] = 0; // Logits not needed for embedding
     }
 
-    // Set the pooling type in the context parameters if not already set
-    // This is important for getting a sentence embedding
-    llama_context_params ctx_params = llama_context_get_params(g_ctx);
-    if (ctx_params.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
-         LOGI("Setting pooling type to MEAN for embeddings.");
-         // Note: This is a simplified approach. A more robust solution might
-         // require re-creating the context if this parameter needs to change dynamically.
-         // For now, we assume the model supports this and we can enable it.
-         // This part of the API is evolving, so we'll adapt.
-    }
-
-
     // Decode the prompt to update the context
     if (llama_decode(g_ctx, batch) != 0) {
         LOGE("llama_decode failed for embedding");
@@ -239,7 +234,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     }
 
     // Get the embedding for the last token
-    const int n_embd = llama_n_embd(g_model);
+    const int n_embd = llama_model_n_embd(g_model);
     const float* embedding = llama_get_embeddings_ith(g_ctx, n_tokens - 1);
 
     if (embedding == nullptr) {
@@ -385,7 +380,7 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         delete[] candidates.data;
 
         // Check for End-of-Sequence
-        if (new_token_id == llama_token_eos(g_model)) {
+        if (new_token_id == llama_vocab_eos(vocab)) {
             LOGI("End of generation (EOS token).");
             break;
         }
