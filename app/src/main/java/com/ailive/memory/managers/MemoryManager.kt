@@ -1,6 +1,6 @@
 package com.ailive.memory.managers
 
-import android.content.Context
+import com.ailive.ai.llm.LLMBridge
 import com.ailive.memory.database.MemoryDatabase
 import com.ailive.memory.database.entities.FactCategory
 import com.ailive.memory.database.entities.LongTermFactEntity
@@ -10,7 +10,10 @@ import java.util.UUID
  * Manages the storage, retrieval, and analysis of long-term memories (facts).
  * This class is the primary entry point for all memory-related operations.
  */
-class MemoryManager(context: Context) {
+class MemoryManager(
+    context: Context,
+    private val llmBridge: LLMBridge
+) {
 
     private val db = MemoryDatabase.getInstance(context)
     private val factDao = db.longTermFactDao()
@@ -30,7 +33,7 @@ class MemoryManager(context: Context) {
     ): LongTermFactEntity {
         val timestamp = System.currentTimeMillis()
 
-        // TODO: Call the C++ layer via JNI to get the embedding for the factText.
+        // Generate a real embedding using the LLMBridge
         val embedding = generateEmbedding(factText)
 
         val newFact = LongTermFactEntity(
@@ -85,9 +88,7 @@ class MemoryManager(context: Context) {
         // 2. Get all facts that have an embedding.
         val allFacts = factDao.getAll().filter { it.embedding != null }
 
-        // 3. Calculate cosine similarity and sort. (This is a simplified example).
-        // In a real implementation, this would be a more complex operation,
-        // potentially optimized in the C++ layer or with a dedicated vector database.
+        // 3. Calculate cosine similarity and sort.
         val scoredFacts = allFacts.map { fact ->
             val similarity = cosineSimilarity(queryEmbedding, fact.embedding!!)
             fact to similarity
@@ -106,20 +107,17 @@ class MemoryManager(context: Context) {
     // --- Private Helper Functions ---
 
     /**
-     * TODO: Placeholder for the JNI call to the C++ layer to generate an embedding.
+     * Generates an embedding by calling the native C++ function.
      */
     private suspend fun generateEmbedding(text: String): List<Float>? {
-        // This should call a native C++ function that runs the embedding model.
-        // For now, returns null.
-        println("TODO: Generate embedding for: $text")
-        return null
+        return llmBridge.generateEmbedding(text)
     }
 
     /**
-     * TODO: Placeholder for cosine similarity calculation.
+     * Calculates the cosine similarity between two vectors.
+     * TODO: This could be moved to C++ for better performance in the future.
      */
     private fun cosineSimilarity(vec1: List<Float>, vec2: List<Float>): Float {
-        // This should also ideally be implemented in C++ for performance.
         if (vec1.size != vec2.size) return 0f
         var dotProduct = 0.0
         var norm1 = 0.0

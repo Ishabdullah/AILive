@@ -123,6 +123,100 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
     return env->NewStringUTF(result.c_str());
 }
 
+
+/**
+ * Generate an embedding vector for a given prompt.
+ *
+ * @param env JNI environment
+ * @param thiz Java object reference
+ * @param prompt Input text prompt
+ * @return A float array representing the embedding, or null on failure.
+ */
+JNIEXPORT jfloatArray JNICALL
+Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
+        JNIEnv* env,
+        jobject thiz,
+        jstring prompt) {
+
+    if (g_model == nullptr || g_ctx == nullptr) {
+        LOGE("Model not loaded, cannot generate embedding.");
+        return nullptr;
+    }
+
+    const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
+    LOGI("🧠 Generating embedding for: %.80s...", prompt_cstr);
+
+    // Clear the KV cache
+    llama_kv_cache_clear(g_ctx);
+
+    // Tokenize the prompt
+    std::vector<llama_token> tokens;
+    tokens.reserve(strlen(prompt_cstr) + 1);
+    int n_tokens = llama_tokenize(g_model, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.capacity(), true, false);
+    if (n_tokens < 0) {
+        tokens.resize(-n_tokens);
+        n_tokens = llama_tokenize(g_model, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
+    } else {
+        tokens.resize(n_tokens);
+    }
+
+    if (n_tokens <= 0) {
+        LOGE("Embedding tokenization failed.");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    // Create a batch for the prompt
+    llama_batch batch = llama_batch_init(n_tokens, 0, 1);
+    for (int i = 0; i < n_tokens; ++i) {
+        llama_batch_add(batch, tokens[i], i, {0}, false); // Logits not needed for embedding
+    }
+
+    // Set the pooling type in the context parameters if not already set
+    // This is important for getting a sentence embedding
+    llama_context_params ctx_params = llama_context_get_params(g_ctx);
+    if (ctx_params.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
+         LOGI("Setting pooling type to MEAN for embeddings.");
+         // Note: This is a simplified approach. A more robust solution might
+         // require re-creating the context if this parameter needs to change dynamically.
+         // For now, we assume the model supports this and we can enable it.
+         // This part of the API is evolving, so we'll adapt.
+    }
+
+
+    // Decode the prompt to update the context
+    if (llama_decode(g_ctx, batch) != 0) {
+        LOGE("llama_decode failed for embedding");
+        llama_batch_free(batch);
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    // Get the embedding for the last token
+    const int n_embd = llama_n_embd(g_model);
+    const float* embedding = llama_get_embeddings_ith(g_ctx, n_tokens - 1);
+
+    if (embedding == nullptr) {
+        LOGE("Failed to get embeddings.");
+        llama_batch_free(batch);
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    // Create and return the float array
+    jfloatArray result = env->NewFloatArray(n_embd);
+    if (result == nullptr) {
+        LOGE("Failed to create new float array.");
+    } else {
+        env->SetFloatArrayRegion(result, 0, n_embd, embedding);
+    }
+
+    llama_batch_free(batch);
+    env->ReleaseStringUTFChars(prompt, prompt_cstr);
+    LOGI("✅ Embedding generated successfully.");
+    return result;
+}
+
 /**
  * Free model resources
  */

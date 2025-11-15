@@ -65,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSendCommand: android.widget.Button
     private lateinit var btnCancelGeneration: android.widget.Button
     private lateinit var btnSettings: android.widget.Button
+    private lateinit var btnMemory: android.widget.Button
     private lateinit var btnToggleDashboard: FloatingActionButton
     private lateinit var dashboardContainer: FrameLayout
 
@@ -194,12 +195,14 @@ class MainActivity : AppCompatActivity() {
         btnSendCommand = findViewById(R.id.btnSendCommand)
         btnCancelGeneration = findViewById(R.id.btnCancelGeneration)
         btnSettings = findViewById(R.id.btnSettings)
+        btnMemory = findViewById(R.id.btnMemory)
         btnToggleDashboard = findViewById(R.id.btnToggleDashboard)
         dashboardContainer = findViewById(R.id.dashboardContainer)
 
         setupManualControls()
         setupDashboard()
         setupSettingsButton()
+        setupMemoryButton()
 
         appTitle.text = "${settings.aiName} (Vision + Audio)"
 
@@ -716,6 +719,17 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "⚙️ Opening Model Settings")
             val intent = Intent(this, com.ailive.ui.ModelSettingsActivity::class.java)
             settingsLauncher.launch(intent)  // Use launcher to receive download requests
+        }
+    }
+
+    /**
+     * Setup memory button to launch Memory Activity
+     */
+    private fun setupMemoryButton() {
+        btnMemory.setOnClickListener {
+            Log.i(TAG, "🧠 Opening AI Memory")
+            val intent = Intent(this, com.ailive.ui.MemoryActivity::class.java)
+            startActivity(intent)
         }
     }
 
