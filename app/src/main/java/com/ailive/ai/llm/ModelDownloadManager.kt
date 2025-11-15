@@ -490,9 +490,9 @@ class ModelDownloadManager(private val context: Context) {
                                 onComplete(true, "")
                             }
                         }
-                    }, 500) // 500ms delay
+                    }, 1000) // Increased to 1000ms delay for better stability
                 }
-            }, 500) // 500ms delay
+            }, 1000) // Increased to 1000ms delay for better stability
         }
     }
 
@@ -581,10 +581,10 @@ class ModelDownloadManager(private val context: Context) {
                                 }
                             }
                         )
-                        }, 500) // 500ms delay before Qwen
+                        }, 1500) // Increased to 1500ms delay before Qwen for better stability
                     }
                 )
-                }, 500) // 500ms delay before Memory model
+                }, 1500) // Increased to 1500ms delay before Memory model for better stability
             }
         )
     }
