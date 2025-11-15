@@ -1,0 +1,220 @@
+/**
+ * ailive_audio.cpp - JNI Bridge for whisper.cpp in AILive
+ *
+ * Provides a bridge between Kotlin and the whisper.cpp library for
+ * high-performance, on-device speech-to-text.
+ */
+
+#include <jni.h>
+#include <string>
+#include <vector>
+#include <android/log.h>
+#include "whisper.h"
+#include "piper.h"
+
+#define LOG_TAG_AUDIO "AILive-Audio"
+#define LOGI_AUDIO(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG_AUDIO, __VA_ARGS__)
+#define LOGE_AUDIO(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG_AUDIO, __VA_ARGS__)
+
+// Global context for the Whisper model
+static whisper_context* g_whisper_ctx = nullptr;
+
+// Global context for the Piper model
+static piper::Voice* g_piper_voice = nullptr;
+static piper::PiperConfig g_piper_config;
+
+
+extern "C" {
+
+/**
+ * Initializes the Whisper context from a model file.
+ *
+ * @param env JNI environment
+ * @param thiz Java object reference
+ * @param model_path Path to the .ggml Whisper model file.
+ * @return true if successful, false otherwise.
+ */
+JNIEXPORT jboolean JNICALL
+Java_com_ailive_audio_WhisperProcessor_nativeInit(
+        JNIEnv* env,
+        jobject thiz,
+        jstring model_path) {
+
+    if (g_whisper_ctx != nullptr) {
+        LOGI_AUDIO("Whisper context already initialized. Releasing first.");
+        whisper_free(g_whisper_ctx);
+        g_whisper_ctx = nullptr;
+    }
+
+    const char* path = env->GetStringUTFChars(model_path, nullptr);
+    LOGI_AUDIO("Initializing Whisper model from: %s", path);
+
+    g_whisper_ctx = whisper_init_from_file(path);
+
+    env->ReleaseStringUTFChars(model_path, path);
+
+    if (g_whisper_ctx == nullptr) {
+        LOGE_AUDIO("Failed to initialize whisper context.");
+        return JNI_FALSE;
+    }
+
+    LOGI_AUDIO("✅ Whisper context initialized successfully.");
+    return JNI_TRUE;
+}
+
+/**
+ * Transcribes a chunk of raw audio data.
+ *
+ * @param env JNI environment
+ * @param thiz Java object reference
+ * @param audio_data A float array of PCM audio data (16kHz, mono).
+ * @return The transcribed text as a Java string.
+ */
+JNIEXPORT jstring JNICALL
+Java_com_ailive_audio_WhisperProcessor_nativeProcess(
+        JNIEnv* env,
+        jobject thiz,
+        jfloatArray audio_data) {
+
+    if (g_whisper_ctx == nullptr) {
+        LOGE_AUDIO("Whisper context not initialized. Cannot process audio.");
+        return env->NewStringUTF("");
+    }
+
+    jsize len = env->GetArrayLength(audio_data);
+    jfloat* audio_buf = env->GetFloatArrayElements(audio_data, nullptr);
+
+    LOGI_AUDIO("Processing %d audio samples.", len);
+
+    // Set up whisper parameters
+    whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    params.print_progress = false;
+    params.print_special = false;
+    params.print_timestamps = false;
+    params.print_realtime = false;
+    params.language = "en"; // Set language to English
+
+    // Run the model
+    if (whisper_full(g_whisper_ctx, params, audio_buf, len) != 0) {
+        LOGE_AUDIO("Failed to process audio with Whisper.");
+        env->ReleaseFloatArrayElements(audio_data, audio_buf, JNI_ABORT);
+        return env->NewStringUTF("");
+    }
+
+    // Get the transcribed text
+    const int n_segments = whisper_full_n_segments(g_whisper_ctx);
+    std::string result_text;
+    for (int i = 0; i < n_segments; ++i) {
+        const char* text = whisper_full_get_segment_text(g_whisper_ctx, i);
+        result_text += text;
+    }
+
+    LOGI_AUDIO("Transcription result: %s", result_text.c_str());
+
+    env->ReleaseFloatArrayElements(audio_data, audio_buf, 0);
+
+    return env->NewStringUTF(result_text.c_str());
+}
+
+/**
+ * Releases all resources used by the Whisper context.
+ */
+JNIEXPORT void JNICALL
+Java_com_ailive_audio_WhisperProcessor_nativeRelease(
+        JNIEnv* env,
+        jobject thiz) {
+
+    if (g_whisper_ctx != nullptr) {
+        whisper_free(g_whisper_ctx);
+        g_whisper_ctx = nullptr;
+        LOGI_AUDIO("✅ Whisper context released.");
+    }
+}
+
+
+// --- Piper TTS JNI Functions ---
+
+/**
+ * Initializes the Piper TTS voice from a model file.
+ */
+JNIEXPORT jboolean JNICALL
+Java_com_ailive_audio_TTSManager_nativeInitPiper(
+        JNIEnv* env,
+        jobject thiz,
+        jstring model_path) {
+
+    if (g_piper_voice != nullptr) {
+        LOGI_AUDIO("Piper voice already initialized. Releasing first.");
+        delete g_piper_voice;
+        g_piper_voice = nullptr;
+    }
+
+    const char* path = env->GetStringUTFChars(model_path, nullptr);
+    LOGI_AUDIO("Initializing Piper model from: %s", path);
+
+    try {
+        g_piper_voice = new piper::Voice();
+        piper::loadVoice(g_piper_config, std::string(path), *g_piper_voice);
+    } catch (const std::exception& e) {
+        LOGE_AUDIO("Failed to load Piper voice: %s", e.what());
+        env->ReleaseStringUTFChars(model_path, path);
+        return JNI_FALSE;
+    }
+
+    env->ReleaseStringUTFChars(model_path, path);
+    LOGI_AUDIO("✅ Piper voice initialized successfully.");
+    return JNI_TRUE;
+}
+
+/**
+ * Synthesizes speech from text and returns raw audio data.
+ */
+JNIEXPORT jshortArray JNICALL
+Java_com_ailive_audio_TTSManager_nativeSynthesize(
+        JNIEnv* env,
+        jobject thiz,
+        jstring text) {
+
+    if (g_piper_voice == nullptr) {
+        LOGE_AUDIO("Piper voice not initialized.");
+        return nullptr;
+    }
+
+    const char* text_cstr = env->GetStringUTFChars(text, nullptr);
+    std::vector<int16_t> audio_buffer;
+    piper::SynthesisResult result;
+
+    try {
+        piper::textToAudio(g_piper_config, *g_piper_voice, text_cstr, audio_buffer, result);
+    } catch (const std::exception& e) {
+        LOGE_AUDIO("Piper synthesis failed: %s", e.what());
+        env->ReleaseStringUTFChars(text, text_cstr);
+        return nullptr;
+    }
+
+    LOGI_AUDIO("Synthesized %zu audio samples.", audio_buffer.size());
+
+    jshortArray audio_array = env->NewShortArray(audio_buffer.size());
+    env->SetShortArrayRegion(audio_array, 0, audio_buffer.size(), audio_buffer.data());
+
+    env->ReleaseStringUTFChars(text, text_cstr);
+    return audio_array;
+}
+
+/**
+ * Releases all resources used by the Piper voice.
+ */
+JNIEXPORT void JNICALL
+Java_com_ailive_audio_TTSManager_nativeReleasePiper(
+        JNIEnv* env,
+        jobject thiz) {
+
+    if (g_piper_voice != nullptr) {
+        delete g_piper_voice;
+        g_piper_voice = nullptr;
+        LOGI_AUDIO("✅ Piper voice released.");
+    }
+}
+
+
+} // extern "C"

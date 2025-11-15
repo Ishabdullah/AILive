@@ -21,7 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import com.ailive.ai.models.ModelManager
 import com.ailive.audio.AudioManager
 import com.ailive.audio.CommandRouter
-import com.ailive.audio.SpeechProcessor
+import com.ailive.audio.WhisperProcessor
 import com.ailive.audio.WakeWordDetector
 import com.ailive.camera.CameraManager
 import com.ailive.core.AILiveCore
@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
 
     // Audio components
     private lateinit var audioManager: AudioManager
-    private lateinit var speechProcessor: SpeechProcessor
+    private lateinit var whisperProcessor: WhisperProcessor
     private lateinit var wakeWordDetector: WakeWordDetector
     private lateinit var commandRouter: CommandRouter
 
@@ -469,39 +469,43 @@ class MainActivity : AppCompatActivity() {
 
     private fun initializeAudio() {
         try {
-            Log.i(TAG, "=== Initializing Audio Pipeline ===")
+            Log.i(TAG, "=== Initializing Offline Audio Pipeline ===")
 
-            speechProcessor = SpeechProcessor(applicationContext)
-            wakeWordDetector = WakeWordDetector(settings.wakePhrase, aiLiveCore.ttsManager)
-            commandRouter = CommandRouter(aiLiveCore)
-
-            if (!speechProcessor.initialize()) {
-                Log.e(TAG, "❌ Speech processor failed to initialize")
+            // 1. Initialize WhisperProcessor
+            whisperProcessor = WhisperProcessor(applicationContext)
+            val whisperModel = modelDownloadManager.getModelPath("whisper") // Assuming "whisper" is the key for the model
+            if (whisperModel == null) {
+                Log.e(TAG, "❌ Whisper model not found! STT will not work.")
+                onError("Whisper model not found!")
                 return
             }
 
-            Log.i(TAG, "✓ Speech processor ready")
+            if (!whisperProcessor.initialize(whisperModel.absolutePath)) {
+                Log.e(TAG, "❌ Whisper processor failed to initialize")
+                return
+            }
+            Log.i(TAG, "✓ Whisper processor ready")
 
+
+            // 2. Initialize other audio components
+            wakeWordDetector = WakeWordDetector(settings.wakePhrase, aiLiveCore.ttsManager)
+            commandRouter = CommandRouter(aiLiveCore)
+
+
+            // 3. Setup Callbacks
             wakeWordDetector.onWakeWordDetected = {
                 runOnUiThread {
                     onWakeWordDetected()
                 }
             }
 
-            speechProcessor.onPartialResult = { text ->
-                runOnUiThread {
-                    editTextCommand.setText(text)
-                    if (isListeningForWakeWord) {
-                        wakeWordDetector.processText(text)
-                    }
-                }
-            }
-
-            speechProcessor.onFinalResult = { text ->
+            whisperProcessor.onFinalResult = { text ->
                 runOnUiThread {
                     editTextCommand.setText(text)
                     Log.i(TAG, "Final transcription: '$text'")
 
+                    // The new processor is not continuous in the same way.
+                    // We decide whether to process as a command or listen for wake word.
                     if (isListeningForWakeWord) {
                         if (!wakeWordDetector.processText(text)) {
                             restartWakeWordListening()
@@ -512,15 +516,15 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            speechProcessor.onReadyForSpeech = {
+            whisperProcessor.onReadyForSpeech = {
                 runOnUiThread {
                     statusIndicator.text = if (isListeningForWakeWord) "● LISTENING" else "● COMMAND"
                 }
             }
 
-            speechProcessor.onError = { error ->
+            whisperProcessor.onError = { error ->
                 runOnUiThread {
-                    Log.w(TAG, "Speech error: $error")
+                    Log.w(TAG, "Whisper error: $error")
                     if (isMicEnabled) {
                         isListeningForWakeWord = true
                         restartWakeWordListening()
@@ -551,7 +555,6 @@ class MainActivity : AppCompatActivity() {
             // Mic starts OFF by default - user must enable manually
             isListeningForWakeWord = false
             isMicEnabled = false
-            // Don't start wake word listening automatically
 
             runOnUiThread {
                 btnToggleMic.text = "🎤 MIC OFF"
@@ -571,7 +574,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            Log.i(TAG, "✓ Phase 2.3: Audio pipeline operational")
+            Log.i(TAG, "✓ Phase 2.3: Offline Audio pipeline operational")
             Log.i(TAG, "✓ Phase 2.4: TTS ready")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Audio init failed", e)
@@ -582,7 +585,7 @@ class MainActivity : AppCompatActivity() {
     private fun startWakeWordListening() {
         editTextCommand.setText("")
         editTextCommand.hint = "Say \"${settings.wakePhrase}\" or type..."
-        speechProcessor.startListening(continuous = false)
+        whisperProcessor.startListening()
         Log.i(TAG, "Listening for wake word...")
     }
 
@@ -600,10 +603,10 @@ class MainActivity : AppCompatActivity() {
         editTextCommand.hint = "Listening for command..."
         statusIndicator.text = "● COMMAND"
 
-        speechProcessor.stopListening()
+        whisperProcessor.stopListening()
         lifecycleScope.launch {
             delay(500)
-            speechProcessor.startListening(continuous = false)
+            whisperProcessor.startListening()
         }
     }
 
@@ -618,8 +621,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupManualControls() {
         btnToggleMic.setOnClickListener {
             if (isMicEnabled) {
-                if (::speechProcessor.isInitialized) {
-                    speechProcessor.stopListening()
+                if (::whisperProcessor.isInitialized) {
+                    whisperProcessor.stopListening()
                     isListeningForWakeWord = false
                 }
                 isMicEnabled = false
@@ -630,7 +633,7 @@ class MainActivity : AppCompatActivity() {
                 editTextCommand.hint = "Type your command..."
                 Log.i(TAG, "🎤 Microphone manually disabled")
             } else {
-                if (::speechProcessor.isInitialized) {
+                if (::whisperProcessor.isInitialized) {
                     isListeningForWakeWord = true
                     isMicEnabled = true
                     startWakeWordListening()
@@ -922,7 +925,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try { if (::speechProcessor.isInitialized) speechProcessor.release() } catch (e: Exception) {}
+        try { if (::whisperProcessor.isInitialized) whisperProcessor.release() } catch (e: Exception) {}
         try { if (::cameraManager.isInitialized) cameraManager.stopCamera() } catch (e: Exception) {}
         try { if (::modelManager.isInitialized) modelManager.close() } catch (e: Exception) {}
         try { if (::aiLiveCore.isInitialized) aiLiveCore.stop() } catch (e: Exception) {}
