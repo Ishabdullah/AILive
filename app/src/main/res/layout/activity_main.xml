@@ -217,6 +217,18 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Captured Image Preview (hidden by default) -->
+        <ImageView
+            android:id="@+id/imageViewCaptured"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:scaleType="centerCrop"
+            android:background="#30FFFFFF"
+            android:visibility="gone"
+            android:contentDescription="Captured Image Preview" />
+
         <!-- Text Input Field (futuristic style) -->
         <EditText
             android:id="@+id/editTextCommand"
@@ -300,6 +312,20 @@
                 android:layout_marginStart="8dp" />
         </LinearLayout>
     </LinearLayout>
+
+    <!-- Capture Image Button (floating, bottom right) -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnCaptureImage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@android:drawable/ic_menu_camera"
+        app:backgroundTint="#FFD700"
+        app:tint="#000000"
+        app:elevation="12dp"
+        app:layout_constraintBottom_toTopOf="@id/inputContainer"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginEnd="20dp"
+        android:layout_marginBottom="20dp" />
 
     <!-- Dashboard Toggle Button (floating, top right) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton

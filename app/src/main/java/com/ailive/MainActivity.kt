@@ -30,6 +30,7 @@ import com.ailive.testing.TestScenarios
 import com.ailive.ui.dashboard.DashboardFragment
 import com.ailive.ui.ModelSetupDialog
 import com.ailive.ai.llm.ModelDownloadManager
+import com.ailive.ai.vision.VisionManager
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.*
 
@@ -38,8 +39,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: AISettings
     private lateinit var aiLiveCore: AILiveCore
-    private lateinit var modelManager: ModelManager
+    // private lateinit var modelManager: ModelManager // Removed: Deprecated
     private lateinit var cameraManager: CameraManager
+    private lateinit var visionManager: VisionManager
 
     // Audio components
     private lateinit var audioManager: AudioManager
@@ -57,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inferenceTime: TextView
     private lateinit var statusIndicator: TextView
     private lateinit var typingIndicator: TextView
+    private lateinit var imageViewCaptured: ImageView // New: for captured image preview
 
     // Manual controls
     private lateinit var btnToggleMic: android.widget.Button
@@ -66,6 +69,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCancelGeneration: android.widget.Button
     private lateinit var btnSettings: android.widget.Button
     private lateinit var btnMemory: android.widget.Button
+    private lateinit var btnCaptureImage: FloatingActionButton // New: for image capture
     private lateinit var btnToggleDashboard: FloatingActionButton
     private lateinit var dashboardContainer: FrameLayout
 
@@ -80,6 +84,10 @@ class MainActivity : AppCompatActivity() {
     // File picker
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
     private var filePickerOnComplete: (() -> Unit)? = null
+
+    // Image capture
+    private lateinit var imageCaptureLauncher: ActivityResultLauncher<Intent> // New: for image capture
+    private var capturedImageBitmap: Bitmap? = null // New: to store captured image
 
     // Permissions launcher
     private lateinit var permissionLauncher: ActivityResultLauncher<Array<String>>
@@ -150,7 +158,7 @@ class MainActivity : AppCompatActivity() {
                     // Show explanation dialog with option to open settings
                     AlertDialog.Builder(this)
                         .setTitle("Permissions Required")
-                        .setMessage("AILive needs:\n• Camera & Microphone - for voice/video interaction\n• Location - for contextual awareness\n• Storage - to import custom models\n\nPlease grant these permissions to continue.")
+                        .setMessage("Permissions required for full functionality")
                         .setPositiveButton("Open Settings") { _, _ ->
                             val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                                 data = Uri.fromParts("package", packageName, null)
@@ -164,6 +172,23 @@ class MainActivity : AppCompatActivity() {
                         .setCancelable(false)
                         .show()
                 }
+            }
+        }
+
+        // Register image capture launcher
+        imageCaptureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                val imageBitmap = result.data?.extras?.get("data") as? Bitmap
+                if (imageBitmap != null) {
+                    capturedImageBitmap = imageBitmap
+                    imageViewCaptured.setImageBitmap(imageBitmap)
+                    imageViewCaptured.visibility = View.VISIBLE
+                    Log.i(TAG, "✅ Image captured and displayed.")
+                } else {
+                    Log.e(TAG, "❌ Failed to get bitmap from camera intent.")
+                }
+            } else {
+                Log.i(TAG, "Image capture cancelled or failed.")
             }
         }
 
@@ -188,6 +213,7 @@ class MainActivity : AppCompatActivity() {
         inferenceTime = findViewById(R.id.inferenceTime)
         statusIndicator = findViewById(R.id.statusIndicator)
         typingIndicator = findViewById(R.id.typingIndicator)
+        imageViewCaptured = findViewById(R.id.imageViewCaptured) // New: for captured image preview
 
         btnToggleMic = findViewById(R.id.btnToggleMic)
         btnToggleCamera = findViewById(R.id.btnToggleCamera)
@@ -196,6 +222,7 @@ class MainActivity : AppCompatActivity() {
         btnCancelGeneration = findViewById(R.id.btnCancelGeneration)
         btnSettings = findViewById(R.id.btnSettings)
         btnMemory = findViewById(R.id.btnMemory)
+        btnCaptureImage = findViewById(R.id.btnCaptureImage) // New: for image capture
         btnToggleDashboard = findViewById(R.id.btnToggleDashboard)
         dashboardContainer = findViewById(R.id.dashboardContainer)
 
@@ -349,17 +376,17 @@ class MainActivity : AppCompatActivity() {
         try {
             runOnUiThread {
                 statusIndicator.text = "● LOADING AI MODEL..."
-                classificationResult.text = "Loading TensorFlow Lite..."
+                classificationResult.text = "Initializing camera..." // Changed from TensorFlow Lite
             }
 
-            modelManager = ModelManager(applicationContext)
+            // modelManager = ModelManager(applicationContext) // Removed: Deprecated
 
             lifecycleScope.launch(Dispatchers.Default) {
                 try {
-                    modelManager.initialize()
+                    // modelManager.initialize() // Removed: Deprecated
 
                     withContext(Dispatchers.Main) {
-                        Log.i(TAG, "✓ Phase 2.1: TensorFlow ready")
+                        Log.i(TAG, "✓ Phase 2.1: Vision (Camera) ready") // Updated log
                         statusIndicator.text = "● STARTING CAMERA..."
                         classificationResult.text = "Initializing camera..."
 
@@ -371,7 +398,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        Log.e(TAG, "TensorFlow init failed", e)
+                        Log.e(TAG, "Vision/Audio init failed", e) // Updated log
                         statusIndicator.text = "● AI MODEL ERROR"
                         classificationResult.text = "Error: ${e.message}"
                     }
@@ -398,20 +425,20 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "=== Starting Camera ===")
             cameraManager = CameraManager(
                 context = applicationContext,
-                lifecycleOwner = this,
-                modelManager = modelManager
+                lifecycleOwner = this
             )
 
-            cameraManager.onClassificationResult = { label, confidence, time ->
-                callbackCount++
-                Log.i(TAG, ">>> Classification #$callbackCount: $label")
-                updateUI(label, confidence, time)
-            }
+            // Removed onClassificationResult as CameraManager is now a pure frame provider
+            // Vision processing will be triggered manually or by VisionManager
 
             cameraManager.startCamera(cameraPreview)
 
+            // Initialize VisionManager
+            visionManager = VisionManager(aiLiveCore.llmManager.llmBridge) // Assuming LLMBridge is accessible via AILiveCore
+            Log.i(TAG, "✓ VisionManager initialized")
+
             val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
-                modelManager = modelManager,
+                visionManager = visionManager, // Pass the new VisionManager
                 cameraManager = cameraManager
             )
             aiLiveCore.personalityEngine.registerTool(visionTool)
@@ -682,7 +709,7 @@ class MainActivity : AppCompatActivity() {
 
         btnSendCommand.setOnClickListener {
             val command = editTextCommand.text.toString().trim()
-            if (command.isNotEmpty()) {
+            if (command.isNotEmpty() || capturedImageBitmap != null) { // Allow sending with just image
                 processTextCommand(command)
                 editTextCommand.setText("")
             }
@@ -703,7 +730,7 @@ class MainActivity : AppCompatActivity() {
         editTextCommand.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
                 val command = editTextCommand.text.toString().trim()
-                if (command.isNotEmpty()) {
+                if (command.isNotEmpty() || capturedImageBitmap != null) { // Allow sending with just image
                     processTextCommand(command)
                     editTextCommand.setText("")
                 }
@@ -711,6 +738,12 @@ class MainActivity : AppCompatActivity() {
             } else {
                 false
             }
+        }
+
+        btnCaptureImage.setOnClickListener {
+            Log.i(TAG, "📸 Capture Image button clicked.")
+            val cameraIntent = Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE)
+            imageCaptureLauncher.launch(cameraIntent)
         }
     }
 
@@ -746,7 +779,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processTextCommand(command: String) {
-        Log.i(TAG, "📝 Processing text command: '$command'")
+        Log.i(TAG, "📝 Processing command: '$command'")
 
         // Check if AILive core is initialized
         if (!::aiLiveCore.isInitialized) {
@@ -774,7 +807,10 @@ class MainActivity : AppCompatActivity() {
             btnSendCommand.isEnabled = false
         }
 
-        // Stream response in real-time with incremental TTS (store Job for cancellation)
+        // Determine if this is a multimodal (image + text) command
+        val currentImage = capturedImageBitmap
+        val isMultimodal = currentImage != null
+
         generationJob = lifecycleScope.launch {
             try {
                 val responseBuilder = StringBuilder()
@@ -783,57 +819,74 @@ class MainActivity : AppCompatActivity() {
                 val startTime = System.currentTimeMillis()
                 val streamingSpeechEnabled = settings.streamingSpeechEnabled
 
-                // Use PersonalityEngine for proper context (name, time, location)
-                aiLiveCore.personalityEngine.generateStreamingResponse(command)
-                    .collect { token ->
-                        tokenCount++
-                        responseBuilder.append(token)
-                        sentenceBuffer.append(token)
+                if (isMultimodal) {
+                    Log.i(TAG, "🖼️ Processing multimodal command with image.")
+                    // Call VisionManager for multimodal generation
+                    val response = visionManager.generateResponseWithImage(currentImage!!, command)
+                    responseBuilder.append(response)
+                    sentenceBuffer.append(response)
+                    tokenCount = response.length / 5 // Rough token count for display
 
-                        // Update UI with streaming text
-                        withContext(Dispatchers.Main) {
-                            classificationResult.text = responseBuilder.toString()
+                    withContext(Dispatchers.Main) {
+                        classificationResult.text = responseBuilder.toString()
+                        responseScrollView.post {
+                            responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
+                        }
+                    }
+                } else {
+                    // Use PersonalityEngine for proper context (name, time, location)
+                    aiLiveCore.personalityEngine.generateStreamingResponse(command)
+                        .collect { token ->
+                            tokenCount++
+                            responseBuilder.append(token)
+                            sentenceBuffer.append(token)
 
-                            // Auto-scroll to bottom to show new content
-                            responseScrollView.post {
-                                responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
-                            }
+                            // Update UI with streaming text
+                            withContext(Dispatchers.Main) {
+                                classificationResult.text = responseBuilder.toString()
 
-                            // Update performance stats every 5 tokens
-                            if (tokenCount % 5 == 0) {
-                                val elapsed = System.currentTimeMillis() - startTime
-                                val tokensPerSec = if (elapsed > 0) {
-                                    (tokenCount.toFloat() / elapsed) * 1000
-                                } else {
-                                    0f
+                                // Auto-scroll to bottom to show new content
+                                responseScrollView.post {
+                                    responseScrollView.fullScroll(android.view.View.FOCUS_DOWN)
                                 }
-                                inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
-                                statusIndicator.text = "● 🔊 LIVE SPEAKING..."
-                            }
 
-                            // STREAMING TTS: Speak sentence as soon as it's complete
-                            if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
-                                val currentText = sentenceBuffer.toString()
+                                // Update performance stats every 5 tokens
+                                if (tokenCount % 5 == 0) {
+                                    val elapsed = System.currentTimeMillis() - startTime
+                                    val tokensPerSec = if (elapsed > 0) {
+                                        (tokenCount.toFloat() / elapsed) * 1000
+                                    } else {
+                                        0f
+                                    }
+                                    inferenceTime.text = "${String.format("%.1f", tokensPerSec)} tok/s | $tokenCount tokens"
+                                    statusIndicator.text = "● 🔊 LIVE SPEAKING..."
+                                }
 
-                                // Check if we have a complete sentence or phrase
-                                val shouldSpeak = currentText.endsWith(". ") ||
-                                                  currentText.endsWith("! ") ||
-                                                  currentText.endsWith("? ") ||
-                                                  currentText.endsWith(".\n") ||
-                                                  currentText.endsWith("!\n") ||
-                                                  currentText.endsWith("?\n") ||
-                                                  (currentText.length > 80 && token == " ")  // Long phrase, speak at word boundary
+                                // STREAMING TTS: Speak sentence as soon as it's complete
+                                if (streamingSpeechEnabled && ::aiLiveCore.isInitialized) {
+                                    val currentText = sentenceBuffer.toString()
 
-                                if (shouldSpeak && currentText.length > 10) {
-                                    // Speak this sentence incrementally (queues, doesn't interrupt)
-                                    val sentenceToSpeak = currentText.trim()
-                                    Log.d(TAG, "🔊 Streaming TTS: Speaking sentence of ${sentenceToSpeak.length} chars")
-                                    aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
-                                    sentenceBuffer.clear()
+                                    // Check if we have a complete sentence or phrase
+                                    val shouldSpeak = currentText.endsWith(". ") ||
+                                                      currentText.endsWith("! ") ||
+                                                      currentText.endsWith("? ") ||
+                                                      currentText.endsWith(".\n") ||
+                                                      currentText.endsWith("!\n") ||
+                                                      currentText.endsWith("?\n") ||
+                                                      (currentText.length > 80 && token == " ")  // Long phrase, speak at word boundary
+
+                                    if (shouldSpeak && currentText.length > 10) {
+                                        // Speak this sentence incrementally (queues, doesn't interrupt)
+                                        val sentenceToSpeak = currentText.trim()
+                                        Log.d(TAG, "🔊 Streaming TTS: Speaking sentence of ${sentenceToSpeak.length} chars")
+                                        aiLiveCore.ttsManager.speakIncremental(sentenceToSpeak)
+                                        sentenceBuffer.clear()
+                                    }
                                 }
                             }
                         }
-                    }
+                }
+
 
                 // Generation complete
                 val totalTime = System.currentTimeMillis() - startTime
@@ -882,6 +935,11 @@ class MainActivity : AppCompatActivity() {
                         // Fallback to batched TTS if streaming disabled
                         aiLiveCore.ttsManager.speak(responseBuilder.toString(), com.ailive.audio.TTSManager.Priority.NORMAL)
                     }
+
+                    // Clear captured image after processing
+                    capturedImageBitmap?.recycle()
+                    capturedImageBitmap = null
+                    imageViewCaptured.visibility = View.GONE
                 }
 
             } catch (e: Exception) {
@@ -927,8 +985,9 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         try { if (::whisperProcessor.isInitialized) whisperProcessor.release() } catch (e: Exception) {}
         try { if (::cameraManager.isInitialized) cameraManager.stopCamera() } catch (e: Exception) {}
-        try { if (::modelManager.isInitialized) modelManager.close() } catch (e: Exception) {}
+        try { if (::modelManager.isInitialized) modelManager.close() } catch (e: Exception) {} // ModelManager is deprecated, but still has a close() method
         try { if (::aiLiveCore.isInitialized) aiLiveCore.stop() } catch (e: Exception) {}
         try { if (::modelSetupDialog.isInitialized) modelSetupDialog.cleanup() } catch (e: Exception) {}
+        capturedImageBitmap?.recycle() // Recycle captured image bitmap
     }
 }

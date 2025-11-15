@@ -16,6 +16,7 @@
 #include <vector>
 #include <android/log.h>
 #include "llama.h"
+#include "llama_image.h" // Required for LLaVA image processing
 
 #define LOG_TAG "AILive-LLM"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -119,6 +120,43 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
     std::string result = llama_decode_and_generate(prompt_cstr, max_tokens);
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
+
+    return env->NewStringUTF(result.c_str());
+}
+
+/**
+ * Generate text completion with image input (multimodal).
+ *
+ * @param env JNI environment
+ * @param thiz Java object reference
+ * @param prompt Input text prompt
+ * @param image_bytes Raw image data (e.g., JPEG, PNG)
+ * @param max_tokens Maximum tokens to generate
+ * @return Generated text
+ */
+JNIEXPORT jstring JNICALL
+Java_com_ailive_ai_llm_LLMBridge_nativeGenerateWithImage(
+        JNIEnv* env,
+        jobject thiz,
+        jstring prompt,
+        jbyteArray image_bytes,
+        jint max_tokens) {
+
+    if (g_model == nullptr || g_ctx == nullptr) {
+        LOGE("Model not loaded, cannot generate with image.");
+        return env->NewStringUTF("");
+    }
+
+    const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
+    jbyte* image_data = env->GetByteArrayElements(image_bytes, nullptr);
+    jsize image_len = env->GetArrayLength(image_bytes);
+
+    std::vector<uint8_t> image_vec(image_data, image_data + image_len);
+
+    std::string result = llama_decode_and_generate_multimodal(prompt_cstr, image_vec, max_tokens);
+
+    env->ReleaseStringUTFChars(prompt, prompt_cstr);
+    env->ReleaseByteArrayElements(image_bytes, image_data, JNI_ABORT);
 
     return env->NewStringUTF(result.c_str());
 }
@@ -294,6 +332,132 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
     // --- Generate Response ---
     std::string result_str;
     int n_current = n_prompt_tokens;
+
+    while (n_current < max_tokens) {
+        // Sample the next token
+        auto* logits = llama_get_logits_ith(g_ctx, batch.n_tokens - 1);
+        
+        llama_token_data_array candidates;
+        candidates.data = new llama_token_data[llama_n_vocab(g_model)];
+        candidates.size = llama_n_vocab(g_model);
+        for (int token_id = 0; token_id < candidates.size; ++token_id) {
+            candidates.data[token_id].id = token_id;
+            candidates.data[token_id].logit = logits[token_id];
+            candidates.data[token_id].p = 0.0f;
+        }
+
+        llama_token_data_array cur_p = { candidates.data, candidates.size, false };
+
+        // Apply penalties
+        llama_sample_repetition_penalties(g_ctx, &cur_p, prompt_tokens.data(), prompt_tokens.size(), 1.1f, 64, 1.0f);
+        llama_sample_top_k(g_ctx, &cur_p, 40, 1);
+        llama_sample_min_p(g_ctx, &cur_p, 0.05f, 1);
+        llama_sample_top_p(g_ctx, &cur_p, 0.95f, 1);
+        llama_sample_temp(g_ctx, &cur_p, 0.8f);
+        
+        llama_token new_token_id = llama_sample_token(g_ctx, &cur_p);
+        delete[] candidates.data;
+
+        // Check for End-of-Sequence
+        if (new_token_id == llama_token_eos(g_model)) {
+            LOGI("End of generation (EOS token).");
+            break;
+        }
+
+        // Append token to result string
+        result_str += llama_token_to_piece(g_ctx, new_token_id);
+
+        // Prepare for next iteration
+        llama_batch_free(batch);
+        batch = llama_batch_init(1, 0, 1);
+        llama_batch_add(batch, new_token_id, n_current, {0}, true);
+        
+        if (llama_decode(g_ctx, batch) != 0) {
+            LOGE("Failed to decode token %d", new_token_id);
+            break;
+        }
+
+        n_current++;
+    }
+
+    llama_batch_free(batch);
+    LOGI("✨ Generated %zu tokens: %.80s...", result_str.length(), result_str.c_str());
+    return result_str;
+}
+
+/**
+ * Main generation function using the corrected llama.cpp workflow for multimodal input.
+ */
+static std::string llama_decode_and_generate_multimodal(const std::string& prompt_str, const std::vector<uint8_t>& image_bytes, int max_tokens) {
+    LOGI("🖼️ Generating response for multimodal input (prompt: %.80s..., image size: %zu bytes)...", prompt_str.c_str(), image_bytes.size());
+
+    // Clear the KV cache from previous runs
+    llama_kv_cache_clear(g_ctx);
+
+    // 1. Create image embed
+    llama_image_embed* image_embed = llama_image_embed_make_with_bytes(g_ctx, g_model, image_bytes.data(), image_bytes.size());
+    if (image_embed == nullptr) {
+        LOGE("Failed to create image embed from bytes.");
+        return "[ERROR: Image embedding failed]";
+    }
+    LOGI("Image embed created. N_image_tokens: %d", llama_image_embed_n_tokens(image_embed));
+
+    // 2. Tokenize prompt with image embed
+    std::vector<llama_token> prompt_tokens;
+    prompt_tokens.reserve(prompt_str.length() + llama_image_embed_n_tokens(image_embed) + 1); // Reserve space
+
+    // Add BOS token
+    prompt_tokens.push_back(llama_token_bos(g_model));
+
+    // Add image tokens
+    llama_image_embed_tokenize_to_vector(g_model, image_embed, prompt_tokens);
+
+    // Add text tokens
+    int n_text_tokens = llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), nullptr, 0, false, false);
+    if (n_text_tokens < 0) {
+        LOGE("Failed to tokenize text prompt for multimodal (buffer too small). Required size: %d", -n_text_tokens);
+        // Resize and try again
+        std::vector<llama_token> text_tokens_temp;
+        text_tokens_temp.resize(-n_text_tokens);
+        n_text_tokens = llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), text_tokens_temp.data(), text_tokens_temp.size(), false, false);
+        prompt_tokens.insert(prompt_tokens.end(), text_tokens_temp.begin(), text_tokens_temp.end());
+    } else {
+        std::vector<llama_token> text_tokens_temp;
+        text_tokens_temp.resize(n_text_tokens);
+        llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), text_tokens_temp.data(), text_tokens_temp.size(), false, false);
+        prompt_tokens.insert(prompt_tokens.end(), text_tokens_temp.begin(), text_tokens_temp.end());
+    }
+
+    // Add EOS token if not already present
+    if (prompt_tokens.empty() || prompt_tokens.back() != llama_token_eos(g_model)) {
+        prompt_tokens.push_back(llama_token_eos(g_model));
+    }
+
+    llama_image_embed_free(image_embed); // Free image embed after tokenization
+
+    if (prompt_tokens.empty()) {
+        LOGE("Multimodal tokenization resulted in 0 tokens.");
+        return "[ERROR: Multimodal tokenization failed]";
+    }
+    LOGI("Tokenized multimodal prompt into %zu tokens.", prompt_tokens.size());
+
+    // --- Process Prompt ---
+    llama_batch batch = llama_batch_init(prompt_tokens.size(), 0, 1);
+    for (size_t i = 0; i < prompt_tokens.size(); ++i) {
+        llama_batch_add(batch, prompt_tokens[i], i, {0}, true);
+    }
+    batch.logits[batch.n_tokens - 1] = 1; // Request logit for the last token
+
+    if (llama_decode(g_ctx, batch) != 0) {
+        LOGE("Failed to decode multimodal prompt.");
+        llama_batch_free(batch);
+        return "[ERROR: Multimodal prompt decoding failed]";
+    }
+    LOGI("Multimodal prompt decoded successfully.");
+
+    // --- Generate Response ---
+    std::string result_str;
+    int n_current = prompt_tokens.size();
 
     while (n_current < max_tokens) {
         // Sample the next token

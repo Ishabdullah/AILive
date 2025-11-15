@@ -12,9 +12,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import com.ailive.ai.models.ModelManager
 import kotlinx.coroutines.*
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executor
 
 /**
@@ -23,8 +21,7 @@ import java.util.concurrent.Executor
  */
 class CameraManager(
     private val context: Context,
-    private val lifecycleOwner: LifecycleOwner,
-    private val modelManager: ModelManager
+    private val lifecycleOwner: LifecycleOwner
 ) {
     private val TAG = "CameraManager"
 
@@ -33,7 +30,7 @@ class CameraManager(
     private val analysisScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private var frameCount = 0
-    var onClassificationResult: ((String, Float, Long) -> Unit)? = null
+    // Removed onClassificationResult as CameraManager is now a pure frame provider
 
     // PHASE 5: Frame buffering for VisionAnalysisTool
     @Volatile
@@ -42,10 +39,6 @@ class CameraManager(
 
     // Performance optimization: Process every Nth frame to reduce CPU usage
     private val FRAME_SKIP_RATE = 30  // Process 1 out of every 30 frames (~1 FPS at 30 FPS camera)
-
-    // Debouncing: Track last classification to avoid redundant UI updates
-    private var lastClassificationTime = 0L
-    private val MIN_CLASSIFICATION_INTERVAL_MS = 500  // Update UI at most every 500ms
     
     /**
      * Start camera with S24 Ultra optimizations
@@ -150,7 +143,7 @@ class CameraManager(
     }
     
     /**
-     * Process frame with TensorFlow Lite
+     * Process frame (now only updates latestFrame)
      */
     @OptIn(ExperimentalGetImage::class)
     private fun processFrame(imageProxy: ImageProxy) {
@@ -161,34 +154,14 @@ class CameraManager(
                 if (bitmap != null) {
                     Log.d(TAG, "Bitmap: ${bitmap.width}x${bitmap.height}")
 
-                    // PHASE 5: Store latest frame for VisionAnalysisTool
-                    // Create a copy since we'll recycle the original
+                    // Store latest frame for VisionManager
                     val frameCopy = bitmap.copy(bitmap.config ?: android.graphics.Bitmap.Config.ARGB_8888, true)
                     synchronized(frameLock) {
                         latestFrame?.recycle()  // Recycle old frame
                         latestFrame = frameCopy
                     }
 
-                    val result = modelManager.classifyImage(bitmap)
-
-                    if (result != null) {
-                        Log.d(TAG, "✅ ${result.topLabel} (${(result.confidence*100).toInt()}%)")
-
-                        // OPTIMIZATION: Debounce UI updates to avoid overwhelming the main thread
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastClassificationTime >= MIN_CLASSIFICATION_INTERVAL_MS) {
-                            lastClassificationTime = currentTime
-                            withContext(Dispatchers.Main) {
-                                onClassificationResult?.invoke(
-                                    result.topLabel,
-                                    result.confidence,
-                                    result.inferenceTimeMs
-                                )
-                            }
-                        }
-                    }
-
-                    bitmap.recycle()
+                    bitmap.recycle() // Recycle the original bitmap after copying
                 }
 
             } catch (e: Exception) {
