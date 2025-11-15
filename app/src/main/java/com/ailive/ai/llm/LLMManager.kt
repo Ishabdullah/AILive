@@ -149,7 +149,7 @@ class LLMManager(private val context: Context) {
     }
 
     // LLM Bridge for native llama.cpp
-    private val llmBridge = LLMBridge()
+    val llmBridge = LLMBridge()
 
     // Model configuration settings (loaded from SharedPreferences)
     private var settings: ModelSettings = ModelSettings.load(context)
@@ -242,7 +242,7 @@ class LLMManager(private val context: Context) {
 
             // Load model using LLM Bridge
             Log.i(TAG, "📥 Loading llama.cpp model...")
-            if (!llmBridge.loadModel(modelFile.absolutePath, settings.contextSize)) {
+            if (!llmBridge.loadModel(modelFile.absolutePath, settings.ctxSize)) {
                 throw Exception("Failed to load model")
             }
 

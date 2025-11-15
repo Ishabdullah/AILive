@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: AISettings
     private lateinit var aiLiveCore: AILiveCore
-    // private lateinit var modelManager: ModelManager // Removed: Deprecated
+    private lateinit var modelManager: ModelManager
     private lateinit var cameraManager: CameraManager
     private lateinit var visionManager: VisionManager
 
@@ -381,7 +381,7 @@ class MainActivity : AppCompatActivity() {
                 classificationResult.text = "Initializing camera..." // Changed from TensorFlow Lite
             }
 
-            // modelManager = ModelManager(applicationContext) // Removed: Deprecated
+            modelManager = ModelManager(applicationContext)
 
             lifecycleScope.launch(Dispatchers.Default) {
                 try {
@@ -503,13 +503,13 @@ class MainActivity : AppCompatActivity() {
             // 1. Initialize WhisperProcessor
             whisperProcessor = WhisperProcessor(applicationContext)
             val whisperModel = modelDownloadManager.getModelPath("whisper") // Assuming "whisper" is the key for the model
-            if (whisperModel == null) {
+            if (whisperModel.isEmpty()) {
                 Log.e(TAG, "❌ Whisper model not found! STT will not work.")
-                onError("Whisper model not found!")
+                showError("Whisper model not found!")
                 return
             }
 
-            if (!whisperProcessor.initialize(whisperModel.absolutePath)) {
+            if (!whisperProcessor.initialize(whisperModel)) {
                 Log.e(TAG, "❌ Whisper processor failed to initialize")
                 return
             }
@@ -980,6 +980,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             dashboardContainer.visibility = View.GONE
             Log.i(TAG, "📊 Dashboard closed")
+        }
+    }
+
+    private fun showError(message: String) {
+        runOnUiThread {
+            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+            Log.e(TAG, message)
         }
     }
 
