@@ -17,7 +17,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "AILive"
 include(":app")
-
-// llama.cpp Android module (official)
-include(":llama")
-project(":llama").projectDir = file("external/llama.cpp/examples/llama.android/llama")

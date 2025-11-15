@@ -18,23 +18,19 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // NDK configuration disabled (ONNX-only mode - Phase 7.10)
-        // Will be re-enabled when llama.cpp JNI is built
-        // ndk {
-        //     abiFilters += listOf("arm64-v8a", "armeabi-v7a")
-        // }
+        // NDK configuration
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
 
-        // externalNativeBuild {
-        //     cmake {
-        //         cppFlags += "-std=c++17"
-        //         arguments += listOf(
-        //             "-DANDROID_STL=c++_shared",
-        //             "-DLLAMA_BUILD_TESTS=OFF",
-        //             "-DLLAMA_BUILD_EXAMPLES=OFF"
-        //         )
-        //         cFlags += listOf("-O3", "-march=armv8-a+dotprod+i8mm+bf16")
-        //     }
-        // }
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared"
+                )
+            }
+        }
     }
 
     // ✨ GPU/CPU Build Variants (v1.1)
@@ -85,14 +81,13 @@ android {
         buildConfig = true
     }
 
-    // External native build disabled (ONNX-only mode - Phase 7.10)
-    // Will be re-enabled when llama.cpp JNI is built
-    // externalNativeBuild {
-    //     cmake {
-    //         path = file("src/main/cpp/CMakeLists.txt")
-    //         version = "3.22.1"
-    //     }
-    // }
+    // External native build
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
 
     // CRITICAL: Allow large ONNX model files (348MB) in assets
     // Without this, files >100MB are excluded from APK
@@ -145,11 +140,6 @@ dependencies {
     // implementation("org.tensorflow:tensorflow-lite:2.14.0")
     // implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     // implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-
-    // llama.cpp for LLM inference (Phase 9.0 - Official Android module)
-    // Official llama.cpp Android bindings from examples/llama.android
-    // Supports GGUF models with native ARM64 libraries
-    implementation(project(":llama"))
 
     // ONNX Runtime for BGE embeddings (v1.4 - Memory enhancement)
     // Used ONLY for embedding models (no ArgMax op issues with sentence transformers)
