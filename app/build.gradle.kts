@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.ailive"
     compileSdk = 35
+    ndkVersion = "26.3.11579264"
 
     defaultConfig {
         applicationId = "com.ailive"
@@ -16,10 +17,24 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // NDK configuration for native C++ libraries (llama.cpp, whisper.cpp, piper)
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared"
+                )
+            }
+        }
     }
 
     // ✨ GPU/CPU Build Variants (v1.1)
-    // ONNX Runtime automatically uses NNAPI GPU acceleration
+    // Allows installing both GPU and CPU versions side-by-side
     flavorDimensions += "acceleration"
     productFlavors {
         create("gpu") {
@@ -28,7 +43,16 @@ android {
             versionNameSuffix = "-GPU"
 
             buildConfigField("boolean", "GPU_ENABLED", "true")
-            buildConfigField("String", "BUILD_VARIANT", "\"GPU (NNAPI)\"")
+            buildConfigField("String", "BUILD_VARIANT", "\"GPU (OpenCL + NNAPI)\"")
+
+            // GPU-specific CMake flags for llama.cpp OpenCL
+            externalNativeBuild {
+                cmake {
+                    arguments += listOf(
+                        "-DGGML_OPENCL=ON"
+                    )
+                }
+            }
         }
 
         create("cpu") {
@@ -54,6 +78,14 @@ android {
     // Enable BuildConfig generation
     buildFeatures {
         buildConfig = true
+    }
+
+    // External native build configuration
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     // CRITICAL: Allow large ONNX model files (348MB) in assets

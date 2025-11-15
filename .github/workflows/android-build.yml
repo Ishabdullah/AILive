@@ -18,12 +18,26 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        submodules: recursive  # Checkout llama.cpp, whisper.cpp, piper submodules
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
+
+    - name: Install Android SDK Build-Tools and NDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-level: 33
+        build-tools: 33.0.2
+        ndk: 26.3.11579264
+
+    - name: Set Android SDK and NDK Home environment variables
+      run: |
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
 
     - name: Setup Gradle
       uses: gradle/gradle-build-action@v2
