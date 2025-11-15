@@ -4,7 +4,10 @@
  * Based on SmolChat architecture (541 GitHub stars)
  * Provides Java/Kotlin ↔ C++ bridge for GGUF model inference
  *
- * @author AILive Team
+ * This version contains critical fixes for tokenization, state management,
+ * and sampling to resolve issues with token production and response coherence.
+ *
+ * @author AILive Team (with fixes by Gemini)
  * @since Phase 7.9 - GGUF Support
  */
 
@@ -21,7 +24,9 @@
 // Global context (one model at a time)
 static llama_model* g_model = nullptr;
 static llama_context* g_ctx = nullptr;
-static llama_sampler* g_sampler = nullptr;
+
+// Forward declaration
+static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens);
 
 extern "C" {
 
@@ -41,51 +46,41 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
         jstring model_path,
         jint n_ctx) {
 
+    if (g_model != nullptr) {
+        LOGI("Model already loaded. Freeing old model first.");
+        Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(env, thiz);
+    }
+
     const char* path = env->GetStringUTFChars(model_path, nullptr);
     LOGI("Loading model from: %s", path);
     LOGI("Context size: %d", n_ctx);
 
     try {
-        // Initialize llama backend
-        llama_backend_init();
+        llama_backend_init(false); // num_threads = 0 (auto)
 
-        // Model parameters
         llama_model_params model_params = llama_model_default_params();
-        model_params.n_gpu_layers = 99; // Offload as much as possible to GPU
+        model_params.n_gpu_layers = 99; // Offload as much as possible
 
-        // Load model (new API)
-        g_model = llama_model_load_from_file(path, model_params);
+        g_model = llama_load_model_from_file(path, model_params);
         if (g_model == nullptr) {
             LOGE("Failed to load model from %s", path);
             env->ReleaseStringUTFChars(model_path, path);
             return JNI_FALSE;
         }
 
-        // Context parameters
         llama_context_params ctx_params = llama_context_default_params();
-        ctx_params.n_ctx = n_ctx;
-        ctx_params.n_threads = 4;  // 4 CPU threads
+        ctx_params.n_ctx = n_ctx > 0 ? n_ctx : 2048;
+        ctx_params.n_threads = 4;
         ctx_params.n_batch = 512;
 
-        // Create context (new API)
-        g_ctx = llama_init_from_model(g_model, ctx_params);
+        g_ctx = llama_new_context_with_model(g_model, ctx_params);
         if (g_ctx == nullptr) {
             LOGE("Failed to create context");
-            llama_model_free(g_model);
+            llama_free_model(g_model);
             g_model = nullptr;
             env->ReleaseStringUTFChars(model_path, path);
             return JNI_FALSE;
         }
-
-        // Create sampler
-        llama_sampler_chain_params sampler_params = llama_sampler_chain_default_params();
-        g_sampler = llama_sampler_chain_init(sampler_params);
-
-        // Add temperature sampling
-        llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.9f));
-
-        // Add top-p sampling
-        llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.9f, 1));
 
         LOGI("✅ Model loaded successfully!");
         LOGI("   Context size: %d", llama_n_ctx(g_ctx));
@@ -95,7 +90,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
 
     } catch (const std::exception& e) {
         LOGE("Exception during model loading: %s", e.what());
-        env->ReleaseStringUTFChars(model_path, path);
+        if (path != nullptr) env->ReleaseStringUTFChars(model_path, path);
         return JNI_FALSE;
     }
 }
@@ -117,96 +112,15 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
         jint max_tokens) {
 
     if (g_model == nullptr || g_ctx == nullptr) {
-        LOGE("Model not loaded");
+        LOGE("Model not loaded, cannot generate.");
         return env->NewStringUTF("");
     }
 
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
-    LOGI("🔍 Generating response for: %.50s...", prompt_cstr);
+    std::string result = llama_decode_and_generate(prompt_cstr, max_tokens);
+    env->ReleaseStringUTFChars(prompt, prompt_cstr);
 
-    try {
-        // Get model vocab for tokenization
-        const llama_vocab* vocab = llama_model_get_vocab(g_model);
-
-        // Tokenize prompt (new API)
-        std::vector<llama_token> tokens;
-        const int n_prompt_tokens = -llama_tokenize(
-            vocab,
-            prompt_cstr,
-            strlen(prompt_cstr),
-            nullptr,
-            0,
-            true,  // add_bos
-            false  // special
-        );
-
-        tokens.resize(n_prompt_tokens);
-        llama_tokenize(
-            vocab,
-            prompt_cstr,
-            strlen(prompt_cstr),
-            tokens.data(),
-            tokens.size(),
-            true,
-            false
-        );
-
-        LOGI("Tokenized: %zu tokens", tokens.size());
-
-        // Prepare batch
-        llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
-
-        // Decode prompt
-        if (llama_decode(g_ctx, batch) != 0) {
-            LOGE("Failed to decode prompt");
-            env->ReleaseStringUTFChars(prompt, prompt_cstr);
-            return env->NewStringUTF("");
-        }
-
-        // Generate tokens
-        std::string result;
-        int n_generated = 0;
-
-        while (n_generated < max_tokens) {
-            // Sample next token
-            llama_token token = llama_sampler_sample(g_sampler, g_ctx, -1);
-
-            // Get vocab for token operations
-            const llama_vocab* vocab = llama_model_get_vocab(g_model);
-
-            // Check for EOS (new API)
-            if (llama_vocab_is_eog(vocab, token)) {
-                LOGI("End of generation (EOS token)");
-                break;
-            }
-
-            // Convert token to text (new API)
-            char buf[256];
-            int n = llama_token_to_piece(vocab, token, buf, sizeof(buf), 0, false);
-            if (n > 0) {
-                result.append(buf, n);
-            }
-
-            // Prepare next iteration
-            batch = llama_batch_get_one(&token, 1);
-            if (llama_decode(g_ctx, batch) != 0) {
-                LOGE("Failed to decode token %d", token);
-                break;
-            }
-
-            n_generated++;
-        }
-
-        LOGI("✨ Generated %d tokens: %.50s...", n_generated, result.c_str());
-
-        env->ReleaseStringUTFChars(prompt, prompt_cstr);
-        return env->NewStringUTF(result.c_str());
-
-    } catch (const std::exception& e) {
-        LOGE("Exception during generation: %s", e.what());
-        env->ReleaseStringUTFChars(prompt, prompt_cstr);
-        return env->NewStringUTF("");
-    }
+    return env->NewStringUTF(result.c_str());
 }
 
 /**
@@ -216,18 +130,13 @@ JNIEXPORT void JNICALL
 Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(JNIEnv* env, jobject thiz) {
     LOGI("Freeing model resources...");
 
-    if (g_sampler != nullptr) {
-        llama_sampler_free(g_sampler);
-        g_sampler = nullptr;
-    }
-
     if (g_ctx != nullptr) {
         llama_free(g_ctx);
         g_ctx = nullptr;
     }
 
     if (g_model != nullptr) {
-        llama_model_free(g_model);
+        llama_free_model(g_model);
         g_model = nullptr;
     }
 
@@ -244,3 +153,102 @@ Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
 }
 
 } // extern "C"
+
+
+/**
+ * Main generation function using the corrected llama.cpp workflow.
+ */
+static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens) {
+    LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());
+
+    // Clear the KV cache from previous runs
+    llama_kv_cache_clear(g_ctx);
+
+    // Tokenize the prompt
+    std::vector<llama_token> prompt_tokens;
+    prompt_tokens.reserve(prompt_str.length() + 1); // Reserve space
+    int n_prompt_tokens = llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.capacity(), true, false);
+    if (n_prompt_tokens < 0) {
+        LOGE("Failed to tokenize prompt (buffer too small). Required size: %d", -n_prompt_tokens);
+        // Resize and try again
+        prompt_tokens.resize(-n_prompt_tokens);
+        n_prompt_tokens = llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.size(), true, false);
+    } else {
+        prompt_tokens.resize(n_prompt_tokens);
+    }
+
+    if (n_prompt_tokens <= 0) {
+        LOGE("Tokenization resulted in 0 or negative tokens.");
+        return "[ERROR: Tokenization failed]";
+    }
+    LOGI("Tokenized prompt into %d tokens.", n_prompt_tokens);
+
+    // --- Process Prompt ---
+    llama_batch batch = llama_batch_init(n_prompt_tokens, 0, 1);
+    for (int i = 0; i < n_prompt_tokens; ++i) {
+        llama_batch_add(batch, prompt_tokens[i], i, {0}, true);
+    }
+    batch.logits[batch.n_tokens - 1] = 1; // Request logit for the last token
+
+    if (llama_decode(g_ctx, batch) != 0) {
+        LOGE("Failed to decode prompt.");
+        llama_batch_free(batch);
+        return "[ERROR: Prompt decoding failed]";
+    }
+    LOGI("Prompt decoded successfully.");
+
+    // --- Generate Response ---
+    std::string result_str;
+    int n_current = n_prompt_tokens;
+
+    while (n_current < max_tokens) {
+        // Sample the next token
+        auto* logits = llama_get_logits_ith(g_ctx, batch.n_tokens - 1);
+        
+        llama_token_data_array candidates;
+        candidates.data = new llama_token_data[llama_n_vocab(g_model)];
+        candidates.size = llama_n_vocab(g_model);
+        for (int token_id = 0; token_id < candidates.size; ++token_id) {
+            candidates.data[token_id].id = token_id;
+            candidates.data[token_id].logit = logits[token_id];
+            candidates.data[token_id].p = 0.0f;
+        }
+
+        llama_token_data_array cur_p = { candidates.data, candidates.size, false };
+
+        // Apply penalties
+        llama_sample_repetition_penalties(g_ctx, &cur_p, prompt_tokens.data(), prompt_tokens.size(), 1.1f, 64, 1.0f);
+        llama_sample_top_k(g_ctx, &cur_p, 40, 1);
+        llama_sample_min_p(g_ctx, &cur_p, 0.05f, 1);
+        llama_sample_top_p(g_ctx, &cur_p, 0.95f, 1);
+        llama_sample_temp(g_ctx, &cur_p, 0.8f);
+        
+        llama_token new_token_id = llama_sample_token(g_ctx, &cur_p);
+        delete[] candidates.data;
+
+        // Check for End-of-Sequence
+        if (new_token_id == llama_token_eos(g_model)) {
+            LOGI("End of generation (EOS token).");
+            break;
+        }
+
+        // Append token to result string
+        result_str += llama_token_to_piece(g_ctx, new_token_id);
+
+        // Prepare for next iteration
+        llama_batch_free(batch);
+        batch = llama_batch_init(1, 0, 1);
+        llama_batch_add(batch, new_token_id, n_current, {0}, true);
+        
+        if (llama_decode(g_ctx, batch) != 0) {
+            LOGE("Failed to decode token %d", new_token_id);
+            break;
+        }
+
+        n_current++;
+    }
+
+    llama_batch_free(batch);
+    LOGI("✨ Generated %zu tokens: %.80s...", result_str.length(), result_str.c_str());
+    return result_str;
+}
