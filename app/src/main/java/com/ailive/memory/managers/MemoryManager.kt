@@ -1,5 +1,6 @@
 package com.ailive.memory.managers
 
+import android.content.Context
 import com.ailive.ai.llm.LLMBridge
 import com.ailive.memory.database.MemoryDatabase
 import com.ailive.memory.database.entities.FactCategory
