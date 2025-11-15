@@ -20,18 +20,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // NDK configuration for native C++ libraries (llama.cpp, whisper.cpp, piper)
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
+        // TEMPORARILY DISABLED: Native build disabled until piper dependencies are fixed
+        // ndk {
+        //     abiFilters += "arm64-v8a"
+        // }
 
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared"
-                )
-            }
-        }
+        // externalNativeBuild {
+        //     cmake {
+        //         cppFlags += "-std=c++17"
+        //         arguments += listOf(
+        //             "-DANDROID_STL=c++_shared"
+        //         )
+        //     }
+        // }
     }
 
     // ✨ GPU/CPU Build Variants (v1.1)
@@ -47,13 +48,14 @@ android {
             buildConfigField("String", "BUILD_VARIANT", "\"GPU (OpenCL + NNAPI)\"")
 
             // GPU-specific CMake flags for llama.cpp OpenCL
-            externalNativeBuild {
-                cmake {
-                    arguments += listOf(
-                        "-DGGML_OPENCL=ON"
-                    )
-                }
-            }
+            // TEMPORARILY DISABLED: Native build disabled until piper dependencies are fixed
+            // externalNativeBuild {
+            //     cmake {
+            //         arguments += listOf(
+            //             "-DGGML_OPENCL=ON"
+            //         )
+            //     }
+            // }
         }
 
         create("cpu") {
@@ -84,12 +86,15 @@ android {
     }
 
     // External native build configuration
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+    // TEMPORARILY DISABLED: Piper's ExternalProject builds deps for x86 Linux instead of ARM64 Android
+    // Will re-enable once we have pre-built piper libraries or implement native Android TTS fallback
+    // TODO: Re-enable with option to use pre-built ARM64 Android libraries for piper dependencies
+    // externalNativeBuild {
+    //     cmake {
+    //         path = file("src/main/cpp/CMakeLists.txt")
+    //         version = "3.22.1"
+    //     }
+    // }
 
     // CRITICAL: Allow large ONNX model files (348MB) in assets
     // Without this, files >100MB are excluded from APK

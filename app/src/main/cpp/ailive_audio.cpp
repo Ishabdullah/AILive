@@ -10,7 +10,14 @@
 #include <vector>
 #include <android/log.h>
 #include "whisper.h"
+
+// Piper TTS is temporarily disabled due to ExternalProject incompatibility with Android NDK
+// Will be re-enabled once we have pre-built piper libs for ARM64 Android
+// #define ENABLE_PIPER
+
+#ifdef ENABLE_PIPER
 #include "piper.hpp"
+#endif
 
 #define LOG_TAG_AUDIO "AILive-Audio"
 #define LOGI_AUDIO(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG_AUDIO, __VA_ARGS__)
@@ -19,9 +26,11 @@
 // Global context for the Whisper model
 static whisper_context* g_whisper_ctx = nullptr;
 
+#ifdef ENABLE_PIPER
 // Global context for the Piper model
 static piper::Voice* g_piper_voice = nullptr;
 static piper::PiperConfig g_piper_config;
+#endif
 
 
 extern "C" {
@@ -133,7 +142,9 @@ Java_com_ailive_audio_WhisperProcessor_nativeRelease(
 
 
 // --- Piper TTS JNI Functions ---
+// Temporarily disabled - will use Android system TTS as fallback
 
+#ifdef ENABLE_PIPER
 /**
  * Initializes the Piper TTS voice from a model file.
  */
@@ -232,6 +243,33 @@ Java_com_ailive_audio_TTSManager_nativeReleasePiper(
         LOGI_AUDIO("✅ Piper voice released.");
     }
 }
+#else
+// Stub implementations when Piper is disabled
+JNIEXPORT jboolean JNICALL
+Java_com_ailive_audio_TTSManager_nativeInitPiper(
+        JNIEnv* env,
+        jobject thiz,
+        jstring model_path) {
+    LOGI_AUDIO("Piper TTS disabled - using Android system TTS fallback");
+    return JNI_FALSE;
+}
+
+JNIEXPORT jshortArray JNICALL
+Java_com_ailive_audio_TTSManager_nativeSynthesize(
+        JNIEnv* env,
+        jobject thiz,
+        jstring text) {
+    LOGI_AUDIO("Piper TTS disabled - no native synthesis available");
+    return nullptr;
+}
+
+JNIEXPORT void JNICALL
+Java_com_ailive_audio_TTSManager_nativeReleasePiper(
+        JNIEnv* env,
+        jobject thiz) {
+    // No-op when Piper is disabled
+}
+#endif // ENABLE_PIPER
 
 
 } // extern "C"
