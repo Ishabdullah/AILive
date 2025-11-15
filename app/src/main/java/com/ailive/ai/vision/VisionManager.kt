@@ -13,6 +13,11 @@ class VisionManager(private val llmBridge: LLMBridge) {
     private val TAG = "VisionManager"
 
     /**
+     * Check if vision manager is ready to process images.
+     */
+    fun isReady(): Boolean = llmBridge.isReady()
+
+    /**
      * Generates a text response from the LLaVA model given an image and a text prompt.
      *
      * @param image The Bitmap image to analyze.
