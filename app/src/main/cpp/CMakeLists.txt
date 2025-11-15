@@ -58,9 +58,8 @@ target_include_directories(ailive_llm PRIVATE
 
 # Link libraries
 target_link_libraries(ailive_llm
-    llama      # From llama.cpp
-    whisper    # From whisper.cpp
-    piper      # From piper
-    onnxruntime # Piper dependency
-    log        # Android logging
+    llama       # From llama.cpp
+    whisper     # From whisper.cpp
+    piper_lib   # From piper (static library)
+    log         # Android logging
 )

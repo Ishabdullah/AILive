@@ -10,7 +10,7 @@
 #include <vector>
 #include <android/log.h>
 #include "whisper.h"
-#include "piper.h"
+#include "piper.hpp"
 
 #define LOG_TAG_AUDIO "AILive-Audio"
 #define LOGI_AUDIO(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG_AUDIO, __VA_ARGS__)
