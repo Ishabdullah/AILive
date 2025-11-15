@@ -2,7 +2,6 @@ package com.ailive.ai.llm
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.llama.cpp.LLamaAndroid
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -149,8 +148,8 @@ class LLMManager(private val context: Context) {
         private const val TAG = "LLMManager"
     }
 
-    // Official llama.cpp Android instance (singleton)
-    private val llamaAndroid = LLamaAndroid.instance()
+    // LLM Bridge for native llama.cpp
+    private val llmBridge = LLMBridge()
 
     // Model configuration settings (loaded from SharedPreferences)
     private var settings: ModelSettings = ModelSettings.load(context)
