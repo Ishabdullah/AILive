@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp") version "2.0.0-1.0.21"
 }
 
@@ -78,6 +79,8 @@ android {
     // Enable BuildConfig generation
     buildFeatures {
         buildConfig = true
+        compose = true
+        viewBinding = true
     }
 
     // External native build configuration
@@ -122,8 +125,10 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.6.2")
 
     // Lifecycle - REQUIRED for lifecycleScope
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
@@ -164,6 +169,28 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+
+    // Jetpack Compose BOM (Bill of Materials)
+    implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+
+    // Compose UI
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // Material Design 3
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Activity Compose
+    implementation("androidx.activity:activity-compose:1.8.2")
+
+    // Compose Foundation
+    implementation("androidx.compose.foundation:foundation")
+
+    // Debug tooling
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     // Web Search Integration (v1.4)
     // OkHttp - HTTP client with connection pooling, interceptors, TLS
