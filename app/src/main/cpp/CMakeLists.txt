@@ -40,7 +40,39 @@ endif()
 
 set(PIPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(PIPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
+# Build piper which creates the piper executable with all dependencies
 add_subdirectory(${PIPER_DIR} piper)
+
+# Create our own static library from piper source
+# This allows us to link piper functionality without modifying the upstream submodule
+add_library(piper_lib STATIC ${PIPER_DIR}/src/cpp/piper.cpp)
+
+# Copy the include directories and link libraries from the piper executable
+# We get these after add_subdirectory has configured everything
+target_include_directories(piper_lib PUBLIC
+    ${PIPER_DIR}/src/cpp
+)
+
+# Link against the same dependencies that piper executable uses
+# These are set up by piper's CMakeLists.txt
+target_link_libraries(piper_lib PUBLIC
+    fmt
+    spdlog
+    espeak-ng
+    piper_phonemize
+    onnxruntime
+)
+
+# Set the same link and include directories that piper uses
+get_target_property(PIPER_LINK_DIRS piper LINK_DIRECTORIES)
+get_target_property(PIPER_INCLUDE_DIRS piper INCLUDE_DIRECTORIES)
+if(PIPER_LINK_DIRS)
+    target_link_directories(piper_lib PUBLIC ${PIPER_LINK_DIRS})
+endif()
+if(PIPER_INCLUDE_DIRS)
+    target_include_directories(piper_lib PUBLIC ${PIPER_INCLUDE_DIRS})
+endif()
 
 
 # --- Our JNI Library ---
