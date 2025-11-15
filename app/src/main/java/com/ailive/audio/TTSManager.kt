@@ -1,348 +1,157 @@
 package com.ailive.audio
 
 import android.content.Context
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.util.*
-import java.util.concurrent.ConcurrentLinkedQueue
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
- * TTSManager - Text-to-Speech engine for AILive
- * Provides voice output for all AI agents
+ * TTSManager - Offline, high-quality Text-to-Speech engine for AILive using Piper.
+ * Provides voice output for all AI agents by synthesizing audio locally.
  */
-class TTSManager(private val context: Context) : TextToSpeech.OnInitListener {
+class TTSManager(private val context: Context) {
     private val TAG = "TTSManager"
 
-    private var tts: TextToSpeech? = null
+    private var audioTrack: AudioTrack? = null
     private var isInitialized = false
-    private val speechQueue = ConcurrentLinkedQueue<SpeechRequest>()
+    private val speechQueue = Channel<SpeechRequest>(Channel.UNLIMITED)
+    private var playbackJob: Job? = null
 
-    // TTS state
     private val _state = MutableStateFlow(TTSState.INITIALIZING)
     val state: StateFlow<TTSState> = _state
 
-    // TTS settings
-    var speechRate: Float = 1.0f
-        set(value) {
-            field = value.coerceIn(0.5f, 2.0f)
-            tts?.setSpeechRate(field)
-        }
+    data class SpeechRequest(val text: String, val priority: Priority = Priority.NORMAL)
+    enum class Priority { NORMAL, URGENT }
+    enum class TTSState { INITIALIZING, READY, SPEAKING, ERROR, SHUTDOWN }
 
-    var pitch: Float = 1.0f
-        set(value) {
-            field = value.coerceIn(0.5f, 2.0f)
-            tts?.setPitch(field)
-        }
-
-    data class SpeechRequest(
-        val text: String,
-        val priority: Priority = Priority.NORMAL,
-        val callback: ((Boolean) -> Unit)? = null
-    )
-
-    enum class Priority {
-        LOW,
-        NORMAL,
-        HIGH,
-        URGENT  // Interrupts current speech
-    }
-
-    enum class TTSState {
-        INITIALIZING,
-        READY,
-        SPEAKING,
-        ERROR,
-        SHUTDOWN
+    companion object {
+        // This should ideally be fetched from the model, but we'll use a common Piper sample rate.
+        private const val SAMPLE_RATE = 22050
+        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_OUT_MONO
+        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
 
     init {
-        initialize()
+        // Load native library
+        System.loadLibrary("ailive_llm")
     }
 
+    // --- Native JNI Functions for Piper ---
+    private external fun nativeInitPiper(modelPath: String): Boolean
+    private external fun nativeSynthesize(text: String): ShortArray?
+    private external fun nativeReleasePiper()
+
     /**
-     * Initialize TTS engine
+     * Initialize the Piper TTS engine with a voice model.
      */
-    private fun initialize() {
-        try {
-            Log.i(TAG, "Initializing TTS engine...")
-            tts = TextToSpeech(context, this)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize TTS", e)
+    fun initialize(modelPath: String): Boolean {
+        Log.i(TAG, "Initializing Piper TTS engine...")
+        if (!nativeInitPiper(modelPath)) {
+            Log.e(TAG, "Failed to initialize Piper native component.")
             _state.value = TTSState.ERROR
-        }
-    }
-
-    /**
-     * Called when TTS engine is initialized
-     */
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts?.let { engine ->
-                // Set default language
-                val result = engine.setLanguage(Locale.US)
-
-                if (result == TextToSpeech.LANG_MISSING_DATA ||
-                    result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.e(TAG, "Language not supported")
-                    _state.value = TTSState.ERROR
-                    return
-                }
-
-                // Configure TTS
-                engine.setSpeechRate(speechRate)
-                engine.setPitch(pitch)
-
-                // Set utterance progress listener
-                engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {
-                        Log.d(TAG, "Speech started: $utteranceId")
-                        _state.value = TTSState.SPEAKING
-                    }
-
-                    override fun onDone(utteranceId: String?) {
-                        Log.d(TAG, "Speech completed: $utteranceId")
-                        _state.value = TTSState.READY
-
-                        // Process next queued speech if any
-                        processNextInQueue()
-                    }
-
-                    override fun onError(utteranceId: String?) {
-                        Log.e(TAG, "Speech error: $utteranceId")
-                        _state.value = TTSState.READY
-                        processNextInQueue()
-                    }
-                })
-
-                isInitialized = true
-                _state.value = TTSState.READY
-                Log.i(TAG, "✓ TTS engine initialized successfully")
-            }
-        } else {
-            Log.e(TAG, "TTS initialization failed with status: $status")
-            _state.value = TTSState.ERROR
-        }
-    }
-
-    /**
-     * Speak text immediately (interrupts current speech if urgent)
-     */
-    fun speak(
-        text: String,
-        priority: Priority = Priority.NORMAL,
-        callback: ((Boolean) -> Unit)? = null
-    ) {
-        if (!isInitialized) {
-            Log.w(TAG, "TTS not initialized, cannot speak")
-            callback?.invoke(false)
-            return
+            return false
         }
 
-        if (text.isBlank()) {
-            Log.w(TAG, "Empty text, ignoring speak request")
-            callback?.invoke(false)
-            return
-        }
-
-        val request = SpeechRequest(text, priority, callback)
-
-        when (priority) {
-            Priority.URGENT -> {
-                // Interrupt current speech
-                stop()
-                speakNow(request)
-            }
-            Priority.HIGH -> {
-                // Add to front of queue
-                speechQueue.add(request)
-                if (_state.value != TTSState.SPEAKING) {
-                    processNextInQueue()
-                }
-            }
-            else -> {
-                // Add to queue
-                speechQueue.add(request)
-                if (_state.value != TTSState.SPEAKING) {
-                    processNextInQueue()
-                }
-            }
-        }
-    }
-
-    /**
-     * Speak text immediately without queueing
-     */
-    private fun speakNow(request: SpeechRequest) {
-        tts?.let { engine ->
-            val utteranceId = UUID.randomUUID().toString()
-            val result = engine.speak(
-                request.text,
-                TextToSpeech.QUEUE_FLUSH,
-                null,
-                utteranceId
+        val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        audioTrack = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
             )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AUDIO_FORMAT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(CHANNEL_CONFIG)
+                    .build()
+            )
+            .setBufferSizeInBytes(bufferSize)
+            .build()
 
-            if (result == TextToSpeech.SUCCESS) {
-                Log.d(TAG, "Speaking: ${request.text}")
-                request.callback?.invoke(true)
-            } else {
-                Log.e(TAG, "Failed to speak: ${request.text}")
-                request.callback?.invoke(false)
-            }
-        }
+        isInitialized = true
+        _state.value = TTSState.READY
+        startPlaybackQueue()
+        Log.i(TAG, "✓ Piper TTS engine initialized successfully.")
+        return true
     }
 
-    /**
-     * Speak text incrementally (for streaming) - adds to queue instead of flushing
-     * Use this for real-time token-to-speech streaming where sentences are generated progressively
-     */
-    fun speakIncremental(
-        text: String,
-        callback: ((Boolean) -> Unit)? = null
-    ) {
-        if (!isInitialized) {
-            Log.w(TAG, "TTS not initialized, cannot speak")
-            callback?.invoke(false)
-            return
-        }
-
-        if (text.isBlank()) {
-            Log.w(TAG, "Empty text, ignoring incremental speak request")
-            callback?.invoke(false)
-            return
-        }
-
-        tts?.let { engine ->
-            val utteranceId = UUID.randomUUID().toString()
-
-            // Use QUEUE_ADD to append speech without interrupting current playback
-            val result = engine.speak(
-                text,
-                TextToSpeech.QUEUE_ADD,  // Key difference: ADD not FLUSH
-                null,
-                utteranceId
-            )
-
-            if (result == TextToSpeech.SUCCESS) {
-                Log.d(TAG, "🔊 Queued incremental speech: ${text.take(50)}${if (text.length > 50) "..." else ""}")
+    private fun startPlaybackQueue() {
+        playbackJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive) {
+                val request = speechQueue.receive() // This suspends until a request is available
+                
                 _state.value = TTSState.SPEAKING
-                callback?.invoke(true)
-            } else {
-                Log.e(TAG, "Failed to queue incremental speech")
-                callback?.invoke(false)
+                
+                val audioData = nativeSynthesize(request.text)
+                
+                if (audioData != null) {
+                    Log.d(TAG, "Playing ${audioData.size} samples for text: ${request.text.take(50)}...")
+                    audioTrack?.play()
+                    audioTrack?.write(audioData, 0, audioData.size)
+                    audioTrack?.stop() // Use stop() to let buffer finish, not pause()
+                } else {
+                    Log.e(TAG, "Synthesis failed for text: ${request.text}")
+                }
+
+                _state.value = TTSState.READY
             }
         }
     }
 
-    /**
-     * Process next speech request in queue
-     */
-    private fun processNextInQueue() {
-        val request = speechQueue.poll() ?: return
-        speakNow(request)
+    fun speak(text: String, priority: Priority = Priority.NORMAL) {
+        if (!isInitialized || text.isBlank()) return
+
+        val request = SpeechRequest(text, priority)
+        
+        if (priority == Priority.URGENT) {
+            // Clear the queue and stop current playback
+            stop()
+            speechQueue.trySend(request)
+        } else {
+            speechQueue.trySend(request)
+        }
     }
 
-    /**
-     * Stop current speech
-     */
+    fun speakIncremental(text: String) {
+        // With this architecture, incremental streaming is handled by just adding to the queue.
+        // The playback of each sentence will be sequential.
+        speak(text, Priority.NORMAL)
+    }
+
     fun stop() {
-        tts?.stop()
+        // Clear pending requests
+        while (speechQueue.tryReceive().isSuccess) { /* clear channel */ }
+        
+        // Stop current playback
+        audioTrack?.let {
+            if (it.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                it.stop()
+                it.flush()
+            }
+        }
         _state.value = TTSState.READY
     }
 
-    /**
-     * Clear all queued speech
-     */
-    fun clearQueue() {
-        speechQueue.clear()
-    }
+    fun isSpeaking(): Boolean = _state.value == TTSState.SPEAKING
 
-    /**
-     * Check if currently speaking
-     */
-    fun isSpeaking(): Boolean {
-        return tts?.isSpeaking == true
-    }
-
-    /**
-     * Speak with different voices/styles for different agents
-     *
-     * @deprecated As of PersonalityEngine refactoring, AILive uses ONE unified voice.
-     * Use speak() directly instead. This method is kept for backward compatibility
-     * during transition but will be removed in future versions.
-     */
-    @Deprecated(
-        message = "Use speak() with unified voice instead. AILive now has one personality, not separate agent voices.",
-        replaceWith = ReplaceWith("speak(text, Priority.NORMAL, callback)"),
-        level = DeprecationLevel.WARNING
-    )
-    fun speakAsAgent(agentName: String, text: String, callback: ((Boolean) -> Unit)? = null) {
-        // REFACTORING: Force unified voice regardless of agent name
-        // All responses should sound like ONE character
-        pitch = 1.0f
-        speechRate = 1.0f
-
-        Log.w(TAG, "⚠️ speakAsAgent() is deprecated. Use speak() for unified voice.")
-
-        speak(text, Priority.NORMAL, callback)
-    }
-
-    /**
-     * Speak with unified AILive personality voice
-     *
-     * This is the preferred method for PersonalityEngine.
-     * Uses consistent voice parameters (pitch=1.0, rate=1.0) to maintain
-     * the illusion of a single unified character.
-     */
-    fun speakUnified(text: String, callback: ((Boolean) -> Unit)? = null) {
-        // Ensure unified voice settings
-        pitch = 1.0f
-        speechRate = 1.0f
-
-        speak(text, Priority.NORMAL, callback)
-    }
-
-    /**
-     * Play audio feedback (short beep/tone)
-     */
-    fun playFeedback(feedbackType: FeedbackType) {
-        when (feedbackType) {
-            FeedbackType.WAKE_WORD_DETECTED -> {
-                speak("Yes?", Priority.URGENT)
-            }
-            FeedbackType.LISTENING -> {
-                // Short tone or "Listening"
-                speak("Listening", Priority.HIGH)
-            }
-            FeedbackType.COMMAND_RECEIVED -> {
-                // Quick acknowledgment
-                speak("Got it", Priority.HIGH)
-            }
-            FeedbackType.ERROR -> {
-                speak("Sorry, I didn't understand that", Priority.HIGH)
-            }
-        }
-    }
-
-    enum class FeedbackType {
-        WAKE_WORD_DETECTED,
-        LISTENING,
-        COMMAND_RECEIVED,
-        ERROR
-    }
-
-    /**
-     * Shutdown TTS engine
-     */
     fun shutdown() {
-        Log.i(TAG, "Shutting down TTS...")
+        Log.i(TAG, "Shutting down Piper TTS...")
         stop()
-        clearQueue()
-        tts?.shutdown()
-        tts = null
+        playbackJob?.cancel()
+        audioTrack?.release()
+        nativeReleasePiper()
         isInitialized = false
         _state.value = TTSState.SHUTDOWN
         Log.i(TAG, "TTS shutdown complete")
