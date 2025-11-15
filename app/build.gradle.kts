@@ -7,35 +7,19 @@ plugins {
 android {
     namespace = "com.ailive"
     compileSdk = 35
-    ndkVersion = "26.3.11579264"  // NDK for llama.cpp
 
     defaultConfig {
         applicationId = "com.ailive"
-        minSdk = 33  // Android 13+ required for llama.cpp Android module
+        minSdk = 33
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // NDK configuration
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
-                    "-DLLAMA_LAVA=ON" // Enable LLaVA multimodal support
-                )
-            }
-        }
     }
 
     // ✨ GPU/CPU Build Variants (v1.1)
-    // Allows installing both GPU and CPU versions side-by-side
+    // ONNX Runtime automatically uses NNAPI GPU acceleration
     flavorDimensions += "acceleration"
     productFlavors {
         create("gpu") {
@@ -43,18 +27,8 @@ android {
             applicationIdSuffix = ".gpu"
             versionNameSuffix = "-GPU"
 
-            // Set build config field to indicate GPU variant
             buildConfigField("boolean", "GPU_ENABLED", "true")
-            buildConfigField("String", "BUILD_VARIANT", "\"GPU (OpenCL Adreno 750)\"")
-
-            // CRITICAL: Pass GPU flag to llama.cpp module via gradle property
-            // This triggers OpenCL compilation in the native library
-            externalNativeBuild {
-                cmake {
-                    // Signal to llama module that this is a GPU build
-                    // The llama module's build.gradle.kts checks for ENABLE_GPU property
-                }
-            }
+            buildConfigField("String", "BUILD_VARIANT", "\"GPU (NNAPI)\"")
         }
 
         create("cpu") {
@@ -80,14 +54,6 @@ android {
     // Enable BuildConfig generation
     buildFeatures {
         buildConfig = true
-    }
-
-    // External native build
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 
     // CRITICAL: Allow large ONNX model files (348MB) in assets
