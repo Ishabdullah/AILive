@@ -2,20 +2,17 @@ package com.ailive.personality.tools
 
 import android.graphics.Bitmap
 import android.util.Log
-import com.ailive.ai.models.ClassificationResult
-import com.ailive.ai.models.ModelManager
 import com.ailive.camera.CameraManager
+import com.ailive.ai.vision.VisionManager
 
 /**
- * VisionAnalysisTool - Analyzes camera vision using computer vision models
+ * VisionAnalysisTool - Analyzes camera vision using multimodal LLaVA models.
  *
- * Converted from MotorAI's vision capabilities to a tool for PersonalityEngine.
- * Provides real-time object detection without separate personality.
- *
- * Phase 5: Tool Expansion
+ * Provides real-time visual context understanding by sending camera frames
+ * and text prompts to a LLaVA-enabled LLM.
  */
 class VisionAnalysisTool(
-    private val modelManager: ModelManager,
+    private val visionManager: VisionManager,
     private val cameraManager: CameraManager
 ) : BaseTool() {
 
@@ -26,24 +23,24 @@ class VisionAnalysisTool(
     override val name: String = "analyze_vision"
 
     override val description: String =
-        "Analyzes what the camera sees using computer vision. " +
-        "Detects objects, scenes, and provides visual context understanding."
+        "Analyzes what the camera sees using multimodal AI. " +
+        "Provides detailed descriptions and answers questions about visual context."
 
     override val requiresPermissions: Boolean = true
 
     override suspend fun isAvailable(): Boolean {
-        // Check if camera is initialized and model is ready
-        return cameraManager.isInitialized() && modelManager != null
+        // Check if camera is initialized and the LLM for vision is ready
+        return cameraManager.isInitialized() && visionManager.llmBridge.isReady()
     }
 
     override fun validateParams(params: Map<String, Any>): String? {
-        // No required parameters - uses latest camera frame
+        // Optional: Can add parameters for specific questions about the image
         return null
     }
 
     override suspend fun executeInternal(params: Map<String, Any>): ToolResult {
         try {
-            Log.d(TAG, "Analyzing vision from camera...")
+            Log.d(TAG, "Analyzing vision from camera with LLaVA...")
 
             // Get latest frame from camera
             val latestFrame = cameraManager.getLatestFrame()
@@ -54,37 +51,61 @@ class VisionAnalysisTool(
                 )
             }
 
-            // Classify the image
+            // Formulate a default prompt for the LLaVA model
+            val visionPrompt = params["prompt"] as? String ?: "What do you see in this image?"
+
             val startTime = System.currentTimeMillis()
-            val classification = modelManager.classifyImage(latestFrame)
+            val llavaResponse = visionManager.generateResponseWithImage(latestFrame, visionPrompt)
             val duration = System.currentTimeMillis() - startTime
 
-            if (classification == null) {
+            latestFrame.recycle() // Recycle the bitmap after use
+
+            if (llavaResponse.isBlank() || llavaResponse.contains("[ERROR")) {
                 return ToolResult.Failure(
-                    error = Exception("Model inference failed"),
-                    reason = "Failed to analyze image",
+                    error = Exception("LLaVA inference failed"),
+                    reason = "Failed to analyze image with LLaVA: $llavaResponse",
                     recoverable = true
                 )
             }
 
-            Log.i(TAG, "✓ Vision analysis complete: ${classification.topLabel} " +
-                    "(${(classification.confidence * 100).toInt()}%) in ${duration}ms")
-
-            // Build natural language description
-            val description = buildVisionDescription(classification)
+            Log.i(TAG, "✓ LLaVA analysis complete in ${duration}ms. Response: ${llavaResponse.take(100)}...")
 
             return ToolResult.Success(
                 data = VisionAnalysisResult(
-                    primaryObject = classification.topLabel,
-                    confidence = classification.confidence,
-                    allDetections = classification.allResults.take(3).map {
-                        Detection(it.first, it.second)
-                    },
-                    description = description,
-                    inferenceTimeMs = classification.inferenceTimeMs
+                    response = llavaResponse,
+                    inferenceTimeMs = duration
                 ),
                 context = mapOf(
                     "vision_available" to true,
+                    "processing_time_ms" to duration
+                )
+            )
+
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Camera permission denied", e)
+            return ToolResult.Blocked(
+                reason = "Camera permission not granted",
+                requiredAction = "Grant camera permission to use vision capabilities"
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Vision analysis failed", e)
+            return ToolResult.Failure(
+                error = e,
+                reason = "Failed to analyze vision: ${e.message}",
+                recoverable = true
+            )
+        }
+    }
+
+    /**
+     * Result of vision analysis
+     */
+    data class VisionAnalysisResult(
+        val response: String,
+        val inferenceTimeMs: Long
+    )
+}
+"vision_available" to true,
                     "model_confidence" to classification.confidence,
                     "processing_time_ms" to duration
                 )
