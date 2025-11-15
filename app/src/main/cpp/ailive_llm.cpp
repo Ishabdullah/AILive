@@ -16,7 +16,7 @@
 #include <vector>
 #include <android/log.h>
 #include "llama.h"
-#include "llama_image.h" // Required for LLaVA image processing
+// #include "llama_image.h" // TODO: Not available in current llama.cpp - vision features temporarily disabled
 
 #define LOG_TAG "AILive-LLM"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -153,7 +153,9 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateWithImage(
 
     std::vector<uint8_t> image_vec(image_data, image_data + image_len);
 
-    std::string result = llama_decode_and_generate_multimodal(prompt_cstr, image_vec, max_tokens);
+    // TODO: Vision features temporarily disabled - llama_image API not available in current llama.cpp
+    std::string result = "[ERROR: Vision/multimodal features not available in this build]";
+    // std::string result = llama_decode_and_generate_multimodal(prompt_cstr, image_vec, max_tokens);
 
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
     env->ReleaseByteArrayElements(image_bytes, image_data, JNI_ABORT);
@@ -385,6 +387,7 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
     return result_str;
 }
 
+#if 0 // TODO: Vision features disabled - llama_image API not available in current llama.cpp
 /**
  * Main generation function using the corrected llama.cpp workflow for multimodal input.
  */
@@ -510,3 +513,4 @@ static std::string llama_decode_and_generate_multimodal(const std::string& promp
     LOGI("✨ Generated %zu tokens: %.80s...", result_str.length(), result_str.c_str());
     return result_str;
 }
+#endif // Vision features disabled
