@@ -153,8 +153,21 @@ Java_com_ailive_audio_TTSManager_nativeInitPiper(
     LOGI_AUDIO("Initializing Piper model from: %s", path);
 
     try {
+        // Initialize piper (must be called before loading voice)
+        piper::initialize(g_piper_config);
+
         g_piper_voice = new piper::Voice();
-        piper::loadVoice(g_piper_config, std::string(path), *g_piper_voice);
+
+        // Construct config path (model_path + ".json")
+        std::string model_path_str(path);
+        std::string config_path = model_path_str + ".json";
+
+        // Speaker ID (optional, set to nullopt for default)
+        std::optional<piper::SpeakerId> speaker_id = std::nullopt;
+
+        // Load voice with all required parameters
+        piper::loadVoice(g_piper_config, model_path_str, config_path,
+                        *g_piper_voice, speaker_id, false); // useCuda = false for Android
     } catch (const std::exception& e) {
         LOGE_AUDIO("Failed to load Piper voice: %s", e.what());
         env->ReleaseStringUTFChars(model_path, path);
@@ -185,7 +198,11 @@ Java_com_ailive_audio_TTSManager_nativeSynthesize(
     piper::SynthesisResult result;
 
     try {
-        piper::textToAudio(g_piper_config, *g_piper_voice, text_cstr, audio_buffer, result);
+        // Empty audio callback (called after each synthesized audio chunk)
+        auto audio_callback = [](){};
+
+        piper::textToAudio(g_piper_config, *g_piper_voice, text_cstr,
+                          audio_buffer, result, audio_callback);
     } catch (const std::exception& e) {
         LOGE_AUDIO("Piper synthesis failed: %s", e.what());
         env->ReleaseStringUTFChars(text, text_cstr);
