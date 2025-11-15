@@ -240,9 +240,11 @@ class LLMManager(private val context: Context) {
                 Log.i(TAG, "   Expected performance: 7-8 tokens/second")
             }
 
-            // Load model using official llama.cpp Android
+            // Load model using LLM Bridge
             Log.i(TAG, "📥 Loading llama.cpp model...")
-            llamaAndroid.load(modelFile.absolutePath)
+            if (!llmBridge.loadModel(modelFile.absolutePath, settings.contextSize)) {
+                throw Exception("Failed to load model")
+            }
 
             isInitialized = true
             isInitializing = false
@@ -409,36 +411,23 @@ class LLMManager(private val context: Context) {
         Log.d(TAG, "   Message length: ${messageToSend.length} chars")
         Log.d(TAG, "   Using formatChat=$useFormatChat")
 
-        // Stream tokens directly from llama.cpp with configured max tokens
-        var tokenCount = 0
+        // Generate text using LLM Bridge (non-streaming)
         val backend = gpuInfo?.backend ?: "CPU"
 
         try {
-            llamaAndroid.send(messageToSend, formatChat = useFormatChat, maxTokens = settings.maxTokens)
-                .catch { e ->
-                    Log.e(TAG, "❌ Streaming generation error", e)
-                    throw e
-                }
-                .collect { token ->
-                    tokenCount++
-                    emit(token)  // Emit each token to the UI
+            // Generate the full response
+            val result = llmBridge.generate(messageToSend, settings.maxTokens)
 
-                    // Log progress every 10 tokens
-                    if (tokenCount % 10 == 0) {
-                        val elapsed = System.currentTimeMillis() - startTime
-                        val tokensPerSec = if (elapsed > 0) {
-                            (tokenCount.toFloat() / elapsed) * 1000
-                        } else {
-                            0f
-                        }
-                        Log.d(TAG, "   Token $tokenCount (${String.format("%.1f", tokensPerSec)} tok/s)")
-                    }
-                }
+            // Emit the result (simulating streaming by emitting the whole result)
+            emit(result)
+
+            // Estimate token count (rough approximation: ~4 chars per token)
+            val tokenCount = result.length / 4
 
             // Check if we got any tokens
-            if (tokenCount == 0) {
-                Log.w(TAG, "⚠️ No tokens generated! Check if model is loaded correctly.")
-                throw IllegalStateException("Model generated no tokens. Please restart the app.")
+            if (result.isEmpty()) {
+                Log.w(TAG, "⚠️ No content generated! Check if model is loaded correctly.")
+                throw IllegalStateException("Model generated no content. Please restart the app.")
             }
 
             // Record final performance
@@ -451,12 +440,11 @@ class LLMManager(private val context: Context) {
                 0f
             }
 
-            Log.i(TAG, "✓ Streamed $tokenCount tokens in ${totalTime}ms")
+            Log.i(TAG, "✓ Generated ~$tokenCount tokens in ${totalTime}ms")
             Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tokens/second")
             Log.i(TAG, "   Average speed (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error during streaming generation", e)
-            Log.e(TAG, "   Tokens generated before error: $tokenCount")
+            Log.e(TAG, "❌ Error during generation", e)
             Log.e(TAG, "   Settings: maxTokens=${settings.maxTokens}, ctxSize=${settings.ctxSize}")
             throw e
         }
@@ -468,10 +456,9 @@ class LLMManager(private val context: Context) {
      */
     private fun detectGPUSupport(): GPUInfo {
         return try {
-            val gpuString = llamaAndroid.detectGPU()
-            val parts = gpuString.split(":")
-            val backend = parts.getOrNull(0) ?: "CPU"
-            val deviceName = parts.getOrNull(1) ?: "Unknown"
+            // GPU detection not supported in current implementation
+            val backend = "CPU"
+            val deviceName = "CPU"
 
             when (backend) {
                 "OpenCL" -> {
@@ -544,28 +531,12 @@ class LLMManager(private val context: Context) {
         // Reload settings in case they changed
         settings = ModelSettings.load(context)
 
-        // IMPORTANT: formatChat lets llama.cpp apply the model's built-in chat template
-        // This works with any model (Qwen, Llama, Mistral, etc.)
-        llamaAndroid.send(prompt, formatChat = useFormatChat, maxTokens = settings.maxTokens)
-            .catch { e ->
-                Log.e(TAG, "❌ Generation error", e)
-                throw e
-            }
-            .collect { token ->
-                response.append(token)
-                tokenCount++
+        // Generate using LLM Bridge
+        val result = llmBridge.generate(prompt, settings.maxTokens)
+        response.append(result)
 
-                // Log progress every 10 tokens
-                if (tokenCount % 10 == 0) {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    val tokensPerSec = if (elapsed > 0) {
-                        (tokenCount.toFloat() / elapsed) * 1000
-                    } else {
-                        0f
-                    }
-                    Log.d(TAG, "   Token $tokenCount generated (${String.format("%.1f", tokensPerSec)} tok/s)")
-                }
-            }
+        // Estimate token count
+        tokenCount = result.length / 4
 
         val totalTime = System.currentTimeMillis() - startTime
 
@@ -578,7 +549,7 @@ class LLMManager(private val context: Context) {
             0f
         }
 
-        Log.i(TAG, "✓ Generated $tokenCount tokens in ${totalTime}ms")
+        Log.i(TAG, "✓ Generated ~$tokenCount tokens in ${totalTime}ms")
         Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tokens/second")
         Log.i(TAG, "   Backend: $backend")
         Log.i(TAG, "   Average speed (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
@@ -741,8 +712,8 @@ class LLMManager(private val context: Context) {
 
         runBlocking {
             try {
-                llamaAndroid.unload()
-                Log.d(TAG, "llama.cpp model unloaded")
+                llmBridge.free()
+                Log.d(TAG, "LLM Bridge resources freed")
             } catch (e: Exception) {
                 Log.w(TAG, "Error unloading model: ${e.message}")
             }
