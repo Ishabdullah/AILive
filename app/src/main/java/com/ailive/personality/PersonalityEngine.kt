@@ -290,8 +290,26 @@ class PersonalityEngine(
             Log.e(TAG, "Exception message: ${e.message}")
             e.printStackTrace()
 
+            // Provide specific error messages based on exception type
+            val errorMessage = when (e) {
+                is UnsatisfiedLinkError -> {
+                    "The AI model requires native libraries that are missing from this build. " +
+                    "Please download a properly built APK with NDK support enabled, or rebuild with CMake configuration."
+                }
+                is IllegalStateException -> {
+                    if (e.message?.contains("not initialized") == true) {
+                        "The AI model is not initialized. ${e.message}"
+                    } else {
+                        "I encountered a state error: ${e.message}. Please try restarting the app."
+                    }
+                }
+                else -> {
+                    "I encountered an error: ${e.message}. Please try again or restart the app."
+                }
+            }
+
             // Return error message as a flow
-            return kotlinx.coroutines.flow.flowOf("I encountered an error: ${e.message}. Please try again.")
+            return kotlinx.coroutines.flow.flowOf(errorMessage)
         }
     }
 

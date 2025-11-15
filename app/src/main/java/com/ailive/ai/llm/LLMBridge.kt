@@ -15,16 +15,37 @@ class LLMBridge {
     companion object {
         private const val TAG = "LLMBridge"
 
+        @Volatile
+        private var isLibraryLoaded = false
+        private var libraryLoadError: String? = null
+
         // Load native library
         init {
             try {
                 System.loadLibrary("ailive_llm")
+                isLibraryLoaded = true
                 Log.i(TAG, "✅ Native library loaded successfully")
             } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "❌ Failed to load native library", e)
-                Log.e(TAG, "   Make sure NDK build is configured properly")
+                isLibraryLoaded = false
+                libraryLoadError = e.message ?: "Unknown error"
+                Log.e(TAG, "❌ CRITICAL: Failed to load native library", e)
+                Log.e(TAG, "   Error: ${e.message}")
+                Log.e(TAG, "   This APK was likely built without NDK/CMake enabled")
+                Log.e(TAG, "   The app will crash if you try to use the LLM")
             }
         }
+
+        /**
+         * Check if native library is loaded
+         * @return true if libailive_llm.so is loaded and available
+         */
+        fun isLibraryAvailable(): Boolean = isLibraryLoaded
+
+        /**
+         * Get the library load error message if it failed
+         * @return error message or null if loaded successfully
+         */
+        fun getLibraryError(): String? = libraryLoadError
     }
 
     /**
@@ -77,6 +98,13 @@ class LLMBridge {
      * Kotlin-friendly wrapper for model loading
      */
     fun loadModel(modelPath: String, contextSize: Int = 2048): Boolean {
+        // CRITICAL: Check if native library is loaded first
+        if (!isLibraryLoaded) {
+            val error = "Cannot load model: Native library not loaded (${libraryLoadError})"
+            Log.e(TAG, "❌ $error")
+            return false
+        }
+
         Log.i(TAG, "📂 Loading model: $modelPath")
         Log.i(TAG, "   Context size: $contextSize")
 
@@ -95,6 +123,13 @@ class LLMBridge {
      * Kotlin-friendly wrapper for text generation
      */
     fun generate(prompt: String, maxTokens: Int = 80): String {
+        // CRITICAL: Check if native library is loaded first
+        if (!isLibraryLoaded) {
+            val error = "Cannot generate: Native library not loaded (${libraryLoadError})"
+            Log.e(TAG, "❌ $error")
+            throw UnsatisfiedLinkError(error)
+        }
+
         if (!nativeIsLoaded()) {
             Log.w(TAG, "⚠️ Model not loaded")
             return ""

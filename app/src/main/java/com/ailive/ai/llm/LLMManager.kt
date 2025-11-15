@@ -195,6 +195,21 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "🤖 Initializing Qwen2-VL with llama.cpp Android...")
             Log.i(TAG, "⏱️  This may take 10-15 seconds for model loading...")
 
+            // CRITICAL: Check if native library is loaded
+            if (!llmBridge.isLibraryAvailable()) {
+                val error = "Native library (libailive_llm.so) not found in APK. " +
+                           "This build was compiled without NDK support. " +
+                           "Error: ${llmBridge.getLibraryError()}"
+                Log.e(TAG, "❌ $error")
+                Log.e(TAG, "   Please download a properly built APK with NDK enabled")
+                Log.e(TAG, "   Or rebuild with CMake/NDK configuration enabled")
+                initializationError = error
+                isInitializing = false
+                return@withContext false
+            }
+
+            Log.i(TAG, "✅ Native library verified loaded")
+
             // Check if ANY GGUF model is available (not just Qwen)
             if (!modelDownloadManager.isQwenVLModelAvailable()) {
                 val error = "No GGUF model found. Please download a model or import one from your device."
