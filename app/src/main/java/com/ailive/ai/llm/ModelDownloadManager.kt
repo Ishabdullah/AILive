@@ -64,6 +64,31 @@ class ModelDownloadManager(private val context: Context) {
         // Q5_K_M: 1.13GB (higher quality)
         // Q6_K: 1.27GB (very high quality)
 
+        // SmolLM2-360M-Instruct GGUF model (Q4_K_M quantized)
+        // Ultra-lightweight model for instant chat responses and quick tasks
+        // Runs ALONGSIDE Qwen for fast, lightweight conversations
+
+        // Base URL for SmolLM2-360M-Instruct GGUF (bartowski quantization)
+        private const val SMOLLM2_BASE_URL = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main"
+
+        // Fast chat model file (Q4_K_M quantization)
+        const val SMOLLM2_MODEL_GGUF = "SmolLM2-360M-Instruct-Q4_K_M.gguf"
+        const val SMOLLM2_MODEL_URL = "$SMOLLM2_BASE_URL/$SMOLLM2_MODEL_GGUF"
+
+        // Model info:
+        // - 360M parameters (instruction-tuned for chat)
+        // - GGUF format: Compatible with llama.cpp Android
+        // - Q4_K_M quantization: ~271MB
+        // - Context: 2048 tokens
+        // - Purpose: Instant chat responses, quick reasoning, background tasks
+        // - License: Apache 2.0 (fully commercial-safe)
+        //
+        // Performance on mobile:
+        // - CPU: 30-40 tokens/sec (3-4x faster than Qwen)
+        // - GPU (Adreno): 60-80 tokens/sec
+        // - Init time: < 2 seconds
+        // - Perfect for: Quick Q&A, simple tasks, always-available chat
+
         // TinyLlama-1.1B-Chat-v1.0 GGUF model (Q4_K_M quantized)
         // Lightweight model for memory operations (fact extraction, summarization)
         // This runs BEFORE/ALONGSIDE Qwen to manage AILive's memory system
@@ -200,6 +225,31 @@ class ModelDownloadManager(private val context: Context) {
 
         Log.i(TAG, "❌ No valid GGUF models found (all too small)")
         return false
+    }
+
+    /**
+     * Check if SmolLM2 fast chat model exists in models folder
+     * Used for instant responses: quick Q&A, simple tasks, always-available chat
+     */
+    fun isSmolLM2ModelAvailable(): Boolean {
+        val downloadsDir = getModelsDir()
+        val modelFile = File(downloadsDir, SMOLLM2_MODEL_GGUF)
+
+        if (!modelFile.exists()) {
+            Log.i(TAG, "❌ Missing SmolLM2 model file: $SMOLLM2_MODEL_GGUF")
+            return false
+        }
+
+        val sizeMB = modelFile.length() / 1024 / 1024
+        Log.d(TAG, "✓ Found SmolLM2 model: $SMOLLM2_MODEL_GGUF (${sizeMB}MB)")
+
+        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
+            Log.e(TAG, "❌ SmolLM2 model file too small (${sizeMB}MB), likely corrupted")
+            return false
+        }
+
+        Log.i(TAG, "✅ SmolLM2 fast chat model available (${sizeMB}MB)")
+        return true
     }
 
     /**
@@ -390,6 +440,32 @@ class ModelDownloadManager(private val context: Context) {
             } else {
                 Log.e(TAG, "❌ Failed to download GGUF model: $error")
                 onComplete(false, "Failed to download model: $error")
+            }
+        }
+    }
+
+    /**
+     * Download SmolLM2-360M GGUF model
+     * Ultra-fast model for instant chat responses
+     * Size: ~271MB (Q4_K_M quantization)
+     */
+    fun downloadSmolLM2Model(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
+        Log.i(TAG, "📥 Starting SmolLM2-360M download...")
+        Log.i(TAG, "   Model: $SMOLLM2_MODEL_GGUF (~271MB)")
+        Log.i(TAG, "   Quantization: Q4_K_M (optimized for speed)")
+        Log.i(TAG, "   Purpose: Instant chat responses")
+
+        // Report progress (file 1 of 1)
+        onProgress(SMOLLM2_MODEL_GGUF, 1, 1)
+
+        // Download the single GGUF file
+        downloadModel(SMOLLM2_MODEL_URL, SMOLLM2_MODEL_GGUF) { success, error ->
+            if (success) {
+                Log.i(TAG, "✅ SmolLM2 model downloaded successfully!")
+                onComplete(true, "")
+            } else {
+                Log.e(TAG, "❌ Failed to download SmolLM2 model: $error")
+                onComplete(false, "Failed to download SmolLM2 model: $error")
             }
         }
     }

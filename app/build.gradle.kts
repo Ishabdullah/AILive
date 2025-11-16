@@ -142,11 +142,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
-    // REMOVED (v1.1 Week 4 Cleanup): TensorFlow Lite dependencies
-    // No longer needed - using llama.cpp for all inference
-    // implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    // implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
-    // implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // TensorFlow Lite - For Whisper (STT) and MobileNetV3 (Vision)
+    // Multimodal MVP: testing-123 branch
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")  // Optional GPU acceleration
 
     // ONNX Runtime for BGE embeddings (v1.4 - Memory enhancement)
     // Used ONLY for embedding models (no ArgMax op issues with sentence transformers)
