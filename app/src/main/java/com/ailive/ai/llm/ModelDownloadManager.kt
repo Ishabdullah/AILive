@@ -6,177 +6,84 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * ModelDownloadManager - Handles downloading and importing LLM models
  *
- * Features:
- * - Download models from HuggingFace
- * - Import models from user's storage
- * - Track download progress
- * - Validate model files
+ * REFACTORED: Coroutine-based architecture for clean async operations
+ * UPDATED: SmolLM2-360M support for hybrid dual-model system
  *
  * @author AILive Team
- * @since Phase 7.2
+ * @since Phase 7.2 (Refactored with Coroutines + SmolLM2)
  */
 class ModelDownloadManager(private val context: Context) {
+
+    class DownloadFailedException(message: String) : IOException(message)
 
     companion object {
         private const val TAG = "ModelDownloadManager"
 
-        // Qwen2-VL-2B-Instruct GGUF model (Q4_K_M quantized for mobile)
-        // Vision-Language Model: Can understand both images and text
-        // Perfect for conversational AI with camera input
-        // Switched from ONNX to GGUF for better Android compatibility
-
-        // Base URL for Qwen2-VL-2B-Instruct GGUF (bartowski quantization)
+        // Qwen2-VL-2B-Instruct GGUF (Vision + Complex reasoning)
         private const val QWEN_VL_BASE_URL = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main"
-
-        // Main model file (Q4_K_M quantization - balanced quality/size)
-        // Single file - much simpler than 8-file ONNX approach!
         const val QWEN_VL_MODEL_GGUF = "Qwen2-VL-2B-Instruct-Q4_K_M.gguf"
         const val QWEN_VL_MODEL_URL = "$QWEN_VL_BASE_URL/$QWEN_VL_MODEL_GGUF"
 
-        // Multimodal projection file (required for vision support)
-        // TODO: Add when implementing vision - for now, text-only
-        const val QWEN_VL_MMPROJ = "mmproj-Qwen2-VL-2B-Instruct-f32.gguf"
-        const val QWEN_VL_MMPROJ_URL = "$QWEN_VL_BASE_URL/$QWEN_VL_MMPROJ"
-
-        // Model info:
-        // - 2B parameters (instruction-tuned for conversation)
-        // - GGUF format: Better mobile support than ONNX
-        // - Q4_K_M quantization: 4-bit with medium quality
-        // - Single file: 986MB (vs 3.7GB for ONNX)
-        // - Built-in tokenizer (no separate vocab files needed)
-        //
-        // Quantization quality ladder (from bartowski):
-        // Q2_K: 676MB (lowest quality)
-        // Q4_K_M: 986MB (recommended for mobile - good balance)
-        // Q5_K_M: 1.13GB (higher quality)
-        // Q6_K: 1.27GB (very high quality)
-
-        // SmolLM2-360M-Instruct GGUF model (Q4_K_M quantized)
-        // Ultra-lightweight model for instant chat responses and quick tasks
-        // Runs ALONGSIDE Qwen for fast, lightweight conversations
-
-        // Base URL for SmolLM2-360M-Instruct GGUF (bartowski quantization)
+        // SmolLM2-360M-Instruct GGUF (Fast chat - always loaded)
         private const val SMOLLM2_BASE_URL = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main"
-
-        // Fast chat model file (Q4_K_M quantization)
         const val SMOLLM2_MODEL_GGUF = "SmolLM2-360M-Instruct-Q4_K_M.gguf"
         const val SMOLLM2_MODEL_URL = "$SMOLLM2_BASE_URL/$SMOLLM2_MODEL_GGUF"
 
-        // Model info:
-        // - 360M parameters (instruction-tuned for chat)
-        // - GGUF format: Compatible with llama.cpp Android
-        // - Q4_K_M quantization: ~271MB
-        // - Context: 2048 tokens
-        // - Purpose: Instant chat responses, quick reasoning, background tasks
-        // - License: Apache 2.0 (fully commercial-safe)
-        //
-        // Performance on mobile:
-        // - CPU: 30-40 tokens/sec (3-4x faster than Qwen)
-        // - GPU (Adreno): 60-80 tokens/sec
-        // - Init time: < 2 seconds
-        // - Perfect for: Quick Q&A, simple tasks, always-available chat
-
-        // TinyLlama-1.1B-Chat-v1.0 GGUF model (Q4_K_M quantized)
-        // Lightweight model for memory operations (fact extraction, summarization)
-        // This runs BEFORE/ALONGSIDE Qwen to manage AILive's memory system
-
-        // Base URL for TinyLlama-1.1B-Chat-v1.0 GGUF (TheBloke quantization)
+        // TinyLlama-1.1B (Memory operations)
         private const val TINYLLAMA_BASE_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main"
-
-        // Memory model file (Q4_K_M quantization)
         const val MEMORY_MODEL_GGUF = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
         const val MEMORY_MODEL_URL = "$TINYLLAMA_BASE_URL/$MEMORY_MODEL_GGUF"
 
-        // Model info:
-        // - 1.1B parameters (instruction-tuned for chat/extraction)
-        // - GGUF format: Compatible with llama.cpp Android
-        // - Q4_K_M quantization: ~700MB
-        // - Context: 2048 tokens
-        // - Purpose: Memory operations (fact extraction, summarization, context filtering)
-        // - License: Apache 2.0 (fully commercial-safe)
-        //
-        // Performance on mobile:
-        // - CPU: 10-15 tokens/sec
-        // - GPU (Adreno): 30-40 tokens/sec
-        // - Init time: < 5 seconds
-
-        // BGE-small-en-v1.5 ONNX model (Semantic embeddings)
-        // Lightweight embedding model for semantic search and memory retrieval
-        // This runs ALONGSIDE Qwen and TinyLlama for vector operations
-
-        // Base URLs for BGE-small-en-v1.5 ONNX (Xenova optimized export)
+        // BGE Embeddings
         private const val BGE_ROOT_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main"
         private const val BGE_ONNX_URL = "$BGE_ROOT_URL/onnx"
-
-        // BGE model files (quantized INT8 for mobile efficiency)
         const val BGE_MODEL_ONNX = "model_quantized.onnx"
         const val BGE_TOKENIZER_JSON = "tokenizer.json"
         const val BGE_CONFIG_JSON = "config.json"
-
-        // Model is in onnx/ subdirectory, but tokenizer and config are in root
         const val BGE_MODEL_URL = "$BGE_ONNX_URL/$BGE_MODEL_ONNX"
         const val BGE_TOKENIZER_URL = "$BGE_ROOT_URL/$BGE_TOKENIZER_JSON"
         const val BGE_CONFIG_URL = "$BGE_ROOT_URL/$BGE_CONFIG_JSON"
 
-        // Model info:
-        // - 33M parameters (optimized for embeddings)
-        // - ONNX format: Compatible with ONNX Runtime Android
-        // - INT8 quantization: ~133MB (model + tokenizer + config)
-        // - Output: 384-dimensional embeddings
-        // - Purpose: Semantic search, memory retrieval, fact similarity
-        // - License: MIT (fully commercial-safe)
-        //
-        // Performance on mobile:
-        // - Inference: < 50ms per text
-        // - Batch processing: 20-30 texts/second
-        // - Init time: < 2 seconds
-        // - Memory: ~150MB RAM
-
         private const val MODELS_DIR = "models"
+        private const val MIN_MODEL_SIZE_BYTES = 10 * 1024 * 1024L
+        private const val MIN_GGUF_SIZE_BYTES = 100 * 1024 * 1024L
 
-        // Minimum valid model size
-        private const val MIN_MODEL_SIZE_BYTES = 10 * 1024 * 1024L  // 10MB (BGE files are smaller)
-        private const val MIN_GGUF_SIZE_BYTES = 100 * 1024 * 1024L  // 100MB for GGUF models
+        private const val DOWNLOAD_STATUS_OK = "OK"
+        private const val DOWNLOAD_STATUS_EXISTS = "EXISTS"
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     private var downloadId: Long = -1
-    private var downloadCompleteCallback: ((Boolean, String) -> Unit)? = null
-    private var downloadReceiver: BroadcastReceiver? = null  // Keep reference to unregister later
-    private var currentModelName: String? = null  // Track current download model name
-    private var completionCheckScheduled = false  // Prevent multiple manual checks
-    private var isHandlingCompletion = false  // Guard against duplicate handleDownloadComplete() calls
+    private var downloadContinuation: Continuation<String>? = null
+    private var downloadReceiver: BroadcastReceiver? = null
+    private var currentModelName: String? = null
+    private var isHandlingCompletion = false
 
-    // Polling mechanism for download status (fallback if BroadcastReceiver doesn't fire)
-    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val handler = Handler(Looper.getMainLooper())
     private var statusCheckRunnable: Runnable? = null
-    private val POLL_INTERVAL_MS = 5000L  // Check every 5 seconds
+    private val POLL_INTERVAL_MS = 5000L
 
-    /**
-     * Get the directory where model files are stored.
-     *
-     * ALL Android versions: App-private external storage (no permissions needed)
-     *   Path: /Android/data/com.ailive/files/Download/
-     *   Files deleted when app uninstalled
-     *   REASON: llama.cpp native code needs direct file access which doesn't
-     *           work reliably with public Downloads on Android 12-
-     */
     private fun getModelsDir(): File {
-        // Use app-private external storage for ALL Android versions
-        // This ensures llama.cpp can always load model files
         val appPrivateDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
         return (appPrivateDir ?: context.filesDir).also { dir ->
             if (!dir.exists()) {
@@ -186,230 +93,106 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
-    /**
-     * Check if ANY GGUF model exists in models folder
-     * Accepts any valid GGUF file, not just Qwen2-VL
-     *
-     * This allows users to use custom models like:
-     * - The_Elder-v2.gguf
-     * - Mistral-7B-Q4.gguf
-     * - Llama-2-7B.gguf
-     * etc.
-     */
+    // ========== MODEL AVAILABILITY CHECKS ==========
+
     fun isQwenVLModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
-
-        // First check if the default Qwen model exists
         val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
-        if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
-            val sizeMB = defaultModel.length() / 1024 / 1024
-            Log.i(TAG, "✅ Default model available: $QWEN_VL_MODEL_GGUF (${sizeMB}MB)")
+        
+        if (defaultModel.exists() && defaultModel.length() >= MIN_GGUF_SIZE_BYTES) {
+            Log.i(TAG, "✅ Qwen2-VL available (${defaultModel.length() / 1024 / 1024}MB)")
             return true
         }
 
-        // If default doesn't exist, check for ANY valid GGUF model
-        val ggufModels = getAvailableModelsInDownloads()
-
-        if (ggufModels.isEmpty()) {
-            Log.i(TAG, "❌ No GGUF models found in ${downloadsDir.absolutePath}")
-            return false
-        }
-
-        // Use the largest GGUF model (likely the main conversation model)
-        val largestModel = ggufModels.maxByOrNull { it.length() }
-        if (largestModel != null && largestModel.length() >= MIN_MODEL_SIZE_BYTES) {
-            val sizeMB = largestModel.length() / 1024 / 1024
-            Log.i(TAG, "✅ Found alternative GGUF model: ${largestModel.name} (${sizeMB}MB)")
+        val largestModel = getAvailableModelsInDownloads().maxByOrNull { it.length() }
+        if (largestModel != null && largestModel.length() >= MIN_GGUF_SIZE_BYTES) {
+            Log.i(TAG, "✅ Alternative GGUF model: ${largestModel.name}")
             return true
         }
 
-        Log.i(TAG, "❌ No valid GGUF models found (all too small)")
         return false
     }
 
-    /**
-     * Check if SmolLM2 fast chat model exists in models folder
-     * Used for instant responses: quick Q&A, simple tasks, always-available chat
-     */
     fun isSmolLM2ModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, SMOLLM2_MODEL_GGUF)
 
         if (!modelFile.exists()) {
-            Log.i(TAG, "❌ Missing SmolLM2 model file: $SMOLLM2_MODEL_GGUF")
+            Log.i(TAG, "❌ SmolLM2 not found")
             return false
         }
-
-        val sizeMB = modelFile.length() / 1024 / 1024
-        Log.d(TAG, "✓ Found SmolLM2 model: $SMOLLM2_MODEL_GGUF (${sizeMB}MB)")
 
         if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
-            Log.e(TAG, "❌ SmolLM2 model file too small (${sizeMB}MB), likely corrupted")
+            Log.e(TAG, "❌ SmolLM2 file too small")
             return false
         }
 
-        Log.i(TAG, "✅ SmolLM2 fast chat model available (${sizeMB}MB)")
+        Log.i(TAG, "✅ SmolLM2 available (${modelFile.length() / 1024 / 1024}MB)")
         return true
     }
 
-    /**
-     * Check if Memory Model (TinyLlama) exists in models folder
-     * Used for memory operations: fact extraction, summarization, context filtering
-     */
     fun isMemoryModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, MEMORY_MODEL_GGUF)
 
-        if (!modelFile.exists()) {
-            Log.i(TAG, "❌ Missing memory model file: $MEMORY_MODEL_GGUF")
+        if (!modelFile.exists() || modelFile.length() < MIN_GGUF_SIZE_BYTES) {
             return false
         }
 
-        val sizeMB = modelFile.length() / 1024 / 1024
-        Log.d(TAG, "✓ Found memory model: $MEMORY_MODEL_GGUF (${sizeMB}MB)")
-
-        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
-            Log.e(TAG, "❌ Memory model file too small (${sizeMB}MB), likely corrupted")
-            return false
-        }
-
-        Log.i(TAG, "✅ Memory model available (${sizeMB}MB)")
+        Log.i(TAG, "✅ Memory model available")
         return true
     }
 
-    /**
-     * Check if BGE embedding model exists in models folder
-     * Used for semantic embeddings: similarity search, memory retrieval
-     * Requires 3 files: model_quantized.onnx, tokenizer.json, config.json
-     */
     fun isBGEModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, BGE_MODEL_ONNX)
         val tokenizerFile = File(downloadsDir, BGE_TOKENIZER_JSON)
         val configFile = File(downloadsDir, BGE_CONFIG_JSON)
 
-        // Check all 3 required files
-        if (!modelFile.exists()) {
-            Log.i(TAG, "❌ Missing BGE model file: $BGE_MODEL_ONNX")
-            return false
-        }
-        if (!tokenizerFile.exists()) {
-            Log.i(TAG, "❌ Missing BGE tokenizer file: $BGE_TOKENIZER_JSON")
-            return false
-        }
-        if (!configFile.exists()) {
-            Log.i(TAG, "❌ Missing BGE config file: $BGE_CONFIG_JSON")
-            return false
-        }
+        val allExist = modelFile.exists() && tokenizerFile.exists() && configFile.exists()
+        val validSize = modelFile.length() >= MIN_MODEL_SIZE_BYTES
 
-        val modelSizeMB = modelFile.length() / 1024 / 1024
-        val tokenizerSizeMB = tokenizerFile.length() / 1024 / 1024
-        val configSizeMB = configFile.length() / 1024 / 1024
-
-        Log.d(TAG, "✓ Found BGE model: $BGE_MODEL_ONNX (${modelSizeMB}MB)")
-        Log.d(TAG, "✓ Found BGE tokenizer: $BGE_TOKENIZER_JSON (${tokenizerSizeMB}MB)")
-        Log.d(TAG, "✓ Found BGE config: $BGE_CONFIG_JSON (${configSizeMB}MB)")
-
-        // Validate model file size (tokenizer/config are smaller, so use MIN_MODEL_SIZE_BYTES)
-        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
-            Log.e(TAG, "❌ BGE model file too small (${modelSizeMB}MB), likely corrupted")
-            return false
-        }
-
-        val totalSizeMB = modelSizeMB + tokenizerSizeMB + configSizeMB
-        Log.i(TAG, "✅ BGE embedding model available (~${totalSizeMB}MB)")
-        return true
+        return allExist && validSize
     }
 
-    /**
-     * Check if a model file exists in Downloads folder
-     * If modelName is not specified, checks if Qwen2-VL model exists
-     */
     fun isModelAvailable(modelName: String? = null): Boolean {
-        val downloadsDir = getModelsDir()
-
-        // If specific model requested, check for it
         if (modelName != null) {
-            val modelFile = File(downloadsDir, modelName)
-            val exists = modelFile.exists()
-            if (exists) {
-                Log.i(TAG, "✅ Model found in Downloads: ${modelFile.absolutePath} (${modelFile.length() / 1024 / 1024}MB)")
-            } else {
-                Log.i(TAG, "❌ Model not found in Downloads: ${modelFile.absolutePath}")
-            }
-            return exists
+            val modelFile = File(getModelsDir(), modelName)
+            return modelFile.exists() && modelFile.length() > 0
         }
-
-        // Otherwise, check if Qwen2-VL model exists
         return isQwenVLModelAvailable()
     }
 
-    /**
-     * Get the path to a model file in Downloads folder
-     */
     fun getModelPath(modelName: String = QWEN_VL_MODEL_GGUF): String {
-        val downloadsDir = getModelsDir()
-        return File(downloadsDir, modelName).absolutePath
+        return File(getModelsDir(), modelName).absolutePath
     }
 
-    /**
-     * Get the actual GGUF model to use for LLM inference
-     * Priority:
-     * 1. User-selected model (from Settings)
-     * 2. Default Qwen model
-     * 3. Largest available GGUF model
-     *
-     * This allows users to switch between models easily
-     */
     fun getActiveModelFile(): File? {
         val downloadsDir = getModelsDir()
-
-        // 1. Check if user has selected a specific model in Settings
         val prefs = context.getSharedPreferences("ailive_model_prefs", Context.MODE_PRIVATE)
-        val selectedModelPath = prefs.getString("active_model_path", null)
-
-        if (selectedModelPath != null) {
-            val selectedModel = File(selectedModelPath)
-            if (selectedModel.exists() && selectedModel.length() >= MIN_MODEL_SIZE_BYTES) {
-                Log.i(TAG, "Using user-selected model: ${selectedModel.name}")
-                return selectedModel
-            } else {
-                Log.w(TAG, "User-selected model not found or invalid, falling back to default")
-                // Clear invalid preference
-                prefs.edit().remove("active_model_path").apply()
+        
+        // 1. User-selected model
+        prefs.getString("active_model_path", null)?.let { path ->
+            val file = File(path)
+            if (file.exists() && file.length() >= MIN_GGUF_SIZE_BYTES) {
+                return file
             }
+            prefs.edit().remove("active_model_path").apply()
         }
 
-        // 2. Try the default Qwen model
+        // 2. Default Qwen model
         val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
-        if (defaultModel.exists() && defaultModel.length() >= MIN_MODEL_SIZE_BYTES) {
-            Log.i(TAG, "Using default model: ${defaultModel.name}")
+        if (defaultModel.exists() && defaultModel.length() >= MIN_GGUF_SIZE_BYTES) {
             return defaultModel
         }
 
-        // 3. Otherwise, find the largest GGUF model (likely the main conversation model)
-        val ggufModels = getAvailableModelsInDownloads()
-        val largestModel = ggufModels.maxByOrNull { it.length() }
-
-        if (largestModel != null && largestModel.length() >= MIN_MODEL_SIZE_BYTES) {
-            Log.i(TAG, "Using alternative model: ${largestModel.name} (${largestModel.length() / 1024 / 1024}MB)")
-            return largestModel
-        }
-
-        Log.e(TAG, "No valid GGUF models found")
-        return null
+        // 3. Largest GGUF model
+        return getAvailableModelsInDownloads().maxByOrNull { it.length() }
+            ?.takeIf { it.length() >= MIN_GGUF_SIZE_BYTES }
     }
 
-    /**
-     * Get the Downloads directory path (where models are stored)
-     */
-    fun getModelsDirectory(): String {
-        return getModelsDir().absolutePath
-    }
+    fun getModelsDirectory(): String = getModelsDir().absolutePath
 
-    /**
-     * Get list of available GGUF model files in Downloads folder
-     */
     fun getAvailableModelsInDownloads(): List<File> {
         val downloadsDir = getModelsDir()
         if (!downloadsDir.exists()) return emptyList()
@@ -419,428 +202,306 @@ class ModelDownloadManager(private val context: Context) {
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
 
-    /**
-     * Download Qwen2-VL GGUF model
-     * Much simpler than ONNX - just ONE file!
-     * Size: 986MB (Q4_K_M quantization)
-     */
-    fun downloadQwenVLModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
-        Log.i(TAG, "📥 Starting Qwen2-VL GGUF model download...")
-        Log.i(TAG, "   Model: $QWEN_VL_MODEL_GGUF (986MB)")
-        Log.i(TAG, "   Quantization: Q4_K_M (balanced quality/size)")
+    // ========== DOWNLOAD METHODS (SUSPEND) ==========
 
-        // Report progress (file 1 of 1)
+    suspend fun downloadQwenVLModel(onProgress: (String, Int, Int) -> Unit) {
+        Log.i(TAG, "📥 Downloading Qwen2-VL (986MB)...")
         onProgress(QWEN_VL_MODEL_GGUF, 1, 1)
 
-        // Download the single GGUF file
-        downloadModel(QWEN_VL_MODEL_URL, QWEN_VL_MODEL_GGUF) { success, error ->
-            if (success) {
-                Log.i(TAG, "✅ Qwen2-VL GGUF model downloaded successfully!")
-                onComplete(true, "")
-            } else {
-                Log.e(TAG, "❌ Failed to download GGUF model: $error")
-                onComplete(false, "Failed to download model: $error")
-            }
+        try {
+            downloadModel(QWEN_VL_MODEL_URL, QWEN_VL_MODEL_GGUF)
+            Log.i(TAG, "✅ Qwen2-VL downloaded!")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Qwen2-VL download failed: ${e.message}")
+            throw DownloadFailedException("Qwen2-VL download failed: ${e.message}")
         }
     }
 
-    /**
-     * Download SmolLM2-360M GGUF model
-     * Ultra-fast model for instant chat responses
-     * Size: ~271MB (Q4_K_M quantization)
-     */
-    fun downloadSmolLM2Model(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
-        Log.i(TAG, "📥 Starting SmolLM2-360M download...")
-        Log.i(TAG, "   Model: $SMOLLM2_MODEL_GGUF (~271MB)")
-        Log.i(TAG, "   Quantization: Q4_K_M (optimized for speed)")
-        Log.i(TAG, "   Purpose: Instant chat responses")
-
-        // Report progress (file 1 of 1)
+    suspend fun downloadSmolLM2Model(onProgress: (String, Int, Int) -> Unit) {
+        Log.i(TAG, "📥 Downloading SmolLM2-360M (271MB)...")
         onProgress(SMOLLM2_MODEL_GGUF, 1, 1)
 
-        // Download the single GGUF file
-        downloadModel(SMOLLM2_MODEL_URL, SMOLLM2_MODEL_GGUF) { success, error ->
-            if (success) {
-                Log.i(TAG, "✅ SmolLM2 model downloaded successfully!")
-                onComplete(true, "")
-            } else {
-                Log.e(TAG, "❌ Failed to download SmolLM2 model: $error")
-                onComplete(false, "Failed to download SmolLM2 model: $error")
-            }
+        try {
+            downloadModel(SMOLLM2_MODEL_URL, SMOLLM2_MODEL_GGUF)
+            Log.i(TAG, "✅ SmolLM2 downloaded!")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ SmolLM2 download failed: ${e.message}")
+            throw DownloadFailedException("SmolLM2 download failed: ${e.message}")
         }
     }
 
-    /**
-     * Download Memory Model (TinyLlama-1.1B) GGUF
-     * Lightweight model for memory operations (fact extraction, summarization)
-     * Size: ~700MB (Q4_K_M quantization)
-     */
-    fun downloadMemoryModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
-        Log.i(TAG, "📥 Starting Memory Model (TinyLlama-1.1B) download...")
-        Log.i(TAG, "   Model: $MEMORY_MODEL_GGUF (~700MB)")
-        Log.i(TAG, "   Quantization: Q4_K_M (optimized for mobile)")
-        Log.i(TAG, "   Purpose: Intelligent memory operations")
-
-        // Report progress (file 1 of 1)
+    suspend fun downloadMemoryModel(onProgress: (String, Int, Int) -> Unit) {
+        Log.i(TAG, "📥 Downloading TinyLlama (700MB)...")
         onProgress(MEMORY_MODEL_GGUF, 1, 1)
 
-        // Download the single GGUF file
-        downloadModel(MEMORY_MODEL_URL, MEMORY_MODEL_GGUF) { success, error ->
-            if (success) {
-                Log.i(TAG, "✅ Memory Model downloaded successfully!")
-                onComplete(true, "")
-            } else {
-                Log.e(TAG, "❌ Failed to download Memory Model: $error")
-                onComplete(false, "Failed to download memory model: $error")
-            }
+        try {
+            downloadModel(MEMORY_MODEL_URL, MEMORY_MODEL_GGUF)
+            Log.i(TAG, "✅ Memory model downloaded!")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Memory model download failed: ${e.message}")
+            throw DownloadFailedException("Memory model download failed: ${e.message}")
         }
     }
 
-    /**
-     * Download BGE Embedding Model (BGE-small-en-v1.5) ONNX
-     * Lightweight embedding model for semantic search and memory retrieval
-     * Total size: ~133MB (model + tokenizer + config)
-     * Requires 3 files: model_quantized.onnx, tokenizer.json, config.json
-     */
-    fun downloadBGEModel(onProgress: (String, Int, Int) -> Unit, onComplete: (Boolean, String) -> Unit) {
-        Log.i(TAG, "📥 Starting BGE Embedding Model (BGE-small-en-v1.5) download...")
-        Log.i(TAG, "   Files: 3 (model, tokenizer, config)")
-        Log.i(TAG, "   Total size: ~133MB (INT8 quantized)")
-        Log.i(TAG, "   Purpose: Semantic embeddings for memory retrieval")
-
-        // Download files sequentially: model → tokenizer → config
-        var filesDownloaded = 0
+    suspend fun downloadBGEModel(onProgress: (String, Int, Int) -> Unit): String {
+        Log.i(TAG, "📥 Downloading BGE Embeddings (133MB)...")
         var filesAlreadyExisted = 0
-        val totalFiles = 3
 
-        // Download 1: model_quantized.onnx (~120MB)
-        onProgress(BGE_MODEL_ONNX, 1, totalFiles)
-        downloadModel(BGE_MODEL_URL, BGE_MODEL_ONNX) { success, error ->
-            if (!success) {
-                Log.e(TAG, "❌ Failed to download BGE model file: $error")
-                onComplete(false, "Failed to download BGE model: $error")
-                return@downloadModel
+        try {
+            // Model file
+            onProgress(BGE_MODEL_ONNX, 1, 3)
+            if (downloadModel(BGE_MODEL_URL, BGE_MODEL_ONNX) == DOWNLOAD_STATUS_EXISTS) {
+                filesAlreadyExisted++
+            }
+            delay(1000)
+
+            // Tokenizer
+            onProgress(BGE_TOKENIZER_JSON, 2, 3)
+            if (downloadModel(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON) == DOWNLOAD_STATUS_EXISTS) {
+                filesAlreadyExisted++
+            }
+            delay(1000)
+
+            // Config
+            onProgress(BGE_CONFIG_JSON, 3, 3)
+            if (downloadModel(BGE_CONFIG_URL, BGE_CONFIG_JSON) == DOWNLOAD_STATUS_EXISTS) {
+                filesAlreadyExisted++
             }
 
-            filesDownloaded++
-            if (error == "EXISTS") filesAlreadyExisted++
-            Log.i(TAG, "✅ BGE model file ${if (error == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
-
-            // BUGFIX: Add delay to ensure first download's state is fully cleaned up
-            // Prevents race conditions when downloads happen in quick succession
-            handler.postDelayed({
-                // Download 2: tokenizer.json (~2MB)
-                onProgress(BGE_TOKENIZER_JSON, 2, totalFiles)
-                downloadModel(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON) { tokenizerSuccess, tokenizerError ->
-                    if (!tokenizerSuccess) {
-                        Log.e(TAG, "❌ Failed to download BGE tokenizer: $tokenizerError")
-                        onComplete(false, "Failed to download BGE tokenizer: $tokenizerError")
-                        return@downloadModel
-                    }
-
-                    filesDownloaded++
-                    if (tokenizerError == "EXISTS") filesAlreadyExisted++
-                    Log.i(TAG, "✅ BGE tokenizer ${if (tokenizerError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
-
-                    // BUGFIX: Add delay before third download
-                    handler.postDelayed({
-                        // Download 3: config.json (~1KB)
-                        onProgress(BGE_CONFIG_JSON, 3, totalFiles)
-                        downloadModel(BGE_CONFIG_URL, BGE_CONFIG_JSON) { configSuccess, configError ->
-                            if (!configSuccess) {
-                                Log.e(TAG, "❌ Failed to download BGE config: $configError")
-                                onComplete(false, "Failed to download BGE config: $configError")
-                                return@downloadModel
-                            }
-
-                            filesDownloaded++
-                            if (configError == "EXISTS") filesAlreadyExisted++
-                            Log.i(TAG, "✅ BGE config ${if (configError == "EXISTS") "already exists" else "downloaded"} ($filesDownloaded/$totalFiles)")
-
-                            // Report whether all files already existed or were newly downloaded
-                            if (filesAlreadyExisted == totalFiles) {
-                                Log.i(TAG, "ℹ️ BGE Embedding Model already downloaded (3/3 files exist)")
-                                onComplete(true, "EXISTS")
-                            } else {
-                                Log.i(TAG, "✅ BGE Embedding Model downloaded successfully! (3/3 files)")
-                                onComplete(true, "")
-                            }
-                        }
-                    }, 1000) // Increased to 1000ms delay for better stability
-                }
-            }, 1000) // Increased to 1000ms delay for better stability
+            return if (filesAlreadyExisted == 3) {
+                Log.i(TAG, "ℹ️ BGE already exists")
+                DOWNLOAD_STATUS_EXISTS
+            } else {
+                Log.i(TAG, "✅ BGE downloaded!")
+                DOWNLOAD_STATUS_OK
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ BGE download failed: ${e.message}")
+            throw DownloadFailedException("BGE download failed: ${e.message}")
         }
     }
 
-    /**
-     * Download all necessary models for AILive
-     * Downloads in optimal order: BGE first (smallest/fastest), then Memory model, then Qwen
-     *
-     * @param onProgress Callback for progress updates (modelName, current, total, overallPercent)
-     * @param onComplete Callback when all downloads complete (success, errorMessage)
-     */
-    fun downloadAllModels(
-        onProgress: (String, Int, Int, Int) -> Unit,  // modelName, modelNum, totalModels, overallPercent
-        onComplete: (Boolean, String) -> Unit
-    ) {
-        Log.i(TAG, "📥 Starting download of all necessary models...")
-        Log.i(TAG, "   Total models: 3")
-        Log.i(TAG, "   Total size: ~1.9GB")
-        Log.i(TAG, "   Order: BGE (133MB) → Memory Model (700MB) → Qwen (986MB)")
-
+    suspend fun downloadAllModels(
+        onProgress: (String, Int, Int, Int) -> Unit
+    ): String {
+        Log.i(TAG, "📥 Downloading all models (SmolLM2, BGE, Memory, Qwen)...")
         var modelsAlreadyExisted = 0
-        val totalModels = 3
 
-        // Download BGE model first (smallest, fastest)
-        onProgress("BGE Embedding Model", 1, 3, 0)
-
-        downloadBGEModel(
-            onProgress = { fileName, fileNum, totalFiles ->
-                // Report BGE progress (0-7% overall, ~133MB of ~1900MB)
-                val percent = (7 * fileNum) / totalFiles
-                onProgress(fileName, 1, 3, percent)
-            },
-            onComplete = { success, error ->
-                if (!success) {
-                    Log.e(TAG, "❌ BGE model download failed, aborting: $error")
-                    onComplete(false, "BGE model download failed: $error")
-                    return@downloadBGEModel
+        try {
+            // 1. SmolLM2 (smallest, fastest) - Priority for hybrid system
+            onProgress("SmolLM2 Chat Model", 1, 4, 0)
+            val smolStatus = try {
+                downloadSmolLM2Model { fileName, _, _ ->
+                    onProgress(fileName, 1, 4, 5)
                 }
-
-                if (error == "EXISTS") modelsAlreadyExisted++
-                Log.i(TAG, "✅ BGE model ${if (error == "EXISTS") "already exists" else "downloaded"} (1/3)")
-                onProgress(MEMORY_MODEL_GGUF, 2, 3, 7)
-
-                // BUGFIX: Add delay between models to prevent state conflicts
-                handler.postDelayed({
-                    // Download memory model second (medium size)
-                    downloadMemoryModel(
-                    onProgress = { fileName, fileNum, totalFiles ->
-                        // Report memory model progress (7-44% overall, ~700MB of ~1900MB)
-                        onProgress(fileName, 2, 3, 25)
-                    },
-                    onComplete = { memSuccess, memError ->
-                        if (!memSuccess) {
-                            Log.e(TAG, "❌ Memory model download failed, aborting: $memError")
-                            onComplete(false, "Memory model download failed: $memError")
-                            return@downloadMemoryModel
-                        }
-
-                        if (memError == "EXISTS") modelsAlreadyExisted++
-                        Log.i(TAG, "✅ Memory model ${if (memError == "EXISTS") "already exists" else "downloaded"} (2/3)")
-                        onProgress(QWEN_VL_MODEL_GGUF, 3, 3, 44)
-
-                        // BUGFIX: Add delay before final model
-                        handler.postDelayed({
-                            // Download Qwen model third (largest)
-                            downloadQwenVLModel(
-                            onProgress = { fileName, fileNum, totalFiles ->
-                                // Report Qwen progress (44-100% overall, ~986MB of ~1900MB)
-                                onProgress(fileName, 3, 3, 70)
-                            },
-                            onComplete = { qwenSuccess, qwenError ->
-                                if (!qwenSuccess) {
-                                    Log.e(TAG, "❌ Qwen model download failed: $qwenError")
-                                    onComplete(false, "Qwen model download failed: $qwenError")
-                                    return@downloadQwenVLModel
-                                }
-
-                                if (qwenError == "EXISTS") modelsAlreadyExisted++
-
-                                // Report whether all models already existed or were newly downloaded
-                                if (modelsAlreadyExisted == totalModels) {
-                                    Log.i(TAG, "ℹ️ All models already downloaded! (3/3 exist)")
-                                    onComplete(true, "EXISTS")
-                                } else {
-                                    Log.i(TAG, "✅ All models downloaded successfully! (3/3)")
-                                    onComplete(true, "")
-                                }
-                            }
-                        )
-                        }, 1500) // Increased to 1500ms delay before Qwen for better stability
-                    }
-                )
-                }, 1500) // Increased to 1500ms delay before Memory model for better stability
+                DOWNLOAD_STATUS_OK
+            } catch (e: DownloadFailedException) {
+                if (e.message?.contains(DOWNLOAD_STATUS_EXISTS) == true) DOWNLOAD_STATUS_EXISTS else throw e
             }
-        )
+            if (smolStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
+            delay(1500)
+
+            // 2. BGE (small, useful)
+            onProgress("BGE Embeddings", 2, 4, 15)
+            val bgeStatus = downloadBGEModel { fileName, fileNum, totalFiles ->
+                val percent = 15 + (10 * fileNum) / totalFiles
+                onProgress(fileName, 2, 4, percent)
+            }
+            if (bgeStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
+            delay(1500)
+
+            // 3. Memory model
+            onProgress("Memory Model", 3, 4, 30)
+            val memStatus = try {
+                downloadMemoryModel { fileName, _, _ ->
+                    onProgress(fileName, 3, 4, 50)
+                }
+                DOWNLOAD_STATUS_OK
+            } catch (e: DownloadFailedException) {
+                if (e.message?.contains(DOWNLOAD_STATUS_EXISTS) == true) DOWNLOAD_STATUS_EXISTS else throw e
+            }
+            if (memStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
+            delay(1500)
+
+            // 4. Qwen (largest)
+            onProgress("Qwen2-VL Model", 4, 4, 60)
+            val qwenStatus = try {
+                downloadQwenVLModel { fileName, _, _ ->
+                    onProgress(fileName, 4, 4, 85)
+                }
+                DOWNLOAD_STATUS_OK
+            } catch (e: DownloadFailedException) {
+                if (e.message?.contains(DOWNLOAD_STATUS_EXISTS) == true) DOWNLOAD_STATUS_EXISTS else throw e
+            }
+            if (qwenStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
+
+            return if (modelsAlreadyExisted == 4) {
+                Log.i(TAG, "ℹ️ All models already exist")
+                DOWNLOAD_STATUS_EXISTS
+            } else {
+                Log.i(TAG, "✅ All models downloaded!")
+                DOWNLOAD_STATUS_OK
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Download failed: ${e.message}")
+            throw DownloadFailedException("Failed to download all models: ${e.message}")
+        }
     }
 
-    /**
-     * Download a single model file from HuggingFace (ONNX/BIN)
-     *
-     * Used internally by downloadQwenVLModel() for batch downloads.
-     * For new downloads, use downloadQwenVLModel() instead.
-     *
-     * @param modelUrl URL to download from
-     * @param modelName Name to save as
-     * @param onComplete Callback with (success, errorMessage)
-     */
-    fun downloadModel(
+    // ========== CORE DOWNLOAD LOGIC ==========
+
+    private suspend fun downloadModel(
         modelUrl: String,
         modelName: String,
-        onComplete: (Boolean, String) -> Unit
-    ) {
-        Log.i(TAG, "📥 Starting download: $modelName")
-        Log.i(TAG, "   URL: $modelUrl")
+    ): String = withContext(Dispatchers.Main) {
+        Log.i(TAG, "📥 Downloading: $modelName")
 
-        // Check if file already exists in Downloads
         val downloadsDir = getModelsDir()
         val existingFile = File(downloadsDir, modelName)
-        if (existingFile.exists()) {
-            val fileSizeMB = existingFile.length() / 1024 / 1024
-            Log.i(TAG, "✓ File already exists: $modelName (${fileSizeMB}MB)")
-            Log.i(TAG, "   Skipping download")
-            // Return a special message indicating file already exists
-            onComplete(true, "EXISTS")
-            return
+        val minSize = if (modelName.endsWith(".gguf")) MIN_GGUF_SIZE_BYTES else MIN_MODEL_SIZE_BYTES
+        
+        if (existingFile.exists() && existingFile.length() >= minSize) {
+            Log.i(TAG, "✓ Already exists: $modelName")
+            throw DownloadFailedException(DOWNLOAD_STATUS_EXISTS)
+        } else if (existingFile.exists()) {
+            existingFile.delete()
         }
 
-        // Unregister any existing receiver
         downloadReceiver?.let {
-            try {
-                context.unregisterReceiver(it)
-                Log.i(TAG, "   Unregistered previous receiver")
-            } catch (e: Exception) {
-                Log.w(TAG, "   Could not unregister previous receiver: ${e.message}")
-            }
+            try { context.unregisterReceiver(it) } catch (e: Exception) {}
         }
+        downloadReceiver = null
 
-        downloadCompleteCallback = onComplete
-        currentModelName = modelName
-        completionCheckScheduled = false
-        isHandlingCompletion = false  // Reset for new download
+        return@withContext suspendCancellableCoroutine { continuation ->
+            downloadContinuation = continuation
+            currentModelName = modelName
+            isHandlingCompletion = false
 
-        // Register broadcast receiver for download completion
-        downloadReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                Log.i(TAG, "🔔 BroadcastReceiver triggered! Download ID: $id, Expected: $downloadId")
-
-                if (id == downloadId) {
-                    Log.i(TAG, "   ✅ ID matches! Processing completion...")
-                    try {
-                        ctx.unregisterReceiver(this)
-                        Log.i(TAG, "   Unregistered receiver")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "   Could not unregister receiver: ${e.message}")
+            downloadReceiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context, intent: Intent) {
+                    val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                    if (id == downloadId) {
+                        try { ctx.unregisterReceiver(this) } catch (e: Exception) {}
+                        downloadReceiver = null
+                        handleDownloadComplete(modelName)
                     }
-                    downloadReceiver = null
-                    handleDownloadComplete(modelName)
-                } else {
-                    Log.w(TAG, "   ⚠️ ID mismatch - ignoring")
                 }
             }
-        }
 
-        try {
-            context.registerReceiver(
-                downloadReceiver,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                Context.RECEIVER_NOT_EXPORTED
-            )
-            Log.i(TAG, "✅ BroadcastReceiver registered")
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to register receiver", e)
-            onComplete(false, "Failed to register download listener: ${e.message}")
-            return
-        }
-
-        try {
-            // Download location depends on Android version (scoped storage compliance)
-            val request = DownloadManager.Request(modelUrl.toUri())
-                .setTitle("AILive Model Download")
-                .setDescription("Downloading $modelName...")
-                .setMimeType("application/octet-stream")
-                .setAllowedNetworkTypes(
-                    DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
+            try {
+                context.registerReceiver(
+                    downloadReceiver,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                    Context.RECEIVER_NOT_EXPORTED
                 )
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
 
-            // Download to app-private external storage for ALL Android versions
-            // This ensures llama.cpp can always access the model files
-            request.setDestinationInExternalFilesDir(
-                context,
-                Environment.DIRECTORY_DOWNLOADS,
-                modelName
-            )
-            Log.i(TAG, "📁 Download destination: App-private storage")
+                val request = DownloadManager.Request(modelUrl.toUri())
+                    .setTitle("AILive Model Download")
+                    .setDescription("Downloading $modelName...")
+                    .setMimeType("application/octet-stream")
+                    .setAllowedNetworkTypes(
+                        DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
+                    )
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, modelName)
 
-            downloadId = downloadManager.enqueue(request)
-            Log.i(TAG, "✅ Download queued with ID: $downloadId")
-            Log.i(TAG, "   Destination: ${getModelsDir().absolutePath}/$modelName")
+                downloadId = downloadManager.enqueue(request)
+                Log.i(TAG, "✅ Download queued: $downloadId")
 
-            // Start polling download status as fallback (in case BroadcastReceiver doesn't fire)
-            startPollingDownloadStatus()
+                startPollingDownloadStatus()
 
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to start download", e)
-            // Unregister receiver on failure
-            downloadReceiver?.let {
-                try {
-                    context.unregisterReceiver(it)
-                } catch (ex: Exception) {}
+                continuation.invokeOnCancellation {
+                    cancelDownload()
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Failed to start download", e)
+                downloadReceiver?.let { try { context.unregisterReceiver(it) } catch (ex: Exception) {} }
+                downloadReceiver = null
+                continuation.resumeWithException(DownloadFailedException("Failed to start: ${e.message}"))
             }
-            downloadReceiver = null
-            onComplete(false, "Failed to start download: ${e.message}")
         }
     }
 
-    /**
-     * Check download progress
-     * @return Pair of (bytesDownloaded, totalBytes) or null if not downloading
-     */
-    fun getDownloadProgress(): Pair<Long, Long>? {
-        if (downloadId == -1L) return null
+    private fun handleDownloadComplete(modelName: String) {
+        if (isHandlingCompletion) return
+        isHandlingCompletion = true
 
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        downloadManager.query(query)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val bytesDownloaded = cursor.getLong(
-                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                )
-                val totalBytes = cursor.getLong(
-                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                )
-                return Pair(bytesDownloaded, totalBytes)
-            }
-        }
-        return null
-    }
-
-    /**
-     * Start polling download status (fallback if BroadcastReceiver doesn't fire)
-     */
-    private fun startPollingDownloadStatus() {
-        // Cancel any existing polling
         stopPollingDownloadStatus()
+        downloadReceiver?.let {
+            try { context.unregisterReceiver(it) } catch (e: Exception) {}
+            downloadReceiver = null
+        }
 
+        val continuation = downloadContinuation
+        var exception: DownloadFailedException? = null
+        var result: String? = null
+
+        try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            downloadManager.query(query)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    
+                    when (status) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            val modelFile = File(getModelsDir(), modelName)
+                            val minSize = if (modelName.endsWith(".gguf")) MIN_GGUF_SIZE_BYTES else MIN_MODEL_SIZE_BYTES
+
+                            if (modelFile.exists() && modelFile.length() >= minSize) {
+                                Log.i(TAG, "✅ Verified: $modelName")
+                                result = DOWNLOAD_STATUS_OK
+                            } else {
+                                exception = DownloadFailedException("File too small or missing")
+                            }
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                            exception = DownloadFailedException(getDownloadErrorMessage(reason))
+                        }
+                        else -> {
+                            exception = DownloadFailedException("Unexpected status: $status")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            exception = DownloadFailedException("Error: ${e.message}")
+        } finally {
+            downloadId = -1
+            currentModelName = null
+            downloadContinuation = null
+            isHandlingCompletion = false
+
+            if (exception != null) {
+                continuation?.resumeWithException(exception)
+            } else if (result != null) {
+                continuation?.resume(result)
+            } else {
+                continuation?.resumeWithException(DownloadFailedException("Unknown error"))
+            }
+        }
+    }
+
+    private fun startPollingDownloadStatus() {
+        stopPollingDownloadStatus()
         statusCheckRunnable = object : Runnable {
             override fun run() {
                 checkDownloadStatus()
-                // Schedule next check
-                handler.postDelayed(this, POLL_INTERVAL_MS)
+                statusCheckRunnable?.let { handler.postDelayed(this, POLL_INTERVAL_MS) }
             }
         }
-
-        // Start polling after initial delay
         handler.postDelayed(statusCheckRunnable!!, POLL_INTERVAL_MS)
-        Log.d(TAG, "📊 Started polling download status (every ${POLL_INTERVAL_MS / 1000}s)")
     }
 
-    /**
-     * Stop polling download status
-     */
     private fun stopPollingDownloadStatus() {
         statusCheckRunnable?.let {
             handler.removeCallbacks(it)
             statusCheckRunnable = null
-            Log.d(TAG, "📊 Stopped polling download status")
         }
     }
 
-    /**
-     * Check current download status (called by polling mechanism)
-     */
     private fun checkDownloadStatus() {
         if (downloadId == -1L) {
             stopPollingDownloadStatus()
@@ -851,216 +512,39 @@ class ModelDownloadManager(private val context: Context) {
             val query = DownloadManager.Query().setFilterById(downloadId)
             downloadManager.query(query)?.use { cursor ->
                 if (cursor.moveToFirst()) {
-                    val status = cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
-                    )
-
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                     when (status) {
-                        DownloadManager.STATUS_SUCCESSFUL -> {
-                            Log.i(TAG, "📊 Polling detected: Download SUCCESS")
-                            stopPollingDownloadStatus()
-                            // Trigger completion handler
-                            currentModelName?.let { handleDownloadComplete(it) }
-                        }
-                        DownloadManager.STATUS_FAILED -> {
-                            Log.e(TAG, "📊 Polling detected: Download FAILED")
+                        DownloadManager.STATUS_SUCCESSFUL, DownloadManager.STATUS_FAILED -> {
                             stopPollingDownloadStatus()
                             currentModelName?.let { handleDownloadComplete(it) }
-                        }
-                        DownloadManager.STATUS_RUNNING,
-                        DownloadManager.STATUS_PENDING -> {
-                            // Still downloading - keep polling
-                            val bytesDownloaded = cursor.getLong(
-                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                            )
-                            val totalBytes = cursor.getLong(
-                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                            )
-                            if (totalBytes > 0) {
-                                val progress = (bytesDownloaded * 100) / totalBytes
-                                Log.d(TAG, "📊 Download progress: $progress% (${bytesDownloaded / 1024 / 1024}MB / ${totalBytes / 1024 / 1024}MB)")
-                            }
-                        }
-                        DownloadManager.STATUS_PAUSED -> {
-                            Log.w(TAG, "📊 Download PAUSED")
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error checking download status", e)
+            Log.e(TAG, "❌ Error checking status", e)
         }
     }
 
-    /**
-     * Handle download completion - verify file in Downloads folder
-     * BUGFIX: Prevent duplicate invocations from both BroadcastReceiver and polling
-     * BUGFIX v2: Properly reset state BEFORE callback to allow sequential downloads
-     */
-    private fun handleDownloadComplete(modelName: String) {
-        // Guard against duplicate calls (can happen when both BroadcastReceiver and polling fire)
-        if (isHandlingCompletion) {
-            Log.w(TAG, "⚠️ handleDownloadComplete already in progress, ignoring duplicate call")
-            return
-        }
+    // ========== UTILITY METHODS ==========
 
-        isHandlingCompletion = true
-        Log.i(TAG, "📥 handleDownloadComplete called for: $modelName")
+    fun getDownloadProgress(): Pair<Long, Long>? {
+        if (downloadId == -1L) return null
 
-        // Stop polling (in case called from BroadcastReceiver)
-        stopPollingDownloadStatus()
-
-        // Unregister BroadcastReceiver if still registered
-        downloadReceiver?.let {
-            try {
-                context.unregisterReceiver(it)
-                Log.d(TAG, "   Unregistered BroadcastReceiver in handleDownloadComplete")
-            } catch (e: Exception) {
-                // Already unregistered - that's fine
-                Log.d(TAG, "   BroadcastReceiver already unregistered")
-            }
-            downloadReceiver = null
-        }
-
-        // Store callback locally (but DON'T clear it yet - clear AFTER state reset)
-        val callback = downloadCompleteCallback
-
-        try {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            downloadManager.query(query)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val status = cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
-                    )
-                    Log.i(TAG, "   Download status: $status")
-
-                    when (status) {
-                        DownloadManager.STATUS_SUCCESSFUL -> {
-                            val uriString = cursor.getString(
-                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI)
-                            )
-                            Log.i(TAG, "✅ Download complete: $uriString")
-
-                            if (uriString != null) {
-                                // Verify file exists in Downloads folder
-                                val downloadsDir = getModelsDir()
-                                val modelFile = File(downloadsDir, modelName)
-
-                                // GGUF models are always large (hundreds of MB)
-                                if (modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES) {
-                                    val sizeMB = modelFile.length() / 1024 / 1024
-                                    Log.i(TAG, "✅ File verified in Downloads: ${modelFile.absolutePath}")
-                                    Log.i(TAG, "   Size: ${sizeMB}MB")
-
-                                    // CRITICAL FIX: Reset ALL state BEFORE invoking callback
-                                    // This allows the callback to immediately start a new download
-                                    downloadId = -1
-                                    currentModelName = null
-                                    downloadCompleteCallback = null
-                                    isHandlingCompletion = false
-
-                                    // Now safe to invoke callback (which may trigger next download)
-                                    callback?.invoke(true, "")
-                                    return  // Exit early to avoid finally block resetting flag again
-                                } else {
-                                    val sizeMB = if (modelFile.exists()) modelFile.length() / 1024 / 1024 else 0
-                                    Log.e(TAG, "❌ File missing or too small in Downloads!")
-                                    Log.e(TAG, "   Expected at least ${MIN_MODEL_SIZE_BYTES / 1024 / 1024}MB, got ${sizeMB}MB")
-
-                                    downloadId = -1
-                                    currentModelName = null
-                                    downloadCompleteCallback = null
-                                    isHandlingCompletion = false
-
-                                    callback?.invoke(false, "Download verification failed")
-                                    return
-                                }
-                            } else {
-                                Log.e(TAG, "❌ URI is null!")
-
-                                downloadId = -1
-                                currentModelName = null
-                                downloadCompleteCallback = null
-                                isHandlingCompletion = false
-
-                                callback?.invoke(false, "Download URI is null")
-                                return
-                            }
-                        }
-                        DownloadManager.STATUS_FAILED -> {
-                            val reason = cursor.getInt(
-                                cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
-                            )
-                            val errorMessage = getDownloadErrorMessage(reason)
-                            Log.e(TAG, "❌ Download failed with reason: $reason - $errorMessage")
-
-                            downloadId = -1
-                            currentModelName = null
-                            downloadCompleteCallback = null
-                            isHandlingCompletion = false
-
-                            callback?.invoke(false, errorMessage)
-                            return
-                        }
-                        else -> {
-                            Log.w(TAG, "⚠️ Download status: $status")
-
-                            downloadId = -1
-                            currentModelName = null
-                            downloadCompleteCallback = null
-                            isHandlingCompletion = false
-
-                            callback?.invoke(false, "Unexpected download status: $status")
-                            return
-                        }
-                    }
-                } else {
-                    Log.e(TAG, "❌ Cursor is empty!")
-
-                    downloadId = -1
-                    currentModelName = null
-                    downloadCompleteCallback = null
-                    isHandlingCompletion = false
-
-                    callback?.invoke(false, "Could not query download status")
-                    return
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error handling download completion", e)
-
-            downloadId = -1
-            currentModelName = null
-            downloadCompleteCallback = null
-            isHandlingCompletion = false
-
-            callback?.invoke(false, "Error: ${e.message}")
-            return
-        } finally {
-            // Safety net: only reset if not already reset (shouldn't happen due to early returns)
-            if (isHandlingCompletion) {
-                isHandlingCompletion = false
-                Log.d(TAG, "📥 Completion handling finished (via finally)")
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        downloadManager.query(query)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                return Pair(downloaded, total)
             }
         }
+        return null
     }
 
-
-    /**
-     * Import a model from user's storage (file picker) to Downloads folder
-     * Supports GGUF, ONNX, and BIN formats
-     *
-     * @param uri URI of the file selected by user
-     * @param onComplete Callback with (success, errorMessage)
-     */
-    suspend fun importModelFromStorage(
-        uri: Uri,
-        onComplete: (Boolean, String) -> Unit
-    ) = withContext(Dispatchers.IO) {
+    suspend fun importModelFromStorage(uri: Uri, onComplete: (Boolean, String) -> Unit) = withContext(Dispatchers.IO) {
+        var fileName: String? = null
         try {
-            var fileName = QWEN_VL_MODEL_GGUF
-
-            // Get original filename
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 if (nameIndex >= 0 && cursor.moveToFirst()) {
@@ -1068,203 +552,70 @@ class ModelDownloadManager(private val context: Context) {
                 }
             }
 
-            Log.i(TAG, "📥 Importing model to Downloads: $fileName")
+            if (fileName == null) throw IOException("Could not get file name")
 
-            // Validate model format - GGUF/ONNX/BIN files
-            val isValidFormat = fileName.endsWith(".gguf", ignoreCase = true) ||
-                                fileName.endsWith(".onnx", ignoreCase = true) ||
-                                fileName.endsWith(".bin", ignoreCase = true)
+            val isValid = fileName!!.endsWith(".gguf", true) ||
+                         fileName!!.endsWith(".onnx", true) ||
+                         fileName!!.endsWith(".bin", true)
 
-            if (!isValidFormat) {
-                Log.e(TAG, "❌ Invalid model format: $fileName")
-                withContext(Dispatchers.Main) {
-                    onComplete(false, "Invalid model format.\n\nSupported formats: .gguf, .onnx, .bin")
-                }
-                return@withContext
-            }
+            if (!isValid) throw IOException("Invalid format. Supported: .gguf, .onnx, .bin")
 
-            Log.i(TAG, "✓ Valid model file detected")
-
-            // Ensure Downloads directory exists
-            val downloadsDir = getModelsDir()
-            if (!downloadsDir.exists()) {
-                downloadsDir.mkdirs()
-            }
-
-            val destFile = File(downloadsDir, fileName)
-
-            // Copy file to Downloads
+            val destFile = File(getModelsDir(), fileName!!)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(destFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalBytes = 0L
-
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytes += bytesRead
-
-                        if (totalBytes % (50 * 1024 * 1024) == 0L) {
-                            Log.d(TAG, "   Copied: ${totalBytes / 1024 / 1024}MB...")
-                        }
-                    }
-
-                    Log.i(TAG, "✅ Model imported successfully: ${totalBytes / 1024 / 1024}MB")
-                    Log.i(TAG, "   Location: ${destFile.absolutePath}")
+                    input.copyTo(output, 8192)
                 }
             }
 
-            // Validate file size
-            if (destFile.length() < MIN_MODEL_SIZE_BYTES) {
-                Log.e(TAG, "❌ Imported file is too small (${destFile.length()} bytes)")
+            val minSize = if (fileName!!.endsWith(".gguf")) MIN_GGUF_SIZE_BYTES else MIN_MODEL_SIZE_BYTES
+            if (destFile.length() < minSize) {
                 destFile.delete()
-                withContext(Dispatchers.Main) {
-                    onComplete(false, "File is too small or corrupted. Please select a valid model file.")
-                }
-                return@withContext
+                throw IOException("File too small or corrupted")
             }
 
-            withContext(Dispatchers.Main) {
-                onComplete(true, fileName)
-            }
+            withContext(Dispatchers.Main) { onComplete(true, fileName!!) }
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to import model", e)
-            withContext(Dispatchers.Main) {
-                onComplete(false, "Failed to import: ${e.message}")
-            }
+            withContext(Dispatchers.Main) { onComplete(false, "Failed: ${e.message}") }
         }
     }
 
-    /**
-     * Manually check if download is complete (fallback for when BroadcastReceiver doesn't fire)
-     * Call this when progress reaches 100% as a backup
-     */
-    fun manualCheckDownloadComplete() {
-        if (downloadId == -1L || currentModelName == null) {
-            Log.w(TAG, "⚠️ manualCheckDownloadComplete called but no active download")
-            return
-        }
-
-        if (completionCheckScheduled) {
-            Log.w(TAG, "⚠️ Completion check already scheduled, skipping")
-            return
-        }
-
-        completionCheckScheduled = true
-        Log.i(TAG, "🔍 Manually checking download completion for ID: $downloadId")
-
-        try {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            downloadManager.query(query)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val status = cursor.getInt(
-                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
-                    )
-                    Log.i(TAG, "   Status: $status (${getStatusString(status)})")
-
-                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                        Log.i(TAG, "   ✅ Download complete! Triggering handleDownloadComplete")
-                        // Unregister receiver since we're handling manually
-                        downloadReceiver?.let {
-                            try {
-                                context.unregisterReceiver(it)
-                                Log.i(TAG, "   Unregistered receiver (manual)")
-                            } catch (e: Exception) {
-                                Log.w(TAG, "   Could not unregister: ${e.message}")
-                            }
-                        }
-                        downloadReceiver = null
-                        handleDownloadComplete(currentModelName!!)
-                    } else if (status == DownloadManager.STATUS_RUNNING || status == DownloadManager.STATUS_PENDING) {
-                        Log.i(TAG, "   ⏳ Still downloading, will check again")
-                        completionCheckScheduled = false
-                    } else {
-                        Log.e(TAG, "   ❌ Download failed with status: $status")
-                        downloadCompleteCallback?.invoke(false, "Download failed")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error in manual completion check", e)
-            completionCheckScheduled = false
-        }
-    }
-
-    private fun getStatusString(status: Int): String {
-        return when (status) {
-            DownloadManager.STATUS_PENDING -> "PENDING"
-            DownloadManager.STATUS_RUNNING -> "RUNNING"
-            DownloadManager.STATUS_PAUSED -> "PAUSED"
-            DownloadManager.STATUS_SUCCESSFUL -> "SUCCESSFUL"
-            DownloadManager.STATUS_FAILED -> "FAILED"
-            else -> "UNKNOWN($status)"
-        }
-    }
-
-    /**
-     * Cancel ongoing download
-     */
     fun cancelDownload() {
         if (downloadId != -1L) {
             downloadManager.remove(downloadId)
-            downloadId = -1
-            currentModelName = null
-            completionCheckScheduled = false
-            Log.i(TAG, "🛑 Download cancelled")
         }
+        downloadReceiver?.let { try { context.unregisterReceiver(it) } catch (e: Exception) {} }
+        stopPollingDownloadStatus()
+
+        val continuation = downloadContinuation
+        downloadId = -1
+        currentModelName = null
+        downloadContinuation = null
+        downloadReceiver = null
+        isHandlingCompletion = false
+        
+        continuation?.resumeWithException(DownloadFailedException("Download cancelled"))
     }
 
-    /**
-     * Get list of available ONNX models in Downloads folder (legacy method)
-     */
-    fun getAvailableModels(): List<File> {
-        return getAvailableModelsInDownloads()
-    }
-
-    /**
-     * Delete a model file from Downloads folder
-     */
     fun deleteModel(modelName: String): Boolean {
-        val downloadsDir = getModelsDir()
-        val modelFile = File(downloadsDir, modelName)
+        val modelFile = File(getModelsDir(), modelName)
         return if (modelFile.exists()) {
-            val deleted = modelFile.delete()
-            if (deleted) {
-                Log.i(TAG, "🗑️ Deleted model from Downloads: $modelName")
+            modelFile.delete().also { deleted ->
+                if (deleted) Log.i(TAG, "🗑️ Deleted: $modelName")
             }
-            deleted
         } else {
-            Log.w(TAG, "⚠️ Model not found in Downloads: $modelName")
             false
         }
     }
 
-    /**
-     * Get human-readable error message for download failure reason
-     */
-    private fun getDownloadErrorMessage(reason: Int): String {
-        return when (reason) {
-            DownloadManager.ERROR_CANNOT_RESUME ->
-                "Download cannot be resumed. Please try again."
-            DownloadManager.ERROR_DEVICE_NOT_FOUND ->
-                "No external storage found. Please check your device storage."
-            DownloadManager.ERROR_FILE_ALREADY_EXISTS ->
-                "File already exists. Please delete it and try again."
-            DownloadManager.ERROR_FILE_ERROR ->
-                "File system error. Please check available storage space."
-            DownloadManager.ERROR_HTTP_DATA_ERROR ->
-                "Network error. Please check your internet connection and try again."
-            DownloadManager.ERROR_INSUFFICIENT_SPACE ->
-                "Insufficient storage space. Please free up space and try again."
-            DownloadManager.ERROR_TOO_MANY_REDIRECTS ->
-                "Too many redirects. The download URL may be invalid."
-            DownloadManager.ERROR_UNHANDLED_HTTP_CODE ->
-                "Server error. Please try again later."
-            DownloadManager.ERROR_UNKNOWN ->
-                "Unknown error. Please check your internet connection and try again."
-            else ->
-                "Download failed (error code: $reason). Please try again."
-        }
+    private fun getDownloadErrorMessage(reason: Int): String = when (reason) {
+        DownloadManager.ERROR_CANNOT_RESUME -> "Download cannot be resumed"
+        DownloadManager.ERROR_DEVICE_NOT_FOUND -> "No storage found"
+        DownloadManager.ERROR_FILE_ERROR -> "File system error"
+        DownloadManager.ERROR_HTTP_DATA_ERROR -> "Network error"
+        DownloadManager.ERROR_INSUFFICIENT_SPACE -> "Insufficient storage"
+        DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "Too many redirects"
+        DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "Server error"
+        else -> "Unknown error (code: $reason)"
     }
 }
