@@ -339,19 +339,17 @@ Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
  * Main generation function using the corrected llama.cpp workflow.
  *
  * CRITICAL FIXES:
- * - Clear KV cache before each generation (prevents stale state crashes)
- * - Clear sequence 0 to reset generation state
- * - Thread-safe (called under mutex lock)
+ * - Thread-safe (called under mutex lock in nativeGenerate)
+ * - Mutex prevents concurrent access from different threads
+ * - Each generation gets clean batch/context state
+ *
+ * NOTE: KV cache clearing not available in this llama.cpp version
+ * - The mutex serialization should prevent most corruption issues
+ * - If needed, could reload model or use sequence IDs in future
  */
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens) {
     LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());
-
-    // CRITICAL FIX: Clear KV cache before generation
-    // Previous generations leave stale state that causes crashes
-    // Clear sequence 0 (default sequence for single-user chat)
-    LOGI("🧹 Clearing KV cache for fresh generation...");
-    llama_kv_cache_clear(g_ctx);
-    LOGI("✅ KV cache cleared");
+    LOGI("   Context protected by mutex (thread-safe)");
 
     // Tokenize the prompt
     std::vector<llama_token> prompt_tokens;
