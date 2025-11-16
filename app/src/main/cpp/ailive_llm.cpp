@@ -198,9 +198,9 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
 
     // Tokenize the prompt
     std::vector<llama_token> tokens;
-    tokens.reserve(strlen(prompt_cstr) + 1);
+    tokens.resize(strlen(prompt_cstr) + 1); // Actually allocate memory
     const llama_vocab* vocab = llama_model_get_vocab(g_model);
-    int n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.capacity(), true, false);
+    int n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
     if (n_tokens < 0) {
         tokens.resize(-n_tokens);
         n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
@@ -301,9 +301,9 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
 
     // Tokenize the prompt
     std::vector<llama_token> prompt_tokens;
-    prompt_tokens.reserve(prompt_str.length() + 1); // Reserve space
+    prompt_tokens.resize(prompt_str.length() + 1); // Actually allocate memory
     const llama_vocab* vocab = llama_model_get_vocab(g_model);
-    int n_prompt_tokens = llama_tokenize(vocab, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.capacity(), true, false);
+    int n_prompt_tokens = llama_tokenize(vocab, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.size(), true, false);
     if (n_prompt_tokens < 0) {
         LOGE("Failed to tokenize prompt (buffer too small). Required size: %d", -n_prompt_tokens);
         // Resize and try again
