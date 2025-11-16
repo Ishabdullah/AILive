@@ -389,10 +389,26 @@ class LLMManager(private val context: Context) {
 
         val startTime = System.currentTimeMillis()
         Log.i(TAG, "🚀 Starting streaming generation: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
+        Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
+
+        // CRITICAL FIX: Validate prompt before sending to native code
+        if (prompt.isBlank()) {
+            Log.e(TAG, "❌ Empty prompt, cannot generate")
+            throw IllegalArgumentException("Prompt cannot be empty")
+        }
+
+        if (prompt.length > 8000) {
+            Log.w(TAG, "⚠️ Prompt very long (${prompt.length} chars), may cause issues")
+        }
 
         // Reload settings in case they changed
-        settings = ModelSettings.load(context)
-        Log.i(TAG, "   Using settings: maxTokens=${settings.maxTokens}, temp=${settings.temperature}")
+        try {
+            settings = ModelSettings.load(context)
+            Log.i(TAG, "   Using settings: maxTokens=${settings.maxTokens}, temp=${settings.temperature}")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to load settings, using defaults", e)
+            settings = ModelSettings.getDefaults()
+        }
 
         // CRITICAL FIX: Let llama.cpp handle chat formatting automatically
         // Each GGUF model has its own chat template embedded in the file
@@ -433,12 +449,34 @@ class LLMManager(private val context: Context) {
         try {
             // CRITICAL FIX: Move blocking JNI call to IO dispatcher
             // This prevents crashes from calling native code on wrong thread
+
+            // Debug logging before native call
+            Log.d(TAG, "📝 Prompt preview (first 200 chars):")
+            Log.d(TAG, messageToSend.take(200))
+            Log.d(TAG, "📊 Parameters: maxTokens=${settings.maxTokens}, backend=$backend")
+
             val result = withContext(Dispatchers.IO) {
                 try {
                     Log.d(TAG, "📞 Calling native generate() on IO thread...")
-                    llmBridge.generate(messageToSend, settings.maxTokens)
+                    Log.d(TAG, "   Thread: ${Thread.currentThread().name}")
+
+                    val startNative = System.currentTimeMillis()
+                    val response = llmBridge.generate(messageToSend, settings.maxTokens)
+                    val nativeDuration = System.currentTimeMillis() - startNative
+
+                    Log.d(TAG, "✅ Native call completed in ${nativeDuration}ms")
+                    Log.d(TAG, "   Response length: ${response.length} chars")
+
+                    response
+                } catch (e: UnsatisfiedLinkError) {
+                    Log.e(TAG, "❌ Native library error", e)
+                    Log.e(TAG, "   This means the .so file is missing or incompatible")
+                    throw IllegalStateException("Native library error: ${e.message}", e)
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ Native generate() crashed", e)
+                    Log.e(TAG, "   Exception type: ${e.javaClass.simpleName}")
+                    Log.e(TAG, "   Message: ${e.message}")
+                    e.printStackTrace()
                     throw e
                 }
             }

@@ -125,9 +125,43 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
     }
 
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
-    std::string result = llama_decode_and_generate(prompt_cstr, max_tokens);
+
+    // CRITICAL FIX: Validate prompt before processing
+    if (prompt_cstr == nullptr) {
+        LOGE("❌ Prompt is null!");
+        return env->NewStringUTF("[ERROR: Null prompt]");
+    }
+
+    size_t prompt_len = strlen(prompt_cstr);
+    if (prompt_len == 0) {
+        LOGE("❌ Prompt is empty!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return env->NewStringUTF("[ERROR: Empty prompt]");
+    }
+
+    if (prompt_len > 16000) {
+        LOGE("❌ Prompt too long (%zu bytes), truncating to 16000", prompt_len);
+        // Note: We'll let llama_decode_and_generate handle it, but log warning
+    }
+
+    LOGI("📝 Received prompt: %zu bytes, max_tokens=%d", prompt_len, max_tokens);
+
+    std::string result;
+    try {
+        result = llama_decode_and_generate(prompt_cstr, max_tokens);
+    } catch (const std::exception& e) {
+        LOGE("❌ Exception during generation: %s", e.what());
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return env->NewStringUTF("[ERROR: Generation failed]");
+    } catch (...) {
+        LOGE("❌ Unknown exception during generation");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return env->NewStringUTF("[ERROR: Unknown error]");
+    }
+
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
 
+    LOGI("✅ Generation complete: %zu bytes", result.length());
     return env->NewStringUTF(result.c_str());
 }
 
