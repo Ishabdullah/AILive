@@ -82,7 +82,7 @@ AI: $aiResponse
 Extract facts in this JSON format:
 [
   {
-    "category": "PERSONAL_INFO" | "PREFERENCES" | "GOALS" | "RELATIONSHIPS" | "HEALTH" | "WORK" | "HOBBIES" | "OPINIONS",
+    "category": "PERSONAL_INFO" | "PREFERENCES" | "GOALS" | "RELATIONSHIPS" | "HEALTH" | "WORK" | "INTERESTS" | "OTHER",
     "fact": "User's name is John",
     "importance": 0.8,
     "confidence": 0.9
@@ -158,8 +158,8 @@ JSON:"""
         return try {
             FactCategory.valueOf(categoryStr.uppercase())
         } catch (e: IllegalArgumentException) {
-            // Default to OPINIONS for unknown categories
-            FactCategory.OPINIONS
+            // Default to OTHER for unknown categories
+            FactCategory.OTHER
         }
     }
 

@@ -196,10 +196,10 @@ class LLMManager(private val context: Context) {
             Log.i(TAG, "⏱️  This may take 10-15 seconds for model loading...")
 
             // CRITICAL: Check if native library is loaded
-            if (!llmBridge.isLibraryAvailable()) {
+            if (!LLMBridge.isLibraryAvailable()) {
                 val error = "Native library (libailive_llm.so) not found in APK. " +
                            "This build was compiled without NDK support. " +
-                           "Error: ${llmBridge.getLibraryError()}"
+                           "Error: ${LLMBridge.getLibraryError()}"
                 Log.e(TAG, "❌ $error")
                 Log.e(TAG, "   Please download a properly built APK with NDK enabled")
                 Log.e(TAG, "   Or rebuild with CMake/NDK configuration enabled")
