@@ -178,24 +178,32 @@ class ModelSetupDialog(
      * Download all necessary models (BGE + Memory Model + Qwen2-VL)
      * Downloads in optimal order for best user experience
      */
+    // Data class to track live download state
+    private data class DownloadState(
+        var modelName: String = "",
+        var modelNum: Int = 0,
+        var totalModels: Int = 3,
+        var overallPercent: Int = 0
+    )
+
+    private var downloadState = DownloadState()
+
     private fun downloadAllModels(onComplete: () -> Unit) {
         Log.i(TAG, "Starting download of all necessary models")
         Toast.makeText(activity, "Downloading necessary models (~1.9GB)...", Toast.LENGTH_SHORT).show()
 
         isProcessingDownload = false  // Reset state
-        var currentModelName = ""
-        var currentModelNum = 0
-        var totalModels = 3
-        var overallPercent = 0
+        downloadState = DownloadState()  // Reset download state
 
         modelDownloadManager.downloadAllModels(
             onProgress = { modelName, modelNum, total, percent ->
                 activity.runOnUiThread {
-                    currentModelName = modelName
-                    currentModelNum = modelNum
-                    totalModels = total
-                    overallPercent = percent
-                    updateMultiModelDownloadProgress(modelName, modelNum, total, percent)
+                    // Update live state
+                    downloadState.modelName = modelName
+                    downloadState.modelNum = modelNum
+                    downloadState.totalModels = total
+                    downloadState.overallPercent = percent
+                    updateMultiModelDownloadProgress()  // No params - uses live state
                 }
             },
             onComplete = { success, errorMessage ->
@@ -408,15 +416,21 @@ class ModelSetupDialog(
 
         downloadDialog?.show()
 
-        // Update progress every second
+        // Update progress every second using live download state
         progressHandler = Handler(Looper.getMainLooper())
-        updateMultiModelDownloadProgress("", 0, 2, 0)
+        updateMultiModelDownloadProgress()
     }
 
     /**
-     * Update multi-model download progress
+     * Update multi-model download progress using live downloadState
      */
-    private fun updateMultiModelDownloadProgress(modelName: String, modelNum: Int, totalModels: Int, overallPercent: Int) {
+    private fun updateMultiModelDownloadProgress() {
+        // Read from live download state
+        val modelName = downloadState.modelName
+        val modelNum = downloadState.modelNum
+        val totalModels = downloadState.totalModels
+        val overallPercent = downloadState.overallPercent
+
         val progress = modelDownloadManager.getDownloadProgress()
 
         val message = if (progress != null) {
@@ -445,9 +459,9 @@ class ModelSetupDialog(
 
         downloadDialog?.setMessage(message)
 
-        // Schedule next update in 1 second
+        // Schedule next update in 1 second - now uses live state
         progressHandler?.postDelayed({
-            updateMultiModelDownloadProgress(modelName, modelNum, totalModels, overallPercent)
+            updateMultiModelDownloadProgress()
         }, 1000)
     }
 

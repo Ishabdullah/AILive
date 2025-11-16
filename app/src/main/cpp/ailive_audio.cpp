@@ -58,7 +58,8 @@ Java_com_ailive_audio_WhisperProcessor_nativeInit(
     const char* path = env->GetStringUTFChars(model_path, nullptr);
     LOGI_AUDIO("Initializing Whisper model from: %s", path);
 
-    g_whisper_ctx = whisper_init_from_file(path);
+    whisper_context_params params = whisper_context_default_params();
+    g_whisper_ctx = whisper_init_from_file_with_params(path, params);
 
     env->ReleaseStringUTFChars(model_path, path);
 
