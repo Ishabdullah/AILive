@@ -194,16 +194,16 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     LOGI("🧠 Generating embedding for: %.80s...", prompt_cstr);
 
     // Clear the memory (KV cache)
-    llama_memory_seq_rm(llama_get_memory(g_ctx), -1, 0, -1);
+    llama_kv_cache_seq_rm(g_ctx, -1, 0, -1);
 
     // Tokenize the prompt
     std::vector<llama_token> tokens;
     tokens.reserve(strlen(prompt_cstr) + 1);
     const llama_vocab* vocab = llama_model_get_vocab(g_model);
-    int n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.capacity(), true, false);
+    int n_tokens = llama_tokenize(g_model, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.capacity(), true, false);
     if (n_tokens < 0) {
         tokens.resize(-n_tokens);
-        n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
+        n_tokens = llama_tokenize(g_model, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
     } else {
         tokens.resize(n_tokens);
     }
@@ -297,18 +297,18 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
     LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());
 
     // Clear the memory (KV cache) from previous runs
-    llama_memory_seq_rm(llama_get_memory(g_ctx), -1, 0, -1);
+    llama_kv_cache_seq_rm(g_ctx, -1, 0, -1);
 
     // Tokenize the prompt
     std::vector<llama_token> prompt_tokens;
     prompt_tokens.reserve(prompt_str.length() + 1); // Reserve space
     const llama_vocab* vocab = llama_model_get_vocab(g_model);
-    int n_prompt_tokens = llama_tokenize(vocab, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.capacity(), true, false);
+    int n_prompt_tokens = llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.capacity(), true, false);
     if (n_prompt_tokens < 0) {
         LOGE("Failed to tokenize prompt (buffer too small). Required size: %d", -n_prompt_tokens);
         // Resize and try again
         prompt_tokens.resize(-n_prompt_tokens);
-        n_prompt_tokens = llama_tokenize(vocab, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.size(), true, false);
+        n_prompt_tokens = llama_tokenize(g_model, prompt_str.c_str(), prompt_str.length(), prompt_tokens.data(), prompt_tokens.size(), true, false);
     } else {
         prompt_tokens.resize(n_prompt_tokens);
     }
@@ -346,7 +346,7 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         auto* logits = llama_get_logits_ith(g_ctx, batch.n_tokens - 1);
 
         const llama_vocab* vocab = llama_model_get_vocab(g_model);
-        const int n_vocab = llama_vocab_n_tokens(vocab);
+        const int n_vocab = llama_n_vocab(g_model);
 
         llama_token_data_array candidates;
         candidates.data = new llama_token_data[n_vocab];
@@ -380,14 +380,14 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         delete[] candidates.data;
 
         // Check for End-of-Sequence
-        if (new_token_id == llama_vocab_eos(vocab)) {
+        if (new_token_id == llama_token_eos(g_model)) {
             LOGI("End of generation (EOS token).");
             break;
         }
 
         // Append token to result string
         char piece_buf[256];
-        int piece_len = llama_token_to_piece(vocab, new_token_id, piece_buf, sizeof(piece_buf), 0, false);
+        int piece_len = llama_token_to_piece(g_model, new_token_id, piece_buf, sizeof(piece_buf), 0, false);
         if (piece_len > 0) {
             result_str.append(piece_buf, std::min(piece_len, (int)sizeof(piece_buf)));
         }
