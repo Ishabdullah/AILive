@@ -14,6 +14,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <mutex>
 #include <android/log.h>
 #include "llama.h"
 // #include "llama_image.h" // TODO: Not available in current llama.cpp - vision features temporarily disabled
@@ -21,10 +22,15 @@
 #define LOG_TAG "AILive-LLM"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
 // Global context (one model at a time)
 static llama_model* g_model = nullptr;
 static llama_context* g_ctx = nullptr;
+
+// CRITICAL FIX: Add mutex for thread safety
+// Model initialized on one thread, but generation called from another
+static std::mutex g_llama_mutex;
 
 // Forward declaration
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens);
@@ -119,6 +125,10 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
         jstring prompt,
         jint max_tokens) {
 
+    // CRITICAL FIX: Lock mutex to prevent concurrent access
+    // Model initialized on one thread, generation called from another
+    std::lock_guard<std::mutex> lock(g_llama_mutex);
+
     if (g_model == nullptr || g_ctx == nullptr) {
         LOGE("Model not loaded, cannot generate.");
         return env->NewStringUTF("");
@@ -140,11 +150,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
     }
 
     if (prompt_len > 16000) {
-        LOGE("❌ Prompt too long (%zu bytes), truncating to 16000", prompt_len);
-        // Note: We'll let llama_decode_and_generate handle it, but log warning
+        LOGW("⚠️ Prompt very long (%zu bytes), may cause issues", prompt_len);
     }
 
     LOGI("📝 Received prompt: %zu bytes, max_tokens=%d", prompt_len, max_tokens);
+    LOGI("   Thread safety: LOCKED (mutex acquired)");
 
     std::string result;
     try {
@@ -162,6 +172,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
 
     LOGI("✅ Generation complete: %zu bytes", result.length());
+    LOGI("   Thread safety: UNLOCKED (mutex releasing)");
     return env->NewStringUTF(result.c_str());
 }
 
@@ -326,12 +337,21 @@ Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
 
 /**
  * Main generation function using the corrected llama.cpp workflow.
+ *
+ * CRITICAL FIXES:
+ * - Clear KV cache before each generation (prevents stale state crashes)
+ * - Clear sequence 0 to reset generation state
+ * - Thread-safe (called under mutex lock)
  */
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens) {
     LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());
 
-    // Note: KV cache clearing function varies by llama.cpp version
-    // Skipping cache clear - will naturally overwrite with new tokens
+    // CRITICAL FIX: Clear KV cache before generation
+    // Previous generations leave stale state that causes crashes
+    // Clear sequence 0 (default sequence for single-user chat)
+    LOGI("🧹 Clearing KV cache for fresh generation...");
+    llama_kv_cache_clear(g_ctx);
+    LOGI("✅ KV cache cleared");
 
     // Tokenize the prompt
     std::vector<llama_token> prompt_tokens;
@@ -378,6 +398,13 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
     while (n_current < max_tokens) {
         // Sample the next token using the new sampler API
         auto* logits = llama_get_logits_ith(g_ctx, batch.n_tokens - 1);
+
+        // CRITICAL FIX: Validate logits pointer
+        if (logits == nullptr) {
+            LOGE("❌ Failed to get logits from context (returned null)");
+            llama_batch_free(batch);
+            return "[ERROR: Logits retrieval failed - context may be corrupted]";
+        }
 
         const llama_vocab* vocab = llama_model_get_vocab(g_model);
         const int n_vocab = llama_vocab_n_tokens(vocab);
