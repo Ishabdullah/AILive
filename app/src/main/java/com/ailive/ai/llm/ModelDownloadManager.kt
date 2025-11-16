@@ -29,6 +29,19 @@ import kotlin.coroutines.resumeWithException
  * REFACTORED: Coroutine-based architecture for clean async operations
  * UPDATED: SmolLM2-360M support for hybrid dual-model system
  *
+ * MULTIMODAL MVP STATUS (testing-123 branch):
+ * ✅ SmolLM2-360M: Fast chat model (271MB) - Fully integrated
+ * ✅ BGE-small-en-v1.5: Embeddings (133MB) - Integrated with memory
+ * ✅ TinyLlama-1.1B: Memory ops (700MB) - Downloaded, integration pending
+ * ✅ Qwen2-VL-2B: Vision model (986MB) - TEXT-ONLY (mmproj file not included)
+ * ⏳ Whisper-Tiny: Voice input - Stub created, model download TODO
+ * ⏳ MobileNetV3: Vision pre-screening - Stub created, model download TODO
+ *
+ * INTEGRATION STATUS:
+ * - HybridModelManager: Created but not wired to MainActivity (TODO)
+ * - Current: MainActivity still uses LLMManager (single Qwen model)
+ * - Vision: Qwen2-VL lacks mmproj file, currently text-only
+ *
  * @author AILive Team
  * @since Phase 7.2 (Refactored with Coroutines + SmolLM2)
  */
