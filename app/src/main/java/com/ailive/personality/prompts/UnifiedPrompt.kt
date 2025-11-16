@@ -1,5 +1,6 @@
 package com.ailive.personality.prompts
 
+import android.util.Log
 import com.ailive.personality.ConversationTurn
 import com.ailive.personality.EmotionContext
 import com.ailive.personality.Role
@@ -187,11 +188,14 @@ END OF UNIFIED DIRECTIVE"""
         emotionContext: EmotionContext = EmotionContext(),
         locationContext: String? = null
     ): String {
+        // CRITICAL FIX: Sanitize AI name to prevent injection or malformed prompts
+        val sanitizedName = sanitizeAiName(aiName)
+
         // Build prompt with system instruction and user input
         val promptBuilder = StringBuilder()
 
-        // Add dynamic system instruction with AI name
-        promptBuilder.append(getCorePersonality(aiName))
+        // Add dynamic system instruction with sanitized AI name
+        promptBuilder.append(getCorePersonality(sanitizedName))
         promptBuilder.append("\n\n")
 
         // Add temporal and location awareness
@@ -199,20 +203,26 @@ END OF UNIFIED DIRECTIVE"""
         promptBuilder.append("DATE/TIME: ")
         promptBuilder.append(getCurrentTemporalContext())
         promptBuilder.append("\n")
-        if (locationContext != null) {
+        if (locationContext != null && locationContext.isNotBlank()) {
             promptBuilder.append("LOCATION: ")
-            promptBuilder.append(locationContext)
+            promptBuilder.append(locationContext.take(200)) // Limit location context length
             promptBuilder.append("\n")
         }
         promptBuilder.append("===== END CURRENT CONTEXT =====\n\n")
 
-        // Add conversation history if available
+        // Add conversation history if available (limit to prevent prompt overflow)
         if (conversationHistory.isNotEmpty()) {
             promptBuilder.append("CONVERSATION HISTORY:\n")
-            conversationHistory.takeLast(5).forEach { turn ->
+            conversationHistory.takeLast(3).forEach { turn ->
                 when (turn.role) {
-                    Role.USER -> promptBuilder.append("User: ${turn.content}\n")
-                    Role.ASSISTANT -> promptBuilder.append("$aiName: ${turn.content}\n")
+                    Role.USER -> {
+                        val content = turn.content.take(500) // Limit history content
+                        promptBuilder.append("User: $content\n")
+                    }
+                    Role.ASSISTANT -> {
+                        val content = turn.content.take(500) // Limit history content
+                        promptBuilder.append("$sanitizedName: $content\n")
+                    }
                     else -> {}
                 }
             }
@@ -224,16 +234,53 @@ END OF UNIFIED DIRECTIVE"""
             val contextStr = formatToolContext(toolContext)
             if (contextStr.isNotBlank()) {
                 promptBuilder.append("ADDITIONAL CONTEXT:\n")
-                promptBuilder.append(contextStr)
+                promptBuilder.append(contextStr.take(1000)) // Limit tool context
                 promptBuilder.append("\n\n")
             }
         }
 
-        // Add user input
-        promptBuilder.append("User: $userInput\n")
-        promptBuilder.append("$aiName: ")
+        // Add user input (limit length to prevent overflow)
+        val sanitizedInput = userInput.take(2000)
+        promptBuilder.append("User: $sanitizedInput\n")
+        promptBuilder.append("$sanitizedName: ")
 
-        return promptBuilder.toString()
+        val finalPrompt = promptBuilder.toString()
+
+        // CRITICAL: Validate prompt length (max 6000 chars to stay within context window)
+        if (finalPrompt.length > 6000) {
+            Log.w("UnifiedPrompt", "⚠️ Prompt too long (${finalPrompt.length} chars), truncating...")
+            return finalPrompt.take(6000)
+        }
+
+        return finalPrompt
+    }
+
+    /**
+     * Sanitize AI name to prevent injection or malformed prompts
+     * - Remove control characters and special tokens
+     * - Limit length to reasonable size
+     * - Fallback to "AILive" if invalid
+     */
+    private fun sanitizeAiName(name: String): String {
+        if (name.isBlank()) return "AILive"
+
+        // Remove any control characters, newlines, or special tokens
+        val cleaned = name
+            .replace(Regex("[\\p{C}]"), "") // Remove control characters
+            .replace("\n", " ")
+            .replace("\r", " ")
+            .replace("\t", " ")
+            .replace("<|", "")  // Remove potential special tokens
+            .replace("|>", "")
+            .replace("<", "")
+            .replace(">", "")
+            .trim()
+
+        // Limit length
+        val limited = cleaned.take(50)
+
+        // Return sanitized name or fallback
+        return limited.ifBlank { "AILive" }
     }
 
     /**
