@@ -343,7 +343,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Log which models are available
-        val models = modelDownloadManager.getAvailableModels()
+        val models = modelDownloadManager.getAvailableModelsInDownloads()
         Log.i(TAG, "✅ Found ${models.size} model(s) available:")
         models.forEach { model ->
             Log.i(TAG, "   - ${model.name} (${model.length() / 1024 / 1024}MB)")
