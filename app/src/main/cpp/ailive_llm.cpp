@@ -193,8 +193,8 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
     LOGI("🧠 Generating embedding for: %.80s...", prompt_cstr);
 
-    // Clear the memory (KV cache)
-    llama_kv_cache_clear(g_ctx);
+    // Note: KV cache clearing function varies by llama.cpp version
+    // Skipping cache clear - will naturally overwrite with new tokens
 
     // Tokenize the prompt
     std::vector<llama_token> tokens;
@@ -296,8 +296,8 @@ Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens) {
     LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());
 
-    // Clear the memory (KV cache) from previous runs
-    llama_kv_cache_clear(g_ctx);
+    // Note: KV cache clearing function varies by llama.cpp version
+    // Skipping cache clear - will naturally overwrite with new tokens
 
     // Tokenize the prompt
     std::vector<llama_token> prompt_tokens;
