@@ -1,3 +1,5 @@
+Disregard this README.md its outdated this project has changed drastically. Will be updated eventually. 
+
 # AILive: Your Private Pocket AI
 
 <div align="center">
