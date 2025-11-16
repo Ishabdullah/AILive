@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -430,8 +431,19 @@ class LLMManager(private val context: Context) {
         val backend = gpuInfo?.backend ?: "CPU"
 
         try {
-            // Generate the full response
-            val result = llmBridge.generate(messageToSend, settings.maxTokens)
+            // CRITICAL FIX: Move blocking JNI call to IO dispatcher
+            // This prevents crashes from calling native code on wrong thread
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    Log.d(TAG, "📞 Calling native generate() on IO thread...")
+                    llmBridge.generate(messageToSend, settings.maxTokens)
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Native generate() crashed", e)
+                    throw e
+                }
+            }
+
+            Log.d(TAG, "✅ Native generate() returned successfully")
 
             // Emit the result (simulating streaming by emitting the whole result)
             emit(result)
@@ -463,7 +475,7 @@ class LLMManager(private val context: Context) {
             Log.e(TAG, "   Settings: maxTokens=${settings.maxTokens}, ctxSize=${settings.ctxSize}")
             throw e
         }
-    }
+    }.flowOn(Dispatchers.Default)  // CRITICAL: Ensure Flow runs on background thread, safe for Main collection
 
     /**
      * Detect GPU acceleration support
