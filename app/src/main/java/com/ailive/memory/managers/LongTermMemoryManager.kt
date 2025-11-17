@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
  */
 class LongTermMemoryManager(
     private val context: Context,
-    private val llmBridge: LLMBridge? = null  // Optional: for LLM-based extraction
+    private val llmBridge: LLMBridge  // Required for semantic search and fact extraction
 ) {
     private val TAG = "LongTermMemoryManager"
 
@@ -28,14 +28,16 @@ class LongTermMemoryManager(
     private val factDao = database.longTermFactDao()
 
     // LLM-based fact extractor (lazy init)
-    private val factExtractor: FactExtractor? by lazy {
-        llmBridge?.let { FactExtractor(it) }
+    private val factExtractor: FactExtractor by lazy {
+        FactExtractor(llmBridge)
     }
 
     // ===== Fact Creation and Management =====
 
     /**
      * Learn a new fact
+     *
+     * Now includes automatic embedding generation for semantic search.
      */
     suspend fun learnFact(
         category: FactCategory,
@@ -59,6 +61,14 @@ class LongTermMemoryManager(
             return updated
         }
 
+        // Generate embedding for semantic search
+        val embedding = try {
+            llmBridge.generateEmbedding(factText)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to generate embedding for fact: ${e.message}")
+            null
+        }
+
         // Create new fact
         val fact = LongTermFactEntity(
             id = UUID.randomUUID().toString(),
@@ -69,11 +79,12 @@ class LongTermMemoryManager(
             confidence = confidence,
             firstMentioned = System.currentTimeMillis(),
             lastVerified = System.currentTimeMillis(),
-            tags = tags
+            tags = tags,
+            embedding = embedding  // Store embedding for semantic search
         )
 
         factDao.insertFact(fact)
-        Log.i(TAG, "Learned new fact [${category.name}]: ${factText.take(50)}...")
+        Log.i(TAG, "Learned new fact [${category.name}] with ${if (embedding != null) "embedding" else "no embedding"}: ${factText.take(50)}...")
         return fact
     }
 
@@ -159,10 +170,46 @@ class LongTermMemoryManager(
     }
 
     /**
-     * Search facts
+     * Performs a semantic search (RAG) to find the most relevant facts to a given query.
+     * This uses the LLMBridge to generate query embeddings and calculates cosine similarity.
+     *
+     * @param queryText The text to search for relevant facts against.
+     * @param topN The number of top results to return.
+     * @return A list of the most relevant facts.
      */
-    suspend fun searchFacts(query: String, limit: Int = 20): List<LongTermFactEntity> {
-        return factDao.searchFacts(query, limit)
+    suspend fun searchRelevantFacts(queryText: String, topN: Int = 5): List<LongTermFactEntity> {
+        Log.d(TAG, "🔍 Performing semantic search for: ${queryText.take(50)}...")
+
+        // 1. Generate an embedding for the query text.
+        val queryEmbedding = llmBridge.generateEmbedding(queryText)
+        if (queryEmbedding == null) {
+            Log.w(TAG, "LLM failed to generate query embedding. Falling back to text search.")
+            // Fallback to simple text search if embedding fails.
+            return factDao.searchByText(queryText).take(topN)
+        }
+
+        // 2. Get all facts that have an embedding.
+        val allFacts = factDao.getAllFacts().filter { it.embedding != null }
+
+        if (allFacts.isEmpty()) {
+            Log.w(TAG, "No facts with embeddings found. Falling back to text search.")
+            return factDao.searchByText(queryText).take(topN)
+        }
+
+        // 3. Calculate cosine similarity and sort.
+        val scoredFacts = allFacts.map { fact ->
+            val similarity = cosineSimilarity(queryEmbedding, fact.embedding!!)
+            fact to similarity
+        }.sortedByDescending { it.second }
+
+        // 4. Update access stats for the retrieved facts.
+        val results = scoredFacts.take(topN).map { it.first }
+        results.forEach { fact ->
+            factDao.updateFact(fact.withAccessUpdate()) // Ensure access count is updated
+        }
+
+        Log.i(TAG, "✅ Found ${results.size} relevant facts using semantic search")
+        return results
     }
 
     /**
@@ -266,6 +313,28 @@ class LongTermMemoryManager(
         val union = words1.union(words2).size
 
         return if (union > 0) intersection.toFloat() / union else 0f
+    }
+
+    /**
+     * Calculates the cosine similarity between two vectors.
+     * Used for semantic search to find relevant facts based on embedding similarity.
+     *
+     * @param vec1 First embedding vector
+     * @param vec2 Second embedding vector
+     * @return Similarity score between 0 and 1 (1 = identical, 0 = completely different)
+     */
+    private fun cosineSimilarity(vec1: List<Float>, vec2: List<Float>): Float {
+        if (vec1.size != vec2.size) return 0f
+        var dotProduct = 0.0
+        var norm1 = 0.0
+        var norm2 = 0.0
+        for (i in vec1.indices) {
+            dotProduct += vec1[i] * vec2[i]
+            norm1 += vec1[i] * vec1[i]
+            norm2 += vec2[i] * vec2[i]
+        }
+        if (norm1 == 0.0 || norm2 == 0.0) return 0f
+        return (dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2))).toFloat()
     }
 }
 
