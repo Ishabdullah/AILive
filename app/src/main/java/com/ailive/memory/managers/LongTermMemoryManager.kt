@@ -180,12 +180,30 @@ class LongTermMemoryManager(
     suspend fun searchRelevantFacts(queryText: String, topN: Int = 5): List<LongTermFactEntity> {
         Log.d(TAG, "🔍 Performing semantic search for: ${queryText.take(50)}...")
 
+        // CRITICAL: Validate input before attempting embedding
+        if (queryText.isBlank()) {
+            Log.w(TAG, "⚠️ Query text is blank, returning empty results")
+            return emptyList()
+        }
+
         // 1. Generate an embedding for the query text.
-        val queryEmbedding = llmBridge.generateEmbedding(queryText)
+        // CRITICAL: Wrapped in try-catch for fail-safe operation
+        val queryEmbedding = try {
+            llmBridge.generateEmbedding(queryText)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Exception during embedding generation", e)
+            null
+        }
+
         if (queryEmbedding == null) {
             Log.w(TAG, "LLM failed to generate query embedding. Falling back to text search.")
             // Fallback to simple text search if embedding fails.
-            return factDao.searchByText(queryText).take(topN)
+            return try {
+                factDao.searchByText(queryText).take(topN)
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Text search also failed", e)
+                emptyList()
+            }
         }
 
         // 2. Get all facts that have an embedding.

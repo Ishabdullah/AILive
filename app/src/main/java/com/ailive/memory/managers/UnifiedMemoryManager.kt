@@ -253,9 +253,16 @@ class UnifiedMemoryManager(private val context: Context) {
      * @param query The search query
      * @param limit Maximum number of facts to return
      * @return List of most relevant facts, ordered by semantic similarity
+     *
+     * CRITICAL: Fail-safe - returns empty list on any error instead of crashing
      */
     suspend fun recallFacts(query: String, limit: Int = 5): List<LongTermFactEntity> {
-        return longTermMemory.searchRelevantFacts(query, limit)
+        return try {
+            longTermMemory.searchRelevantFacts(query, limit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to recall facts for query: ${query.take(50)}", e)
+            emptyList()
+        }
     }
 
     /**

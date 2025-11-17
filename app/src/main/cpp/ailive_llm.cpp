@@ -230,37 +230,77 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
         jobject thiz,
         jstring prompt) {
 
+    // CRITICAL FIX: Lock mutex to prevent concurrent access with nativeGenerate
+    // This was causing SIGABRT crashes when text generation and embedding generation
+    // happened simultaneously (e.g., when user types "hello" and memory system searches facts)
+    std::lock_guard<std::mutex> lock(g_llama_mutex);
+
     if (g_model == nullptr || g_ctx == nullptr) {
-        LOGE("Model not loaded, cannot generate embedding.");
+        LOGE("❌ Model not loaded, cannot generate embedding.");
+        return nullptr;
+    }
+
+    // CRITICAL FIX: Validate prompt before processing
+    if (prompt == nullptr) {
+        LOGE("❌ Prompt JNI string is null!");
         return nullptr;
     }
 
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
-    LOGI("🧠 Generating embedding for: %.80s...", prompt_cstr);
+    if (prompt_cstr == nullptr) {
+        LOGE("❌ Failed to get UTF chars from prompt!");
+        return nullptr;
+    }
+
+    size_t prompt_len = strlen(prompt_cstr);
+    if (prompt_len == 0) {
+        LOGE("❌ Prompt is empty, cannot generate embedding!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    LOGI("🧠 Generating embedding for: %.80s... (%zu bytes)", prompt_cstr, prompt_len);
+    LOGI("   Thread safety: LOCKED (mutex acquired)");
 
     // Note: KV cache clearing function varies by llama.cpp version
     // Skipping cache clear - will naturally overwrite with new tokens
 
     // Tokenize the prompt
     std::vector<llama_token> tokens;
-    tokens.resize(strlen(prompt_cstr) + 1); // Actually allocate memory
+    tokens.resize(prompt_len + 1); // Actually allocate memory
     const llama_vocab* vocab = llama_model_get_vocab(g_model);
-    int n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
+    if (vocab == nullptr) {
+        LOGE("❌ Failed to get model vocabulary!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    int n_tokens = llama_tokenize(vocab, prompt_cstr, prompt_len, tokens.data(), tokens.size(), true, false);
     if (n_tokens < 0) {
+        LOGI("   Tokenization buffer too small (%zu), resizing to %d...", tokens.size(), -n_tokens);
         tokens.resize(-n_tokens);
-        n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
+        n_tokens = llama_tokenize(vocab, prompt_cstr, prompt_len, tokens.data(), tokens.size(), true, false);
     } else {
         tokens.resize(n_tokens);
     }
 
     if (n_tokens <= 0) {
-        LOGE("Embedding tokenization failed.");
+        LOGE("❌ Embedding tokenization failed (returned %d tokens).", n_tokens);
         env->ReleaseStringUTFChars(prompt, prompt_cstr);
         return nullptr;
     }
 
+    LOGI("   Tokenized into %d tokens", n_tokens);
+
     // Create a batch for the prompt
+    LOGI("   Creating batch for %d tokens...", n_tokens);
     llama_batch batch = llama_batch_init(n_tokens, 0, 1);
+    if (batch.token == nullptr) {
+        LOGE("❌ Failed to initialize batch!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
     batch.n_tokens = n_tokens;
     for (int i = 0; i < n_tokens; ++i) {
         batch.token[i] = tokens[i];
@@ -271,8 +311,9 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     }
 
     // Decode the prompt to update the context
+    LOGI("   Decoding batch...");
     if (llama_decode(g_ctx, batch) != 0) {
-        LOGE("llama_decode failed for embedding");
+        LOGE("❌ llama_decode failed for embedding (context may be full or corrupted)");
         llama_batch_free(batch);
         env->ReleaseStringUTFChars(prompt, prompt_cstr);
         return nullptr;
@@ -280,10 +321,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
 
     // Get the embedding for the last token
     const int n_embd = llama_model_n_embd(g_model);
-    const float* embedding = llama_get_embeddings_ith(g_ctx, n_tokens - 1);
+    LOGI("   Retrieving embedding (dimension: %d)...", n_embd);
 
+    const float* embedding = llama_get_embeddings_ith(g_ctx, n_tokens - 1);
     if (embedding == nullptr) {
-        LOGE("Failed to get embeddings.");
+        LOGE("❌ Failed to get embeddings from context (model may not support embeddings)");
         llama_batch_free(batch);
         env->ReleaseStringUTFChars(prompt, prompt_cstr);
         return nullptr;
@@ -292,14 +334,19 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     // Create and return the float array
     jfloatArray result = env->NewFloatArray(n_embd);
     if (result == nullptr) {
-        LOGE("Failed to create new float array.");
-    } else {
-        env->SetFloatArrayRegion(result, 0, n_embd, embedding);
+        LOGE("❌ Failed to create new float array (JNI memory allocation failed).");
+        llama_batch_free(batch);
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
     }
+
+    env->SetFloatArrayRegion(result, 0, n_embd, embedding);
 
     llama_batch_free(batch);
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
-    LOGI("✅ Embedding generated successfully.");
+
+    LOGI("✅ Embedding generated successfully (%d dimensions).", n_embd);
+    LOGI("   Thread safety: UNLOCKED (mutex releasing)");
     return result;
 }
 
