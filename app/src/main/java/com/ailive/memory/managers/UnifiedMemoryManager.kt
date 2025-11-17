@@ -29,9 +29,19 @@ class UnifiedMemoryManager(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // Store LLMManager for lazy initialization of long-term memory
+    private var llmManager: com.ailive.ai.llm.LLMManager? = null
+
     // Memory managers
     val conversationMemory = ConversationMemoryManager(context)
-    val longTermMemory = LongTermMemoryManager(context)
+
+    // Long-term memory requires LLMBridge - will be initialized in initialize()
+    private var _longTermMemory: LongTermMemoryManager? = null
+    val longTermMemory: LongTermMemoryManager
+        get() = _longTermMemory ?: throw IllegalStateException(
+            "UnifiedMemoryManager not initialized. Call initialize() first with LLMManager instance."
+        )
+
     val userProfile = UserProfileManager(context)
 
     // NEW: Lightweight AI model for memory operations
@@ -52,19 +62,31 @@ class UnifiedMemoryManager(private val context: Context) {
      * - Better accuracy (Qwen 2B vs TinyLlama 1.1B)
      * - Faster (no model swapping needed)
      * - LLM-based fact extraction enabled
+     * - Semantic search with RAG for fact retrieval
      *
      * @param llmManager The initialized LLMManager instance (with Qwen loaded)
      */
     suspend fun initialize(llmManager: com.ailive.ai.llm.LLMManager? = null) {
         Log.i(TAG, "Initializing unified memory system...")
 
+        // Store LLMManager reference
+        this.llmManager = llmManager
+
         // v1.5: Initialize memory model with Qwen via LLMManager
         if (llmManager != null && llmManager.isReady()) {
             Log.i(TAG, "✓ Initializing memory AI with Qwen (shared model)")
             memoryModelManager.initialize(llmManager)
+
+            // Initialize LongTermMemoryManager with LLMBridge for semantic search
+            _longTermMemory = LongTermMemoryManager(context, llmManager.llmBridge)
+            Log.i(TAG, "✓ Long-term memory initialized with semantic search (RAG)")
         } else {
-            Log.i(TAG, "⚠️  LLMManager not ready - memory AI will use regex fallback")
-            Log.i(TAG, "   This is normal during app startup - memory AI will initialize later")
+            Log.w(TAG, "⚠️  LLMManager not ready - cannot initialize long-term memory")
+            Log.w(TAG, "   Call initialize() again when LLMManager is ready")
+            throw IllegalStateException(
+                "LLMManager is required for UnifiedMemoryManager. " +
+                "Please ensure LLMManager is initialized before calling initialize()."
+            )
         }
 
         // Ensure user profile exists
@@ -73,7 +95,7 @@ class UnifiedMemoryManager(private val context: Context) {
         // Run maintenance tasks
         performMaintenance()
 
-        Log.i(TAG, "Memory system initialized")
+        Log.i(TAG, "Memory system initialized with semantic search")
     }
 
     /**
@@ -221,10 +243,17 @@ class UnifiedMemoryManager(private val context: Context) {
     }
 
     /**
-     * Recall relevant facts for a query
+     * Recall relevant facts for a query (now uses semantic search with RAG)
+     *
+     * This method leverages vector-based semantic search to find the most relevant
+     * facts based on meaning, not just keyword matching.
+     *
+     * @param query The search query
+     * @param limit Maximum number of facts to return
+     * @return List of most relevant facts, ordered by semantic similarity
      */
     suspend fun recallFacts(query: String, limit: Int = 5): List<LongTermFactEntity> {
-        return longTermMemory.searchFacts(query, limit)
+        return longTermMemory.searchRelevantFacts(query, limit)
     }
 
     /**
