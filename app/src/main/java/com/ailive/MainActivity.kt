@@ -436,7 +436,7 @@ class MainActivity : AppCompatActivity() {
             cameraManager.startCamera(cameraPreview)
 
             // Initialize VisionManager
-            visionManager = VisionManager(aiLiveCore.llmManager.llmBridge) // Assuming LLMBridge is accessible via AILiveCore
+            visionManager = VisionManager(aiLiveCore.hybridModelManager.llmBridge) // LLMBridge is accessible via HybridModelManager
             Log.i(TAG, "✓ VisionManager initialized")
 
             val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
@@ -775,7 +775,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Reload settings when returning from settings activity
         if (::aiLiveCore.isInitialized) {
-            aiLiveCore.llmManager.reloadSettings()
+            aiLiveCore.hybridModelManager.reloadSettings()
             Log.i(TAG, "⚙️ Settings reloaded on resume")
         }
     }

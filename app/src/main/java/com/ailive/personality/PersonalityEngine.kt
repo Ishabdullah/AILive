@@ -2,7 +2,7 @@ package com.ailive.personality
 
 import android.content.Context
 import android.util.Log
-import com.ailive.ai.llm.LLMManager
+import com.ailive.ai.llm.HybridModelManager
 import com.ailive.audio.TTSManager
 import com.ailive.core.messaging.*
 import com.ailive.core.state.StateManager
@@ -45,7 +45,7 @@ class PersonalityEngine(
     private val context: Context,
     private val messageBus: MessageBus,
     private val stateManager: StateManager,
-    private val llmManager: LLMManager,
+    private val hybridModelManager: HybridModelManager,
     private val ttsManager: TTSManager,
     private val memoryManager: UnifiedMemoryManager? = null  // v1.3: Persistent memory
 ) {
@@ -203,7 +203,7 @@ class PersonalityEngine(
      * This method creates a proper UnifiedPrompt with AI name, temporal context,
      * location context, conversation history, and persistent memory before streaming to the LLM.
      *
-     * Use this instead of calling llmManager.generateStreaming() directly!
+     * Use this instead of calling hybridModelManager.generateStreaming() directly!
      */
     suspend fun generateStreamingResponse(input: String): Flow<String> {
         Log.d(TAG, "Generating streaming response with full context for: ${input.take(50)}...")
@@ -314,8 +314,8 @@ class PersonalityEngine(
             Log.d(TAG, prompt.take(500))
 
             // Stream with the FULL PROMPT (not just raw input!)
-            Log.d(TAG, "Calling llmManager.generateStreaming()...")
-            return llmManager.generateStreaming(prompt, agentName = aiSettings.aiName)
+            Log.d(TAG, "Calling hybridModelManager.generateStreaming()...")
+            return hybridModelManager.generateStreaming(prompt, agentName = aiSettings.aiName)
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error in generateStreamingResponse", e)
@@ -494,7 +494,7 @@ Respond with ONLY the category name (e.g., "VISION" or "MEMORY").
 
         return try {
             val response = withContext(Dispatchers.IO) {
-                llmManager.generate(classificationPrompt, agentName = "IntentClassifier")
+                hybridModelManager.generate(classificationPrompt, agentName = "IntentClassifier")
             }
 
             val intentType = when (response.trim().uppercase()) {
@@ -652,7 +652,7 @@ Respond with ONLY the category name (e.g., "VISION" or "MEMORY").
         // Generate response with LLM (with fallback)
         val responseText = try {
             val startTime = System.currentTimeMillis()
-            val llmResponse = llmManager.generate(prompt, agentName = aiSettings.aiName)
+            val llmResponse = hybridModelManager.generate(prompt, agentName = aiSettings.aiName)
             val duration = System.currentTimeMillis() - startTime
 
             // Track statistics
@@ -677,7 +677,7 @@ Respond with ONLY the category name (e.g., "VISION" or "MEMORY").
                 }
                 "not initialized" in message.lowercase() -> {
                     Log.w(TAG, "⚠️ LLM not available: $message")
-                    val error = llmManager.getInitializationError()
+                    val error = hybridModelManager.getInitializationError()
                     if (error != null) {
                         "I'm having trouble with my language model: $error"
                     } else {
