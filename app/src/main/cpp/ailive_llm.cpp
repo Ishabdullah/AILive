@@ -417,6 +417,13 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
          (n_prompt_tokens + max_batch_size - 1) / max_batch_size);
 
     // --- Generate Response ---
+
+    // CRITICAL: Create initial batch for generation loop
+    // We only requested logits for 1 position (last prompt token), so they're at index 0
+    // Setting n_tokens=1 makes batch.n_tokens-1=0, which correctly indexes those logits
+    llama_batch batch = llama_batch_init(1, 0, 1);
+    batch.n_tokens = 1;
+
     std::string result_str;
     int n_current = n_prompt_tokens;
 
