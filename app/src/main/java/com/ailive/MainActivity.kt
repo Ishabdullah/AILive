@@ -502,18 +502,44 @@ class MainActivity : AppCompatActivity() {
 
             // 1. Initialize WhisperProcessor
             whisperProcessor = WhisperProcessor(applicationContext)
-            val whisperModel = modelDownloadManager.getModelPath("whisper") // Assuming "whisper" is the key for the model
+            val whisperModel = modelDownloadManager.getModelPath("whisper")
+
+            Log.i(TAG, "🎤 Attempting to initialize Whisper...")
+            Log.d(TAG, "   Model path from ModelDownloadManager: '$whisperModel'")
+
             if (whisperModel.isEmpty()) {
-                Log.e(TAG, "❌ Whisper model not found! STT will not work.")
-                showError("Whisper model not found!")
+                Log.e(TAG, "❌ Whisper model path is empty! STT will not work.")
+                Log.e(TAG, "   Whisper model needs to be downloaded first")
+                showError("Whisper model not downloaded. Please download models in settings.")
                 return
             }
 
-            if (!whisperProcessor.initialize(whisperModel)) {
-                Log.e(TAG, "❌ Whisper processor failed to initialize")
+            // Check if file exists before attempting to initialize
+            val modelFile = java.io.File(whisperModel)
+            if (!modelFile.exists()) {
+                Log.e(TAG, "❌ Whisper model file does not exist!")
+                Log.e(TAG, "   Path: $whisperModel")
+                Log.e(TAG, "   Parent directory exists: ${modelFile.parentFile?.exists()}")
+                showError("Whisper model file not found at: $whisperModel")
                 return
             }
-            Log.i(TAG, "✓ Whisper processor ready")
+
+            if (!modelFile.isFile) {
+                Log.e(TAG, "❌ Whisper model path is not a file (might be a directory)!")
+                Log.e(TAG, "   Path: $whisperModel")
+                showError("Invalid Whisper model path")
+                return
+            }
+
+            Log.i(TAG, "   ✓ Model file exists (${modelFile.length()} bytes)")
+
+            if (!whisperProcessor.initialize(whisperModel)) {
+                Log.e(TAG, "❌ Whisper processor failed to initialize")
+                Log.e(TAG, "   Check native logs above for detailed error")
+                showError("Failed to initialize Whisper. Check logs for details.")
+                return
+            }
+            Log.i(TAG, "✅ Whisper processor ready!")
 
 
             // 2. Initialize other audio components
