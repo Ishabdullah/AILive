@@ -418,23 +418,24 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
 
     // --- Generate Response ---
 
-    // CRITICAL: Create initial batch for generation loop
-    // We only requested logits for 1 position (last prompt token), so they're at index 0
-    // Setting n_tokens=1 makes batch.n_tokens-1=0, which correctly indexes those logits
-    llama_batch batch = llama_batch_init(1, 0, 1);
-    batch.n_tokens = 1;
+    // CRITICAL: After batched prompt processing, logits are available at index 0
+    // (we only requested logits for the last token in the final batch)
+    LOGI("🎯 Starting generation loop...");
 
     std::string result_str;
     int n_current = n_prompt_tokens;
+    llama_batch batch;
+    bool batch_initialized = false;  // Track if batch needs freeing
 
     while (n_current < max_tokens) {
-        // Sample the next token using the new sampler API
-        auto* logits = llama_get_logits_ith(g_ctx, batch.n_tokens - 1);
+        // Get logits from the last decoded token
+        // For first iteration: logits from last prompt token (index 0)
+        // For subsequent iterations: logits from previously generated token (index 0)
+        auto* logits = llama_get_logits_ith(g_ctx, 0);
 
         // CRITICAL FIX: Validate logits pointer
         if (logits == nullptr) {
             LOGE("❌ Failed to get logits from context (returned null)");
-            llama_batch_free(batch);
             return "[ERROR: Logits retrieval failed - context may be corrupted]";
         }
 
@@ -472,9 +473,18 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         llama_sampler_free(sampler_chain);
         delete[] candidates.data;
 
+        // Debug: Log first few sampled tokens
+        if (n_current - n_prompt_tokens < 3) {
+            LOGI("🔍 Sampled token #%d: id=%d (vocab_size=%d, eos=%d)",
+                 n_current - n_prompt_tokens + 1,
+                 new_token_id,
+                 n_vocab,
+                 llama_vocab_eos(vocab));
+        }
+
         // Check for End-of-Sequence
         if (new_token_id == llama_vocab_eos(vocab)) {
-            LOGI("End of generation (EOS token).");
+            LOGI("🛑 End of generation (EOS token at position %d).", n_current - n_prompt_tokens);
             break;
         }
 
@@ -486,8 +496,11 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         }
 
         // Prepare for next iteration
-        llama_batch_free(batch);
+        if (batch_initialized) {
+            llama_batch_free(batch);
+        }
         batch = llama_batch_init(1, 0, 1);
+        batch_initialized = true;
         batch.n_tokens = 1;
         batch.token[0] = new_token_id;
         batch.pos[0] = n_current;
@@ -503,7 +516,11 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         n_current++;
     }
 
-    llama_batch_free(batch);
+    // Clean up batch if it was initialized
+    if (batch_initialized) {
+        llama_batch_free(batch);
+    }
+
     LOGI("✨ Generated %zu tokens: %.80s...", result_str.length(), result_str.c_str());
     return result_str;
 }
