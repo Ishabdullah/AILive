@@ -51,6 +51,9 @@ class HybridModelManager(private val context: Context) {
     private var gpuInfo: GPUInfo? = null
     private val performanceMonitor = PerformanceMonitor()
 
+    // Initialization error tracking
+    private var initializationError: String? = null
+
     // LLMBridge for backward compatibility (delegates to fastModel)
     val llmBridge: LLMBridge
         get() = fastModel
@@ -82,6 +85,7 @@ class HybridModelManager(private val context: Context) {
 
         // Check if SmolLM2 is available
         if (!modelDownloadManager.isSmolLM2ModelAvailable()) {
+            initializationError = "SmolLM2 model not available"
             Log.w(TAG, "⚠️ SmolLM2 not available - hybrid mode unavailable")
             Log.i(TAG, "   Falling back to single-model mode")
             return@withContext false
@@ -93,12 +97,14 @@ class HybridModelManager(private val context: Context) {
 
         if (fastModel.loadModel(fastModelPath, 2048)) {
             isFastModelLoaded = true
+            initializationError = null
             Log.i(TAG, "✅ Fast model loaded successfully!")
             Log.i(TAG, "   RAM: ~350MB")
             Log.i(TAG, "   Ready for instant chat")
             Log.i(TAG, "   Backend: ${gpuInfo?.backend ?: "CPU"}")
             true
         } else {
+            initializationError = "Failed to load SmolLM2 model"
             Log.e(TAG, "❌ Failed to load fast model")
             false
         }
@@ -198,6 +204,50 @@ class HybridModelManager(private val context: Context) {
             generateWithVisionModel(prompt, image)
         }
     }
+
+    /**
+     * Generate response (non-streaming version)
+     * Required for backward compatibility with code that used LLMManager.generate()
+     */
+    suspend fun generate(
+        prompt: String,
+        agentName: String = "AILive"
+    ): String = withContext(Dispatchers.IO) {
+        if (!isReady()) {
+            throw IllegalStateException("HybridModelManager not initialized. Call initialize() first.")
+        }
+
+        // Reload settings
+        settings = ModelSettings.load(context)
+
+        val useFastModel = shouldUseFastModel(prompt, hasImage = false)
+        val startTime = System.currentTimeMillis()
+        val backend = gpuInfo?.backend ?: "CPU"
+
+        val result = if (useFastModel) {
+            Log.i(TAG, "⚡ Using fast model (SmolLM2) - non-streaming")
+            fastModel.generate(prompt, settings.maxTokens)
+        } else {
+            Log.i(TAG, "🎨 Using vision model (Qwen2-VL) - non-streaming")
+            ensureVisionModelLoaded()
+            visionModel.generate(prompt, settings.maxTokens)
+        }
+
+        // Performance tracking
+        val totalTime = System.currentTimeMillis() - startTime
+        val tokenCount = result.length / 4  // Rough approximation
+        performanceMonitor.recordInference(tokenCount, totalTime, backend)
+
+        Log.i(TAG, "✅ Generation complete: ~$tokenCount tokens in ${totalTime}ms")
+
+        result
+    }
+
+    /**
+     * Get initialization error message (if any)
+     * Required for backward compatibility with LLMManager
+     */
+    fun getInitializationError(): String? = initializationError
 
     /**
      * Generate with fast model (SmolLM2)
