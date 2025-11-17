@@ -420,14 +420,21 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
 
     // CRITICAL: After batched prompt processing, logits are available at index 0
     // (we only requested logits for the last token in the final batch)
+
+    // CRITICAL FIX: max_tokens is the number of NEW tokens to generate, not total sequence length
+    // Total sequence = prompt tokens + generated tokens
+    int max_sequence_length = n_prompt_tokens + max_tokens;
+
     LOGI("🎯 Starting generation loop...");
+    LOGI("   Prompt: %d tokens, will generate up to %d new tokens (max seq: %d)",
+         n_prompt_tokens, max_tokens, max_sequence_length);
 
     std::string result_str;
     int n_current = n_prompt_tokens;
     llama_batch batch;
     bool batch_initialized = false;  // Track if batch needs freeing
 
-    while (n_current < max_tokens) {
+    while (n_current < max_sequence_length) {
         // Get logits from the last decoded token
         // For first iteration: logits from last prompt token (index 0)
         // For subsequent iterations: logits from previously generated token (index 0)
@@ -521,7 +528,9 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         llama_batch_free(batch);
     }
 
-    LOGI("✨ Generated %zu tokens: %.80s...", result_str.length(), result_str.c_str());
+    int tokens_generated = n_current - n_prompt_tokens;
+    LOGI("✨ Generated %d tokens (%zu chars): %.80s...",
+         tokens_generated, result_str.length(), result_str.c_str());
     return result_str;
 }
 
