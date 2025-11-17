@@ -455,6 +455,14 @@ class LLMManager(private val context: Context) {
             Log.d(TAG, messageToSend.take(200))
             Log.d(TAG, "📊 Parameters: maxTokens=${settings.maxTokens}, backend=$backend")
 
+            // CRITICAL: Warn if prompt is very large
+            // Context has n_batch=512, prompts >2000 chars might have >512 tokens
+            // C++ will chunk into batches automatically, but log warning
+            if (messageToSend.length > 4000) {
+                Log.w(TAG, "⚠️  Very large prompt (${messageToSend.length} chars)")
+                Log.w(TAG, "   This may take longer - will be processed in batches")
+            }
+
             val result = withContext(Dispatchers.IO) {
                 try {
                     Log.d(TAG, "📞 Calling native generate() on IO thread...")

@@ -371,23 +371,50 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
     }
     LOGI("Tokenized prompt into %d tokens.", n_prompt_tokens);
 
-    // --- Process Prompt ---
-    llama_batch batch = llama_batch_init(n_prompt_tokens, 0, 1);
-    batch.n_tokens = n_prompt_tokens;
-    for (int i = 0; i < n_prompt_tokens; ++i) {
-        batch.token[i] = prompt_tokens[i];
-        batch.pos[i] = i;
-        batch.n_seq_id[i] = 1;
-        batch.seq_id[i][0] = 0;
-        batch.logits[i] = (i == n_prompt_tokens - 1) ? 1 : 0; // Request logit only for last token
+    // CRITICAL FIX: Process prompt in batches to avoid exceeding n_batch limit
+    // Context was initialized with n_batch=512, so we must chunk large prompts
+    const int max_batch_size = 512;  // Must match ctx_params.n_batch from initialization
+    int n_processed = 0;
+
+    LOGI("📦 Processing prompt in batches (max_batch_size=%d)...", max_batch_size);
+
+    while (n_processed < n_prompt_tokens) {
+        // Calculate batch size for this iteration
+        int batch_size = std::min(max_batch_size, n_prompt_tokens - n_processed);
+
+        LOGI("   Batch %d: processing tokens %d-%d (%d tokens)",
+             (n_processed / max_batch_size) + 1,
+             n_processed,
+             n_processed + batch_size - 1,
+             batch_size);
+
+        // Create batch for this chunk
+        llama_batch batch = llama_batch_init(batch_size, 0, 1);
+        batch.n_tokens = batch_size;
+
+        for (int i = 0; i < batch_size; ++i) {
+            batch.token[i] = prompt_tokens[n_processed + i];
+            batch.pos[i] = n_processed + i;  // Absolute position in sequence
+            batch.n_seq_id[i] = 1;
+            batch.seq_id[i][0] = 0;
+            // Only request logits for the very last token of the entire prompt
+            batch.logits[i] = (n_processed + i == n_prompt_tokens - 1) ? 1 : 0;
+        }
+
+        // Decode this batch
+        if (llama_decode(g_ctx, batch) != 0) {
+            LOGE("❌ Failed to decode batch at position %d", n_processed);
+            llama_batch_free(batch);
+            return "[ERROR: Prompt decoding failed at batch]";
+        }
+
+        llama_batch_free(batch);
+        n_processed += batch_size;
     }
 
-    if (llama_decode(g_ctx, batch) != 0) {
-        LOGE("Failed to decode prompt.");
-        llama_batch_free(batch);
-        return "[ERROR: Prompt decoding failed]";
-    }
-    LOGI("Prompt decoded successfully.");
+    LOGI("✅ Prompt decoded successfully (%d tokens in %d batches)",
+         n_prompt_tokens,
+         (n_prompt_tokens + max_batch_size - 1) / max_batch_size);
 
     // --- Generate Response ---
     std::string result_str;
