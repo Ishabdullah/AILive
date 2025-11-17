@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.ailive.ai.llm.LLMBridge
 import com.ailive.memory.database.entities.FactCategory
 import com.ailive.memory.database.entities.LongTermFactEntity
-import com.ailive.memory.managers.MemoryManager
+import com.ailive.memory.managers.LongTermMemoryManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,8 +16,10 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for the Memory management screen.
  * Handles the business logic for displaying, adding, and deleting facts.
+ *
+ * Updated to use LongTermMemoryManager (unified memory system with semantic search).
  */
-class MemoryViewModel(private val memoryManager: MemoryManager) : ViewModel() {
+class MemoryViewModel(private val longTermMemory: LongTermMemoryManager) : ViewModel() {
 
     private val _facts = MutableStateFlow<List<LongTermFactEntity>>(emptyList())
     val facts: StateFlow<List<LongTermFactEntity>> = _facts.asStateFlow()
@@ -35,7 +37,7 @@ class MemoryViewModel(private val memoryManager: MemoryManager) : ViewModel() {
     fun loadAllFacts() {
         viewModelScope.launch {
             _isLoading.value = true
-            _facts.value = memoryManager.recallAllFacts()
+            _facts.value = longTermMemory.getAllFacts()
             _isLoading.value = false
         }
     }
@@ -47,9 +49,9 @@ class MemoryViewModel(private val memoryManager: MemoryManager) : ViewModel() {
     fun addFact(factText: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            memoryManager.rememberFact(
-                factText = factText,
+            longTermMemory.learnFact(
                 category = FactCategory.OTHER,
+                factText = factText,
                 extractedFrom = "manual_entry"
             )
             // Refresh the list after adding
@@ -63,7 +65,7 @@ class MemoryViewModel(private val memoryManager: MemoryManager) : ViewModel() {
     fun deleteFact(id: String) {
         viewModelScope.launch {
             _isLoading.value = true
-            memoryManager.forgetFact(id)
+            longTermMemory.deleteFact(id)
             // Refresh the list after deleting
             loadAllFacts()
         }
@@ -71,7 +73,7 @@ class MemoryViewModel(private val memoryManager: MemoryManager) : ViewModel() {
 }
 
 /**
- * Factory for creating a MemoryViewModel with a MemoryManager dependency.
+ * Factory for creating a MemoryViewModel with a LongTermMemoryManager dependency.
  * This is the standard way to provide parameters to a ViewModel.
  */
 class MemoryViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
@@ -79,9 +81,9 @@ class MemoryViewModelFactory(private val application: Application) : ViewModelPr
         if (modelClass.isAssignableFrom(MemoryViewModel::class.java)) {
             // Manually construct the dependencies for the ViewModel
             val llmBridge = LLMBridge() // Assuming a singleton or simple instantiation
-            val memoryManager = MemoryManager(application, llmBridge)
+            val longTermMemory = LongTermMemoryManager(application, llmBridge)
             @Suppress("UNCHECKED_CAST")
-            return MemoryViewModel(memoryManager) as T
+            return MemoryViewModel(longTermMemory) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
