@@ -474,122 +474,6 @@ class ModelDownloadManager(private val context: Context) {
             downloadManager.query(query)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    when (status) {
-                        DownloadManager.STATUS_PENDING -> "Pending"
-                        DownloadManager.STATUS_RUNNING -> "Downloading"
-                        DownloadManager.STATUS_PAUSED -> "Paused"
-                        DownloadManager.STATUS_SUCCESSFUL -> "Complete"
-                        DownloadManager.STATUS_FAILED -> "Failed"
-                        else -> "Unknown"
-                    }
-                } else null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error getting download status", e)
-            null
-        }
-    }
-
-    suspend fun importModelFromStorage(uri: Uri, onComplete: (Boolean, String) -> Unit) = withContext(Dispatchers.IO) {
-        var fileName: String? = null
-        try {
-            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex >= 0 && cursor.moveToFirst()) {
-                    fileName = cursor.getString(nameIndex)
-                }
-            }
-
-            if (fileName == null) throw IOException("Could not get file name")
-
-            val isValid = fileName!!.endsWith(".gguf", true) ||
-                         fileName!!.endsWith(".onnx", true) ||
-                         fileName!!.endsWith(".bin", true)
-
-            if (!isValid) throw IOException("Invalid format. Supported: .gguf, .onnx, .bin")
-
-            val destFile = File(getModelsDir(), fileName!!)
-            
-            Log.i(TAG, "📥 Importing model: $fileName")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(destFile).use { output ->
-                    input.copyTo(output, 8192)
-                }
-            }
-
-            val minSize = if (fileName!!.endsWith(".gguf")) MIN_GGUF_SIZE_BYTES else MIN_MODEL_SIZE_BYTES
-            if (destFile.length() < minSize) {
-                destFile.delete()
-                throw IOException("File too small or corrupted (${destFile.length()} bytes)")
-            }
-
-            Log.i(TAG, "✅ Model imported successfully: $fileName (${destFile.length() / 1024 / 1024}MB)")
-            withContext(Dispatchers.Main) { onComplete(true, fileName!!) }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Import failed", e)
-            withContext(Dispatchers.Main) { onComplete(false, "Failed: ${e.message}") }
-        }
-    }
-
-    fun cancelDownload() {
-        if (downloadId != -1L) {
-            try {
-                downloadManager.remove(downloadId)
-                Log.i(TAG, "🛑 Download cancelled: $downloadId")
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Error cancelling download", e)
-            }
-        }
-        
-        cleanupReceiver()
-        stopPollingDownloadStatus()
-
-        val continuation = downloadContinuation
-        downloadId = -1
-        currentModelName = null
-        downloadContinuation = null
-        isHandlingCompletion = false
-        isPaused = false
-
-        continuation?.resumeWithException(DownloadFailedException("Download cancelled by user"))
-    }
-
-    fun deleteModel(modelName: String): Boolean {
-        val modelFile = File(getModelsDir(), modelName)
-        return if (modelFile.exists()) {
-            modelFile.delete().also { deleted ->
-                if (deleted) {
-                    Log.i(TAG, "🗑️ Deleted: $modelName")
-                } else {
-                    Log.e(TAG, "❌ Failed to delete: $modelName")
-                }
-            }
-        } else {
-            Log.w(TAG, "⚠️ Model not found: $modelName")
-            false
-        }
-    }
-
-    private fun getDownloadErrorMessage(reason: Int): String = when (reason) {
-        DownloadManager.ERROR_CANNOT_RESUME -> "Download cannot be resumed - network changed"
-        DownloadManager.ERROR_DEVICE_NOT_FOUND -> "No storage found - check SD card"
-        DownloadManager.ERROR_FILE_ERROR -> "File system error - check permissions"
-        DownloadManager.ERROR_HTTP_DATA_ERROR -> "Network error - check connection"
-        DownloadManager.ERROR_INSUFFICIENT_SPACE -> "Insufficient storage - need ~2GB free"
-        DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "Too many redirects - server issue"
-        DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "Server error - try again later"
-        DownloadManager.ERROR_FILE_ALREADY_EXISTS -> "File already exists"
-        else -> "Download failed (error code: $reason)"
-    }
-
-    fun cleanup() {
-        Log.i(TAG, "🧹 Cleaning up ModelDownloadManager")
-        cancelDownload()
-        cleanupReceiver()
-        stopPollingDownloadStatus()
-    }
-}    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
 
                     when (status) {
                         DownloadManager.STATUS_SUCCESSFUL -> {
@@ -700,6 +584,99 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
+    suspend fun importModelFromStorage(uri: Uri, onComplete: (Boolean, String) -> Unit) = withContext(Dispatchers.IO) {
+        var fileName: String? = null
+        try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex >= 0 && cursor.moveToFirst()) {
+                    fileName = cursor.getString(nameIndex)
+                }
+            }
+
+            if (fileName == null) throw IOException("Could not get file name")
+
+            val isValid = fileName!!.endsWith(".gguf", true) ||
+                         fileName!!.endsWith(".onnx", true) ||
+                         fileName!!.endsWith(".bin", true)
+
+            if (!isValid) throw IOException("Invalid format. Supported: .gguf, .onnx, .bin")
+
+            val destFile = File(getModelsDir(), fileName!!)
+            
+            Log.i(TAG, "📥 Importing model: $fileName")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output, 8192)
+                }
+            }
+
+            val minSize = if (fileName!!.endsWith(".gguf")) MIN_GGUF_SIZE_BYTES else MIN_MODEL_SIZE_BYTES
+            if (destFile.length() < minSize) {
+                destFile.delete()
+                throw IOException("File too small or corrupted (${destFile.length()} bytes)")
+            }
+
+            Log.i(TAG, "✅ Model imported successfully: $fileName (${destFile.length() / 1024 / 1024}MB)")
+            withContext(Dispatchers.Main) { onComplete(true, fileName!!) }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Import failed", e)
+            withContext(Dispatchers.Main) { onComplete(false, "Failed: ${e.message}") }
+        }
+    }
+
+    fun cancelDownload() {
+        if (downloadId != -1L) {
+            try {
+                downloadManager.remove(downloadId)
+                Log.i(TAG, "🛑 Download cancelled: $downloadId")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error cancelling download", e)
+            }
+        }
+        
+        cleanupReceiver()
+        stopPollingDownloadStatus()
+
+        val continuation = downloadContinuation
+        downloadId = -1
+        currentModelName = null
+        downloadContinuation = null
+        isHandlingCompletion = false
+        isPaused = false
+
+        continuation?.resumeWithException(DownloadFailedException("Download cancelled by user"))
+    }
+
+    fun deleteModel(modelName: String): Boolean {
+        val modelFile = File(getModelsDir(), modelName)
+        return if (modelFile.exists()) {
+            modelFile.delete().also { deleted ->
+                if (deleted) {
+                    Log.i(TAG, "🗑️ Deleted: $modelName")
+                } else {
+                    Log.e(TAG, "❌ Failed to delete: $modelName")
+                }
+            }
+        } else {
+            Log.w(TAG, "⚠️ Model not found: $modelName")
+            false
+        }
+    }
+
+    private fun getDownloadErrorMessage(reason: Int): String = when (reason) {
+        DownloadManager.ERROR_CANNOT_RESUME -> "Download cannot be resumed - network changed"
+        DownloadManager.ERROR_DEVICE_NOT_FOUND -> "No storage found - check SD card"
+        DownloadManager.ERROR_FILE_ERROR -> "File system error - check permissions"
+        DownloadManager.ERROR_HTTP_DATA_ERROR -> "Network error - check connection"
+        DownloadManager.ERROR_INSUFFICIENT_SPACE -> "Insufficient storage - need ~2GB free"
+        DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "Too many redirects - server issue"
+        DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "Server error - try again later"
+        DownloadManager.ERROR_FILE_ALREADY_EXISTS -> "File already exists"
+        else -> "Download failed (error code: $reason)"
+    }
+
     fun pauseDownload(): Boolean {
         if (downloadId == -1L) {
             Log.w(TAG, "⚠️ No active download to pause")
@@ -768,3 +745,27 @@ class ModelDownloadManager(private val context: Context) {
             val query = DownloadManager.Query().setFilterById(downloadId)
             downloadManager.query(query)?.use { cursor ->
                 if (cursor.moveToFirst()) {
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    when (status) {
+                        DownloadManager.STATUS_PENDING -> "Pending"
+                        DownloadManager.STATUS_RUNNING -> "Downloading"
+                        DownloadManager.STATUS_PAUSED -> "Paused"
+                        DownloadManager.STATUS_SUCCESSFUL -> "Complete"
+                        DownloadManager.STATUS_FAILED -> "Failed"
+                        else -> "Unknown"
+                    }
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error getting download status", e)
+            null
+        }
+    }
+
+    fun cleanup() {
+        Log.i(TAG, "🧹 Cleaning up ModelDownloadManager")
+        cancelDownload()
+        cleanupReceiver()
+        stopPollingDownloadStatus()
+    }
+}
