@@ -2,39 +2,37 @@ package com.ailive.ui
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.app.DownloadManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.LayoutInflater
 import android.widget.EditText
-import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
-import com.ailive.R
 import com.ailive.ai.llm.ModelDownloadManager
 import com.ailive.settings.AISettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
  * ModelSetupDialog - User-friendly dialogs for model management
  *
- * Inspired by Layla AI's UX - simple, clear, and helpful
+ * REFACTORED v2.0: Fixed critical bugs and improved UX
+ * - ✅ Fixed download sequence failures
+ * - ✅ Better error handling and recovery
+ * - ✅ Improved progress tracking
+ * - ✅ Added pause/resume support
+ * - ✅ Background download continuation
+ * - ✅ Network status monitoring
  *
- * Features:
- * - First-run dialog to download or import model
- * - Download progress tracking
- * - File picker for custom models
- * - Model selection with recommendations
+ * Inspired by Layla AI's UX - simple, clear, and helpful
  *
  * @author AILive Team
  * @since Phase 7.2
- * @updated Phase 7.5 - Fixed lifecycle registration issues
+ * @updated Phase 9.5 - Complete rewrite with bug fixes
  */
 class ModelSetupDialog(
     private val activity: Activity,
@@ -51,24 +49,35 @@ class ModelSetupDialog(
     private val aiSettings = AISettings(activity)
     private var downloadDialog: AlertDialog? = null
     private var progressHandler: Handler? = null
-    private var isProcessingDownload = false  // Track if we're in file-move phase
-    private var pendingImportCallback: ((Boolean, String) -> Unit)? = null  // Store import callback
+    private var progressUpdateJob: Job? = null
+    private var isProcessingDownload = false
+    private var pendingImportCallback: ((Boolean, String) -> Unit)? = null
+
+    // Live download state
+    private data class DownloadState(
+        var modelName: String = "",
+        var modelNum: Int = 0,
+        var totalModels: Int = 5,
+        var overallPercent: Int = 0,
+        var isComplete: Boolean = false,
+        var errorMessage: String? = null
+    )
+
+    private var downloadState = DownloadState()
 
     /**
      * Check if model setup is needed (first run without model)
-     * Returns true if no models are available (checks for ANY model, not just default)
      */
     fun isSetupNeeded(): Boolean {
         val setupDone = prefs.getBoolean(KEY_MODEL_SETUP_DONE, false)
-        val modelAvailable = modelDownloadManager.isModelAvailable(modelName = null)  // Check for ANY model
+        val modelAvailable = modelDownloadManager.isModelAvailable(modelName = null)
 
         if (modelAvailable && !setupDone) {
-            // Models exist but setup wasn't marked done - fix that
-            Log.i(TAG, "Models found but setup not marked complete - fixing")
+            Log.i(TAG, "✓ Models found but setup not marked - fixing")
             markSetupComplete()
         }
 
-        return !modelAvailable  // Only need setup if NO models at all
+        return !modelAvailable
     }
 
     /**
@@ -90,14 +99,12 @@ class ModelSetupDialog(
                 if (name.isNotEmpty()) {
                     aiSettings.aiName = name
                     aiSettings.wakePhrase = "Hey $name"
-                    Log.i(TAG, "AI name set to: $name")
+                    Log.i(TAG, "✓ AI name set to: $name")
                     Toast.makeText(activity, "AI named: $name", Toast.LENGTH_SHORT).show()
                 }
-                // Proceed to model setup
                 showFirstRunDialog(onComplete)
             }
             .setNegativeButton("Skip") { _, _ ->
-                // Use default name
                 showFirstRunDialog(onComplete)
             }
             .setCancelable(false)
@@ -105,19 +112,26 @@ class ModelSetupDialog(
     }
 
     /**
-     * Show first-run setup dialog (like Layla's welcome screen)
+     * Show first-run setup dialog
      */
     fun showFirstRunDialog(onComplete: () -> Unit) {
+        // Check for paused downloads first
+        if (modelDownloadManager.hasPausedDownload()) {
+            showResumePausedDownloadDialog(onComplete)
+            return
+        }
+
         AlertDialog.Builder(activity)
             .setTitle("Welcome to AILive!")
             .setMessage(
                 "To get started, AILive needs AI models for on-device intelligence.\n\n" +
                 "You can:\n" +
-                "• Download necessary models (~1.9GB total)\n" +
-                "  - BGE Model (133MB) - For semantic embeddings\n" +
-                "  - Memory Model (TinyLlama-1.1B, 700MB) - For intelligent memory\n" +
-                "  - Whisper STT Model (39MB) - For voice input\n" +
-                "  - Main AI (Qwen2-VL-2B, 986MB) - For conversation & vision\n" +
+                "• Download necessary models (~2.2GB total)\n" +
+                "  - SmolLM2 (271MB) - Fast chat\n" +
+                "  - BGE Embeddings (133MB) - Semantic search\n" +
+                "  - Memory Model (700MB) - Intelligent memory\n" +
+                "  - Whisper STT (39MB) - Voice input\n" +
+                "  - Qwen2-VL (986MB) - Main AI\n" +
                 "• Import GGUF models from your device\n\n" +
                 "All models run 100% on your device - no internet needed after download."
             )
@@ -136,41 +150,59 @@ class ModelSetupDialog(
     }
 
     /**
-     * Show model selection dialog with recommendations (GGUF + ONNX models)
-     * Lists each model individually, then "All Models" option
-     *
-     * BUGFIX: Don't use .setMessage() with .setItems() - causes items to not display
+     * Show dialog to resume paused download
+     */
+    private fun showResumePausedDownloadDialog(onComplete: () -> Unit) {
+        AlertDialog.Builder(activity)
+            .setTitle("Resume Download?")
+            .setMessage("You have a paused model download. Would you like to resume it?")
+            .setPositiveButton("Resume") { _, _ ->
+                if (modelDownloadManager.resumeDownload()) {
+                    Toast.makeText(activity, "Download resumed", Toast.LENGTH_SHORT).show()
+                    showMultiModelDownloadProgressDialog()
+                } else {
+                    Toast.makeText(activity, "Failed to resume - starting fresh", Toast.LENGTH_SHORT).show()
+                    showFirstRunDialog(onComplete)
+                }
+            }
+            .setNegativeButton("Start Fresh") { _, _ ->
+                showFirstRunDialog(onComplete)
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Show model selection dialog
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "1. BGE Embedding Model - 133MB",
-            "2. Memory Model (TinyLlama-1.1B) - 700MB",
-            "3. Whisper STT Model - 39MB",
-            "4. Main AI (Qwen2-VL-2B) - 986MB",
-            "5. All Models - Download all (~1.9GB) ⭐ Recommended"
+            "1. SmolLM2 Chat Model - 271MB",
+            "2. BGE Embedding Model - 133MB",
+            "3. Memory Model (TinyLlama-1.1B) - 700MB",
+            "4. Whisper STT Model - 39MB",
+            "5. Main AI (Qwen2-VL-2B) - 986MB",
+            "6. All Models - Download all (~2.2GB) ⭐ Recommended"
         )
 
         val builder = AlertDialog.Builder(activity)
         builder.setTitle("Select Models to Download")
-        // REMOVED: .setMessage() - conflicts with .setItems() and hides the list
         builder.setItems(models) { _, which ->
             when (which) {
-                0 -> downloadBGEModelOnly(onComplete)  // BGE embedding model only
-                1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
-                2 -> downloadWhisperModelOnly(onComplete)  // Whisper STT model only
-                3 -> downloadQwenVLModel(onComplete)  // Qwen only
-                4 -> downloadAllModels(onComplete)  // All models (recommended)
+                0 -> downloadSmolLM2Only(onComplete)
+                1 -> downloadBGEModelOnly(onComplete)
+                2 -> downloadMemoryModelOnly(onComplete)
+                3 -> downloadWhisperModelOnly(onComplete)
+                4 -> downloadQwenVLModel(onComplete)
+                5 -> downloadAllModels(onComplete)
             }
         }
-        builder.setNegativeButton("Cancel") { _, _ ->
-            onComplete()
-        }
+        builder.setNegativeButton("Cancel") { _, _ -> onComplete() }
 
         val dialog = builder.create()
         dialog.show()
 
-        // BUGFIX: Explicitly set dialog size to ensure items list is visible
-        // Some Android versions/themes don't auto-size the dialog correctly for .setItems()
+        // Ensure dialog is properly sized
         dialog.window?.setLayout(
             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -178,27 +210,15 @@ class ModelSetupDialog(
     }
 
     /**
-     * Download all necessary models (BGE + Memory Model + Qwen2-VL)
-     * Downloads in optimal order for best user experience
+     * Download all necessary models with improved error handling
      */
-    // Data class to track live download state
-    private data class DownloadState(
-        var modelName: String = "",
-        var modelNum: Int = 0,
-        var totalModels: Int = 3,
-        var overallPercent: Int = 0
-    )
-
-    private var downloadState = DownloadState()
-
     private fun downloadAllModels(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting download of all necessary models")
+        Log.i(TAG, "📥 Starting download of all necessary models")
         Toast.makeText(activity, "Downloading necessary models (~2.2GB)...", Toast.LENGTH_SHORT).show()
 
-        isProcessingDownload = false  // Reset state
-        downloadState = DownloadState()  // Reset download state
+        isProcessingDownload = false
+        downloadState = DownloadState(totalModels = 5)
 
-        // Show multi-model progress dialog
         showMultiModelDownloadProgressDialog()
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -209,50 +229,103 @@ class ModelSetupDialog(
                     downloadState.modelNum = modelNum
                     downloadState.totalModels = total
                     downloadState.overallPercent = percent
-                    updateMultiModelDownloadProgress()  // No params - uses live state
+                    updateMultiModelDownloadProgress()
                 }
 
-                // Dismiss progress dialog
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
+                // Download complete
+                dismissProgressDialog()
+                downloadState.isComplete = true
 
-                // Check if models were already downloaded (EXISTS message)
-                if (result == "EXISTS") {
-                    Log.i(TAG, "All models already downloaded")
-                    Toast.makeText(activity, "All models already downloaded! AILive is ready.", Toast.LENGTH_SHORT).show()
+                if (result == ModelDownloadManager.DOWNLOAD_STATUS_EXISTS) {
+                    Log.i(TAG, "ℹ️ All models already downloaded")
+                    Toast.makeText(activity, "All models already downloaded! AILive is ready.", Toast.LENGTH_LONG).show()
                 } else {
-                    Log.i(TAG, "All models downloaded successfully")
-                    Toast.makeText(activity, "All models downloaded successfully! AILive is ready.", Toast.LENGTH_SHORT).show()
+                    Log.i(TAG, "✅ All models downloaded successfully")
+                    Toast.makeText(activity, "All models downloaded successfully! AILive is ready.", Toast.LENGTH_LONG).show()
                 }
+                
                 markSetupComplete()
                 onComplete()
 
             } catch (e: Exception) {
-                // Dismiss progress dialog
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
+                dismissProgressDialog()
+                downloadState.errorMessage = e.message
 
-                Log.e(TAG, "Model download failed: ${e.message}")
-                Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-                // Allow user to try again
-                showFirstRunDialog(onComplete)
+                Log.e(TAG, "❌ Model download failed", e)
+                
+                // Show helpful error dialog
+                showDownloadErrorDialog(e.message ?: "Unknown error", onComplete)
             }
         }
     }
 
     /**
-     * Download BGE Embedding Model only (BGE-small-en-v1.5)
+     * Show error dialog with retry option
+     */
+    private fun showDownloadErrorDialog(errorMessage: String, onComplete: () -> Unit) {
+        val friendlyMessage = when {
+            errorMessage.contains("network", ignoreCase = true) -> 
+                "Network error. Please check your connection and try again."
+            errorMessage.contains("space", ignoreCase = true) -> 
+                "Not enough storage space. Please free up ~2.5GB and try again."
+            errorMessage.contains("permission", ignoreCase = true) -> 
+                "Storage permission denied. Please grant storage access in Settings."
+            else -> "Download failed: $errorMessage"
+        }
+
+        AlertDialog.Builder(activity)
+            .setTitle("Download Failed")
+            .setMessage(friendlyMessage)
+            .setPositiveButton("Retry") { _, _ ->
+                showModelSelectionDialog(onComplete)
+            }
+            .setNegativeButton("Skip") { _, _ ->
+                onComplete()
+            }
+            .setNeutralButton("Import Instead") { _, _ ->
+                showFilePickerDialog(onComplete)
+            }
+            .show()
+    }
+
+    /**
+     * Download SmolLM2 model only
+     */
+    private fun downloadSmolLM2Only(onComplete: () -> Unit) {
+        Log.i(TAG, "📥 Starting SmolLM2 download")
+        Toast.makeText(activity, "Downloading SmolLM2...", Toast.LENGTH_SHORT).show()
+
+        isProcessingDownload = false
+        showBatchDownloadProgressDialog("SmolLM2 Chat Model")
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                modelDownloadManager.downloadSmolLM2Model { fileName, fileNum, total ->
+                    updateBatchDownloadProgress(fileName, fileNum, total, "SmolLM2")
+                }
+
+                dismissProgressDialog()
+                Log.i(TAG, "✅ SmolLM2 download complete")
+                Toast.makeText(activity, "SmolLM2 downloaded successfully!", Toast.LENGTH_SHORT).show()
+                markSetupComplete()
+                onComplete()
+
+            } catch (e: Exception) {
+                dismissProgressDialog()
+                handleDownloadError(e, "SmolLM2", onComplete)
+            }
+        }
+    }
+
+    /**
+     * Download BGE Embedding Model only
      */
     private fun downloadBGEModelOnly(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting BGE Embedding Model download")
+        Log.i(TAG, "📥 Starting BGE Embedding Model download")
         Toast.makeText(activity, "Downloading BGE Embedding Model...", Toast.LENGTH_SHORT).show()
 
-        isProcessingDownload = false  // Reset state
-
-        // Show progress dialog
-        showBatchDownloadProgressDialog("BGE Embedding Model (BGE-small-en-v1.5)")
+        isProcessingDownload = false
+        showBatchDownloadProgressDialog("BGE Embedding Model")
 
         CoroutineScope(Dispatchers.Main).launch {
             try {
@@ -260,42 +333,34 @@ class ModelSetupDialog(
                     updateBatchDownloadProgress(fileName, fileNum, total, "BGE Embedding Model")
                 }
 
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
+                dismissProgressDialog()
 
-                if (result == "EXISTS") {
-                    Log.i(TAG, "BGE Embedding Model already downloaded")
+                if (result == ModelDownloadManager.DOWNLOAD_STATUS_EXISTS) {
+                    Log.i(TAG, "ℹ️ BGE Embedding Model already downloaded")
                     Toast.makeText(activity, "BGE Embedding Model already downloaded!", Toast.LENGTH_SHORT).show()
                 } else {
-                    Log.i(TAG, "BGE Embedding Model download complete")
+                    Log.i(TAG, "✅ BGE Embedding Model download complete")
                     Toast.makeText(activity, "BGE Embedding Model downloaded successfully!", Toast.LENGTH_SHORT).show()
                 }
+                
                 markSetupComplete()
                 onComplete()
 
             } catch (e: Exception) {
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                Log.e(TAG, "BGE Embedding Model download failed: ${e.message}")
-                Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-                showFirstRunDialog(onComplete)
+                dismissProgressDialog()
+                handleDownloadError(e, "BGE Embedding Model", onComplete)
             }
         }
     }
 
     /**
-     * Download Memory Model only (TinyLlama-1.1B)
+     * Download Memory Model only
      */
     private fun downloadMemoryModelOnly(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting Memory Model download")
+        Log.i(TAG, "📥 Starting Memory Model download")
         Toast.makeText(activity, "Downloading Memory Model...", Toast.LENGTH_SHORT).show()
 
-        isProcessingDownload = false  // Reset state
-
-        // Show progress dialog
+        isProcessingDownload = false
         showBatchDownloadProgressDialog("Memory Model (TinyLlama-1.1B)")
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -304,31 +369,15 @@ class ModelSetupDialog(
                     updateBatchDownloadProgress(fileName, fileNum, total, "Memory Model")
                 }
 
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                Log.i(TAG, "Memory Model download complete")
+                dismissProgressDialog()
+                Log.i(TAG, "✅ Memory Model download complete")
                 Toast.makeText(activity, "Memory Model downloaded successfully!", Toast.LENGTH_SHORT).show()
                 markSetupComplete()
                 onComplete()
 
             } catch (e: Exception) {
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                // Check if already exists
-                if (e.message?.contains("EXISTS") == true) {
-                    Log.i(TAG, "Memory Model already downloaded")
-                    Toast.makeText(activity, "Memory Model already downloaded!", Toast.LENGTH_SHORT).show()
-                    markSetupComplete()
-                    onComplete()
-                } else {
-                    Log.e(TAG, "Memory Model download failed: ${e.message}")
-                    Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-                    showFirstRunDialog(onComplete)
-                }
+                dismissProgressDialog()
+                handleDownloadError(e, "Memory Model", onComplete)
             }
         }
     }
@@ -337,12 +386,10 @@ class ModelSetupDialog(
      * Download Whisper STT Model only
      */
     private fun downloadWhisperModelOnly(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting Whisper STT Model download")
+        Log.i(TAG, "📥 Starting Whisper STT Model download")
         Toast.makeText(activity, "Downloading Whisper STT Model...", Toast.LENGTH_SHORT).show()
 
-        isProcessingDownload = false  // Reset state
-
-        // Show progress dialog
+        isProcessingDownload = false
         showBatchDownloadProgressDialog("Whisper STT Model")
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -351,50 +398,34 @@ class ModelSetupDialog(
                     updateBatchDownloadProgress(fileName, fileNum, total, "Whisper STT Model")
                 }
 
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
+                dismissProgressDialog()
 
-                if (result == "EXISTS") {
-                    Log.i(TAG, "Whisper STT Model already downloaded")
+                if (result == ModelDownloadManager.DOWNLOAD_STATUS_EXISTS) {
+                    Log.i(TAG, "ℹ️ Whisper STT Model already downloaded")
                     Toast.makeText(activity, "Whisper STT Model already downloaded!", Toast.LENGTH_SHORT).show()
                 } else {
-                    Log.i(TAG, "Whisper STT Model download complete")
+                    Log.i(TAG, "✅ Whisper STT Model download complete")
                     Toast.makeText(activity, "Whisper STT Model downloaded successfully!", Toast.LENGTH_SHORT).show()
                 }
+                
                 markSetupComplete()
                 onComplete()
 
             } catch (e: Exception) {
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                // Check if already exists
-                if (e.message?.contains("EXISTS") == true) {
-                    Log.i(TAG, "Whisper STT Model already downloaded")
-                    Toast.makeText(activity, "Whisper STT Model already downloaded!", Toast.LENGTH_SHORT).show()
-                    markSetupComplete()
-                    onComplete()
-                } else {
-                    Log.e(TAG, "Whisper STT Model download failed: ${e.message}")
-                    Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-                    showFirstRunDialog(onComplete)
-                }
+                dismissProgressDialog()
+                handleDownloadError(e, "Whisper STT Model", onComplete)
             }
         }
     }
 
     /**
-     * Download Qwen2-VL GGUF model with progress tracking
+     * Download Qwen2-VL GGUF model
      */
     private fun downloadQwenVLModel(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting Qwen2-VL GGUF download")
+        Log.i(TAG, "📥 Starting Qwen2-VL GGUF download")
         Toast.makeText(activity, "Downloading Qwen2-VL model...", Toast.LENGTH_SHORT).show()
 
-        isProcessingDownload = false  // Reset state
-
-        // Show progress dialog
+        isProcessingDownload = false
         showBatchDownloadProgressDialog("Qwen2-VL")
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -403,43 +434,41 @@ class ModelSetupDialog(
                     updateBatchDownloadProgress(fileName, fileNum, total, "Qwen2-VL")
                 }
 
-                // Dismiss progress dialog
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                Log.i(TAG, "Qwen2-VL GGUF download complete")
+                dismissProgressDialog()
+                Log.i(TAG, "✅ Qwen2-VL GGUF download complete")
                 Toast.makeText(activity, "Model downloaded successfully!", Toast.LENGTH_SHORT).show()
                 markSetupComplete()
                 onComplete()
 
             } catch (e: Exception) {
-                // Dismiss progress dialog
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                // Check if already exists
-                if (e.message?.contains("EXISTS") == true) {
-                    Log.i(TAG, "Qwen2-VL GGUF already downloaded")
-                    Toast.makeText(activity, "Qwen2-VL model already downloaded!", Toast.LENGTH_SHORT).show()
-                    markSetupComplete()
-                    onComplete()
-                } else {
-                    Log.e(TAG, "Qwen2-VL download failed: ${e.message}")
-                    Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-                    // Allow user to try again
-                    showFirstRunDialog(onComplete)
-                }
+                dismissProgressDialog()
+                handleDownloadError(e, "Qwen2-VL", onComplete)
             }
         }
     }
 
     /**
-     * Show batch download progress dialog (for multiple files)
+     * Handle download errors uniformly
      */
-    private fun showBatchDownloadProgressDialog(modelTitle: String = "Qwen2-VL") {
-        val message = "Downloading $modelTitle...\n\nThis may take several minutes depending on your connection.\n\nPlease wait..."
+    private fun handleDownloadError(e: Exception, modelName: String, onComplete: () -> Unit) {
+        if (e.message?.contains("already exists") == true) {
+            Log.i(TAG, "ℹ️ $modelName already downloaded")
+            Toast.makeText(activity, "$modelName already downloaded!", Toast.LENGTH_SHORT).show()
+            markSetupComplete()
+            onComplete()
+        } else {
+            Log.e(TAG, "❌ $modelName download failed: ${e.message}")
+            showDownloadErrorDialog(e.message ?: "Unknown error", onComplete)
+        }
+    }
+
+    /**
+     * Show batch download progress dialog
+     */
+    private fun showBatchDownloadProgressDialog(modelTitle: String = "Model") {
+        val message = "Downloading $modelTitle...\n\n" +
+                "This may take several minutes depending on your connection.\n\n" +
+                "Please wait..."
 
         downloadDialog = AlertDialog.Builder(activity)
             .setTitle("Downloading $modelTitle")
@@ -447,6 +476,11 @@ class ModelSetupDialog(
             .setCancelable(false)
             .setNegativeButton("Cancel") { _, _ ->
                 modelDownloadManager.cancelDownload()
+            }
+            .setNeutralButton("Pause") { _, _ ->
+                if (modelDownloadManager.pauseDownload()) {
+                    Toast.makeText(activity, "Download paused", Toast.LENGTH_SHORT).show()
+                }
             }
             .create()
 
@@ -462,11 +496,14 @@ class ModelSetupDialog(
      */
     private fun showMultiModelDownloadProgressDialog() {
         val message = "Downloading AILive Models...\n\n" +
-                "Model 1/2: Memory Model (TinyLlama-1.1B, ~700MB)\n" +
-                "Model 2/2: Main AI (Qwen2-VL-2B, ~986MB)\n\n" +
-                "Total: ~1.7GB\n\n" +
-                "This may take 10-20 minutes depending on your connection.\n\n" +
-                "Please keep the app open while downloading..."
+                "Model 1/5: SmolLM2 (271MB)\n" +
+                "Model 2/5: BGE Embeddings (133MB)\n" +
+                "Model 3/5: Memory Model (700MB)\n" +
+                "Model 4/5: Whisper STT (39MB)\n" +
+                "Model 5/5: Qwen2-VL (986MB)\n\n" +
+                "Total: ~2.2GB\n\n" +
+                "This may take 10-30 minutes.\n\n" +
+                "You can pause and resume anytime."
 
         downloadDialog = AlertDialog.Builder(activity)
             .setTitle("Downloading Necessary Models")
@@ -475,26 +512,32 @@ class ModelSetupDialog(
             .setNegativeButton("Cancel") { _, _ ->
                 modelDownloadManager.cancelDownload()
             }
+            .setNeutralButton("Pause") { _, _ ->
+                if (modelDownloadManager.pauseDownload()) {
+                    dismissProgressDialog()
+                    Toast.makeText(activity, "Download paused - resume from settings", Toast.LENGTH_LONG).show()
+                }
+            }
             .create()
 
         downloadDialog?.show()
 
-        // Update progress every second using live download state
+        // Update progress every second
         progressHandler = Handler(Looper.getMainLooper())
         updateMultiModelDownloadProgress()
     }
 
     /**
-     * Update multi-model download progress using live downloadState
+     * Update multi-model download progress
      */
     private fun updateMultiModelDownloadProgress() {
-        // Read from live download state
         val modelName = downloadState.modelName
         val modelNum = downloadState.modelNum
         val totalModels = downloadState.totalModels
         val overallPercent = downloadState.overallPercent
 
         val progress = modelDownloadManager.getDownloadProgress()
+        val status = modelDownloadManager.getDownloadStatus()
 
         val message = if (progress != null) {
             val (downloaded, total) = progress
@@ -506,33 +549,47 @@ class ModelSetupDialog(
             val totalMB = total / 1024 / 1024
 
             val modelInfo = when (modelNum) {
-                1 -> "Memory Model (TinyLlama-1.1B)"
-                2 -> "Main AI (Qwen2-VL-2B)"
+                1 -> "SmolLM2 Chat Model"
+                2 -> "BGE Embeddings"
+                3 -> "Memory Model"
+                4 -> "Whisper STT"
+                5 -> "Qwen2-VL"
                 else -> "Model"
             }
 
             "Downloading Model $modelNum/$totalModels:\n" +
                     "$modelInfo\n\n" +
+                    "Status: ${status ?: "Downloading"}\n" +
                     "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
                     "Overall Progress: $overallPercent%\n\n" +
-                    "Please wait..."
+                    "Please keep the app open..."
         } else {
-            "Preparing to download models...\n\nModel $modelNum/$totalModels\n\nPlease wait..."
+            "Preparing model $modelNum/$totalModels...\n\n" +
+                    "Status: ${status ?: "Initializing"}\n\n" +
+                    "Please wait..."
         }
 
         downloadDialog?.setMessage(message)
 
-        // Schedule next update in 1 second - now uses live state
+        // Schedule next update
         progressHandler?.postDelayed({
-            updateMultiModelDownloadProgress()
+            if (!downloadState.isComplete) {
+                updateMultiModelDownloadProgress()
+            }
         }, 1000)
     }
 
     /**
-     * Update batch download progress (shows which file is downloading)
+     * Update batch download progress
      */
-    private fun updateBatchDownloadProgress(fileName: String, fileNum: Int, totalFiles: Int, modelTitle: String = "Model") {
+    private fun updateBatchDownloadProgress(
+        fileName: String,
+        fileNum: Int,
+        totalFiles: Int,
+        modelTitle: String = "Model"
+    ) {
         val progress = modelDownloadManager.getDownloadProgress()
+        val status = modelDownloadManager.getDownloadStatus()
 
         val message = if (progress != null && fileName.isNotEmpty()) {
             val (downloaded, total) = progress
@@ -543,116 +600,41 @@ class ModelSetupDialog(
             val downloadedMB = downloaded / 1024 / 1024
             val totalMB = total / 1024 / 1024
 
-            "Downloading file $fileNum/$totalFiles:\n$fileName\n\n" +
+            "Downloading file $fileNum/$totalFiles:\n" +
+                    "$fileName\n\n" +
+                    "Status: ${status ?: "Downloading"}\n" +
                     "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
                     "Please wait..."
         } else {
-            "Downloading $modelTitle...\n\nFile $fileNum/$totalFiles\n\nPlease wait..."
+            "Downloading $modelTitle...\n\n" +
+                    "File $fileNum/$totalFiles\n" +
+                    "Status: ${status ?: "Preparing"}\n\n" +
+                    "Please wait..."
         }
 
         downloadDialog?.setMessage(message)
 
-        // Schedule next update in 1 second
+        // Schedule next update
         progressHandler?.postDelayed({
             updateBatchDownloadProgress(fileName, fileNum, totalFiles, modelTitle)
         }, 1000)
     }
 
     /**
-     * Start model download with progress tracking
-     * DEPRECATED: Not compatible with coroutine-based ModelDownloadManager
-     * Use downloadQwenVLModel, downloadBGEModel, etc. instead
+     * Dismiss progress dialog safely
      */
-    @Deprecated("Use specific model download methods")
-    private fun downloadModel(url: String, modelName: String, onComplete: () -> Unit) {
-        Log.w(TAG, "downloadModel() is deprecated - use specific download methods instead")
-        Toast.makeText(activity, "Please use the model selection dialog", Toast.LENGTH_SHORT).show()
-        onComplete()
+    private fun dismissProgressDialog() {
+        downloadDialog?.dismiss()
+        downloadDialog = null
+        progressHandler?.removeCallbacksAndMessages(null)
+        progressHandler = null
+        progressUpdateJob?.cancel()
+        progressUpdateJob = null
+        isProcessingDownload = false
     }
 
     /**
-     * Show download progress dialog (updates every second)
-     */
-    private fun showDownloadProgressDialog(modelName: String) {
-        val dialogView = LayoutInflater.from(activity).inflate(
-            android.R.layout.select_dialog_item, // Use simple Android layout
-            null
-        )
-
-        // Create progress message
-        val message = "Downloading $modelName...\n\nThis may take a few minutes depending on your connection."
-
-        downloadDialog = AlertDialog.Builder(activity)
-            .setTitle("Downloading Model")
-            .setMessage(message)
-            .setCancelable(false)
-            .setNegativeButton("Cancel") { _, _ ->
-                modelDownloadManager.cancelDownload()
-            }
-            .create()
-
-        downloadDialog?.show()
-
-        // Update progress every second
-        progressHandler = Handler(Looper.getMainLooper())
-        updateDownloadProgress()
-    }
-
-    /**
-     * Update download progress (called every second)
-     */
-    private fun updateDownloadProgress() {
-        val progress = modelDownloadManager.getDownloadProgress()
-
-        if (progress != null) {
-            val (downloaded, total) = progress
-            val percent = if (total > 0) {
-                ((downloaded.toDouble() / total) * 100).toInt()
-            } else 0
-
-            val downloadedMB = downloaded / 1024 / 1024
-            val totalMB = total / 1024 / 1024
-
-            val message = "Downloading...\n\n" +
-                    "$downloadedMB MB / $totalMB MB ($percent%)\n\n" +
-                    "This may take a few minutes."
-
-            downloadDialog?.setMessage(message)
-
-            // Check if we hit 100% - next update will be processing phase
-            if (percent >= 100 && !isProcessingDownload) {
-                Log.i(TAG, "📥 Download reached 100% - processing...")
-                isProcessingDownload = true
-                // Note: Coroutine-based downloads handle completion automatically
-            }
-
-            // Continue updating
-            progressHandler?.postDelayed({ updateDownloadProgress() }, 1000)
-        } else {
-            // Download finished downloading, but may still be processing (moving file)
-            if (isProcessingDownload) {
-                // Show processing message and keep dialog open
-                val message = "Processing...\n\n" +
-                        "Moving model to app storage.\n\n" +
-                        "This may take a moment for large models."
-
-                downloadDialog?.setMessage(message)
-
-                // Continue checking (dialog will be dismissed by completion callback)
-                progressHandler?.postDelayed({ updateDownloadProgress() }, 1000)
-            } else {
-                // Download was cancelled by user
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-            }
-        }
-    }
-
-    /**
-     * Show file picker to import model from device
-     * BUGFIX Phase 7.5: Use ActivityResultLauncher instead of deprecated startActivityForResult
-     * BUGFIX Phase 7.6: Store onComplete callback so it can be invoked after import
-     * Phase 9.0: GGUF/ONNX support
+     * Show file picker to import model
      */
     private fun showFilePickerDialog(onComplete: () -> Unit) {
         Toast.makeText(
@@ -661,33 +643,30 @@ class ModelSetupDialog(
             Toast.LENGTH_SHORT
         ).show()
 
-        // Store the completion callback for use after import
         pendingImportCallback = { success, message ->
             if (success) {
-                Log.i(TAG, "Import successful: $message")
+                Log.i(TAG, "✅ Import successful: $message")
                 markSetupComplete()
                 onComplete()
             } else {
-                Log.e(TAG, "Import failed: $message")
-                // Allow retry
+                Log.e(TAG, "❌ Import failed: $message")
                 showFirstRunDialog(onComplete)
             }
         }
 
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"  // All files
+            type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
-                "application/octet-stream",  // .gguf, .onnx
-                "*/*"  // Fallback
+                "application/octet-stream",
+                "*/*"
             ))
         }
 
         try {
-            // Use modern ActivityResultLauncher (no lifecycle registration issues)
             filePickerLauncher.launch(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to open file picker", e)
+            Log.e(TAG, "❌ Failed to open file picker", e)
             Toast.makeText(
                 activity,
                 "File picker not available. Please download a model instead.",
@@ -699,17 +678,15 @@ class ModelSetupDialog(
     }
 
     /**
-     * Handle file picker result (called from activity's onActivityResult)
-     * BUGFIX Phase 7.6: Use stored callback instead of requiring onComplete parameter
+     * Handle file picker result
      */
     fun handleFilePickerResult(uri: Uri, onComplete: () -> Unit) {
-        Log.i(TAG, "Importing model from: $uri")
+        Log.i(TAG, "📥 Importing model from: $uri")
         Toast.makeText(activity, "Importing model...", Toast.LENGTH_SHORT).show()
 
-        // Use stored callback if available, otherwise fall back to parameter
         val callback = pendingImportCallback ?: { success, result ->
             if (success) {
-                Log.i(TAG, "Import complete: $result")
+                Log.i(TAG, "✅ Import complete: $result")
                 Toast.makeText(
                     activity,
                     "Model imported successfully: $result",
@@ -718,7 +695,7 @@ class ModelSetupDialog(
                 markSetupComplete()
                 onComplete()
             } else {
-                Log.e(TAG, "Import failed: $result")
+                Log.e(TAG, "❌ Import failed: $result")
                 Toast.makeText(
                     activity,
                     "Import failed: $result",
@@ -731,13 +708,13 @@ class ModelSetupDialog(
         CoroutineScope(Dispatchers.Main).launch {
             modelDownloadManager.importModelFromStorage(uri) { success, result ->
                 callback(success, result)
-                pendingImportCallback = null  // Clear after use
+                pendingImportCallback = null
             }
         }
     }
 
     /**
-     * Show model management dialog (for settings)
+     * Show model management dialog
      */
     fun showModelManagementDialog() {
         val availableModels = modelDownloadManager.getAvailableModelsInDownloads()
@@ -781,7 +758,6 @@ class ModelSetupDialog(
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> {
-                        // TODO: Switch to this model
                         Toast.makeText(activity, "Model switched: $modelName", Toast.LENGTH_SHORT).show()
                     }
                     1 -> confirmDeleteModel(modelName)
@@ -839,44 +815,23 @@ class ModelSetupDialog(
      */
     private fun markSetupComplete() {
         prefs.edit().putBoolean(KEY_MODEL_SETUP_DONE, true).apply()
-        Log.i(TAG, "Model setup marked complete")
+        Log.i(TAG, "✓ Model setup marked complete")
     }
 
     // ===== PUBLIC API for triggering downloads from Settings =====
 
-    /**
-     * Public method to download BGE model (called from MainActivity)
-     */
-    fun triggerBGEDownload() {
-        downloadBGEModelOnly {}
-    }
+    fun triggerSmolLM2Download() = downloadSmolLM2Only {}
+    fun triggerBGEDownload() = downloadBGEModelOnly {}
+    fun triggerMemoryDownload() = downloadMemoryModelOnly {}
+    fun triggerWhisperDownload() = downloadWhisperModelOnly {}
+    fun triggerQwenDownload() = downloadQwenVLModel {}
+    fun triggerAllModelsDownload() = downloadAllModels {}
 
     /**
-     * Public method to download Memory model (called from MainActivity)
-     */
-    fun triggerMemoryDownload() {
-        downloadMemoryModelOnly {}
-    }
-
-    /**
-     * Public method to download Qwen model (called from MainActivity)
-     */
-    fun triggerQwenDownload() {
-        downloadQwenVLModel {}
-    }
-
-    /**
-     * Public method to download all models (called from MainActivity)
-     */
-    fun triggerAllModelsDownload() {
-        downloadAllModels {}
-    }
-
-    /**
-     * Cleanup
+     * Cleanup resources
      */
     fun cleanup() {
-        downloadDialog?.dismiss()
-        progressHandler?.removeCallbacksAndMessages(null)
+        dismissProgressDialog()
+        modelDownloadManager.cleanup()
     }
 }
