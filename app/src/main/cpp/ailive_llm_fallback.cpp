@@ -13,33 +13,8 @@ extern "C" {
 // Fallback implementations that don't require llama.cpp
 // These return mock responses to prevent crashes
 
-// Wrapper functions that can be called from main file
-jboolean fallback_load_model(JNIEnv* env, jobject thiz, jstring model_path, jint n_ctx) {
-    return Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(env, thiz, model_path, n_ctx);
-}
-
-jstring fallback_generate(JNIEnv* env, jobject thiz, jstring prompt, jint max_tokens) {
-    return Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(env, thiz, prompt, max_tokens);
-}
-
-jstring fallback_generate_with_image(JNIEnv* env, jobject thiz, jstring prompt, jbyteArray image_bytes, jint max_tokens) {
-    return Java_com_ailive_ai_llm_LLMBridge_nativeGenerateWithImage(env, thiz, prompt, image_bytes, max_tokens);
-}
-
-jfloatArray fallback_generate_embedding(JNIEnv* env, jobject thiz, jstring prompt) {
-    return Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(env, thiz, prompt);
-}
-
-void fallback_free_model(JNIEnv* env, jobject thiz) {
-    Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(env, thiz);
-}
-
-jboolean fallback_is_loaded(JNIEnv* env, jobject thiz) {
-    return Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(env, thiz);
-}
-
 JNIEXPORT jboolean JNICALL
-Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
+Java_com_ailive_ai_llm_LLMBridge_fallbackLoadModel(
         JNIEnv* env,
         jobject thiz,
         jstring model_path,
@@ -51,7 +26,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
+Java_com_ailive_ai_llm_LLMBridge_fallbackGenerate(
         JNIEnv* env,
         jobject thiz,
         jstring prompt,
@@ -85,7 +60,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
 }
 
 JNIEXPORT jstring JNICALL
-Java_com_ailive_ai_llm_LLMBridge_nativeGenerateWithImage(
+Java_com_ailive_ai_llm_LLMBridge_fallbackGenerateWithImage(
         JNIEnv* env,
         jobject thiz,
         jstring prompt,
@@ -98,7 +73,7 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateWithImage(
 }
 
 JNIEXPORT jfloatArray JNICALL
-Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
+Java_com_ailive_ai_llm_LLMBridge_fallbackGenerateEmbedding(
         JNIEnv* env,
         jobject thiz,
         jstring prompt) {
@@ -119,13 +94,13 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
 }
 
 JNIEXPORT void JNICALL
-Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(JNIEnv* env, jobject thiz) {
+Java_com_ailive_ai_llm_LLMBridge_fallbackFreeModel(JNIEnv* env, jobject thiz) {
     LOGI("Fallback: Mock model cleanup");
     // Nothing to clean up in fallback mode
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
+Java_com_ailive_ai_llm_LLMBridge_fallbackIsLoaded(JNIEnv* env, jobject thiz) {
     // Always return true in fallback mode
     return JNI_TRUE;
 }
