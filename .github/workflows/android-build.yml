@@ -8,6 +8,7 @@ on:
       - 'New-Main-AILive-branch'  # Main development branch
       - 'Claude-New-Main-AILive-branch'  # Claude working branch
       - 'testing-123'  # Multimodal MVP testing branch
+      - 'debug-crashes'  # Crash fix and debugging branch
   pull_request:
     branches: [ main ]
   workflow_dispatch:

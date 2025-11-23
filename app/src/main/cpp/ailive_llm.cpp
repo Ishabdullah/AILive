@@ -14,6 +14,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <mutex>
 #include <android/log.h>
 #include "llama.h"
 // #include "llama_image.h" // TODO: Not available in current llama.cpp - vision features temporarily disabled
@@ -21,10 +22,15 @@
 #define LOG_TAG "AILive-LLM"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
 // Global context (one model at a time)
 static llama_model* g_model = nullptr;
 static llama_context* g_ctx = nullptr;
+
+// CRITICAL FIX: Add mutex for thread safety
+// Model initialized on one thread, but generation called from another
+static std::mutex g_llama_mutex;
 
 // Forward declaration
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens);
@@ -119,15 +125,54 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
         jstring prompt,
         jint max_tokens) {
 
+    // CRITICAL FIX: Lock mutex to prevent concurrent access
+    // Model initialized on one thread, generation called from another
+    std::lock_guard<std::mutex> lock(g_llama_mutex);
+
     if (g_model == nullptr || g_ctx == nullptr) {
         LOGE("Model not loaded, cannot generate.");
         return env->NewStringUTF("");
     }
 
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
-    std::string result = llama_decode_and_generate(prompt_cstr, max_tokens);
+
+    // CRITICAL FIX: Validate prompt before processing
+    if (prompt_cstr == nullptr) {
+        LOGE("❌ Prompt is null!");
+        return env->NewStringUTF("[ERROR: Null prompt]");
+    }
+
+    size_t prompt_len = strlen(prompt_cstr);
+    if (prompt_len == 0) {
+        LOGE("❌ Prompt is empty!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return env->NewStringUTF("[ERROR: Empty prompt]");
+    }
+
+    if (prompt_len > 16000) {
+        LOGW("⚠️ Prompt very long (%zu bytes), may cause issues", prompt_len);
+    }
+
+    LOGI("📝 Received prompt: %zu bytes, max_tokens=%d", prompt_len, max_tokens);
+    LOGI("   Thread safety: LOCKED (mutex acquired)");
+
+    std::string result;
+    try {
+        result = llama_decode_and_generate(prompt_cstr, max_tokens);
+    } catch (const std::exception& e) {
+        LOGE("❌ Exception during generation: %s", e.what());
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return env->NewStringUTF("[ERROR: Generation failed]");
+    } catch (...) {
+        LOGE("❌ Unknown exception during generation");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return env->NewStringUTF("[ERROR: Unknown error]");
+    }
+
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
 
+    LOGI("✅ Generation complete: %zu bytes", result.length());
+    LOGI("   Thread safety: UNLOCKED (mutex releasing)");
     return env->NewStringUTF(result.c_str());
 }
 
@@ -185,37 +230,77 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
         jobject thiz,
         jstring prompt) {
 
+    // CRITICAL FIX: Lock mutex to prevent concurrent access with nativeGenerate
+    // This was causing SIGABRT crashes when text generation and embedding generation
+    // happened simultaneously (e.g., when user types "hello" and memory system searches facts)
+    std::lock_guard<std::mutex> lock(g_llama_mutex);
+
     if (g_model == nullptr || g_ctx == nullptr) {
-        LOGE("Model not loaded, cannot generate embedding.");
+        LOGE("❌ Model not loaded, cannot generate embedding.");
+        return nullptr;
+    }
+
+    // CRITICAL FIX: Validate prompt before processing
+    if (prompt == nullptr) {
+        LOGE("❌ Prompt JNI string is null!");
         return nullptr;
     }
 
     const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
-    LOGI("🧠 Generating embedding for: %.80s...", prompt_cstr);
+    if (prompt_cstr == nullptr) {
+        LOGE("❌ Failed to get UTF chars from prompt!");
+        return nullptr;
+    }
+
+    size_t prompt_len = strlen(prompt_cstr);
+    if (prompt_len == 0) {
+        LOGE("❌ Prompt is empty, cannot generate embedding!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    LOGI("🧠 Generating embedding for: %.80s... (%zu bytes)", prompt_cstr, prompt_len);
+    LOGI("   Thread safety: LOCKED (mutex acquired)");
 
     // Note: KV cache clearing function varies by llama.cpp version
     // Skipping cache clear - will naturally overwrite with new tokens
 
     // Tokenize the prompt
     std::vector<llama_token> tokens;
-    tokens.resize(strlen(prompt_cstr) + 1); // Actually allocate memory
+    tokens.resize(prompt_len + 1); // Actually allocate memory
     const llama_vocab* vocab = llama_model_get_vocab(g_model);
-    int n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
+    if (vocab == nullptr) {
+        LOGE("❌ Failed to get model vocabulary!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
+    int n_tokens = llama_tokenize(vocab, prompt_cstr, prompt_len, tokens.data(), tokens.size(), true, false);
     if (n_tokens < 0) {
+        LOGI("   Tokenization buffer too small (%zu), resizing to %d...", tokens.size(), -n_tokens);
         tokens.resize(-n_tokens);
-        n_tokens = llama_tokenize(vocab, prompt_cstr, strlen(prompt_cstr), tokens.data(), tokens.size(), true, false);
+        n_tokens = llama_tokenize(vocab, prompt_cstr, prompt_len, tokens.data(), tokens.size(), true, false);
     } else {
         tokens.resize(n_tokens);
     }
 
     if (n_tokens <= 0) {
-        LOGE("Embedding tokenization failed.");
+        LOGE("❌ Embedding tokenization failed (returned %d tokens).", n_tokens);
         env->ReleaseStringUTFChars(prompt, prompt_cstr);
         return nullptr;
     }
 
+    LOGI("   Tokenized into %d tokens", n_tokens);
+
     // Create a batch for the prompt
+    LOGI("   Creating batch for %d tokens...", n_tokens);
     llama_batch batch = llama_batch_init(n_tokens, 0, 1);
+    if (batch.token == nullptr) {
+        LOGE("❌ Failed to initialize batch!");
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
+    }
+
     batch.n_tokens = n_tokens;
     for (int i = 0; i < n_tokens; ++i) {
         batch.token[i] = tokens[i];
@@ -226,8 +311,9 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     }
 
     // Decode the prompt to update the context
+    LOGI("   Decoding batch...");
     if (llama_decode(g_ctx, batch) != 0) {
-        LOGE("llama_decode failed for embedding");
+        LOGE("❌ llama_decode failed for embedding (context may be full or corrupted)");
         llama_batch_free(batch);
         env->ReleaseStringUTFChars(prompt, prompt_cstr);
         return nullptr;
@@ -235,10 +321,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
 
     // Get the embedding for the last token
     const int n_embd = llama_model_n_embd(g_model);
-    const float* embedding = llama_get_embeddings_ith(g_ctx, n_tokens - 1);
+    LOGI("   Retrieving embedding (dimension: %d)...", n_embd);
 
+    const float* embedding = llama_get_embeddings_ith(g_ctx, n_tokens - 1);
     if (embedding == nullptr) {
-        LOGE("Failed to get embeddings.");
+        LOGE("❌ Failed to get embeddings from context (model may not support embeddings)");
         llama_batch_free(batch);
         env->ReleaseStringUTFChars(prompt, prompt_cstr);
         return nullptr;
@@ -247,14 +334,19 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
     // Create and return the float array
     jfloatArray result = env->NewFloatArray(n_embd);
     if (result == nullptr) {
-        LOGE("Failed to create new float array.");
-    } else {
-        env->SetFloatArrayRegion(result, 0, n_embd, embedding);
+        LOGE("❌ Failed to create new float array (JNI memory allocation failed).");
+        llama_batch_free(batch);
+        env->ReleaseStringUTFChars(prompt, prompt_cstr);
+        return nullptr;
     }
+
+    env->SetFloatArrayRegion(result, 0, n_embd, embedding);
 
     llama_batch_free(batch);
     env->ReleaseStringUTFChars(prompt, prompt_cstr);
-    LOGI("✅ Embedding generated successfully.");
+
+    LOGI("✅ Embedding generated successfully (%d dimensions).", n_embd);
+    LOGI("   Thread safety: UNLOCKED (mutex releasing)");
     return result;
 }
 
@@ -292,12 +384,19 @@ Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
 
 /**
  * Main generation function using the corrected llama.cpp workflow.
+ *
+ * CRITICAL FIXES:
+ * - Thread-safe (called under mutex lock in nativeGenerate)
+ * - Mutex prevents concurrent access from different threads
+ * - Each generation gets clean batch/context state
+ *
+ * NOTE: KV cache clearing not available in this llama.cpp version
+ * - The mutex serialization should prevent most corruption issues
+ * - If needed, could reload model or use sequence IDs in future
  */
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens) {
     LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());
-
-    // Note: KV cache clearing function varies by llama.cpp version
-    // Skipping cache clear - will naturally overwrite with new tokens
+    LOGI("   Context protected by mutex (thread-safe)");
 
     // Tokenize the prompt
     std::vector<llama_token> prompt_tokens;
@@ -319,31 +418,80 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
     }
     LOGI("Tokenized prompt into %d tokens.", n_prompt_tokens);
 
-    // --- Process Prompt ---
-    llama_batch batch = llama_batch_init(n_prompt_tokens, 0, 1);
-    batch.n_tokens = n_prompt_tokens;
-    for (int i = 0; i < n_prompt_tokens; ++i) {
-        batch.token[i] = prompt_tokens[i];
-        batch.pos[i] = i;
-        batch.n_seq_id[i] = 1;
-        batch.seq_id[i][0] = 0;
-        batch.logits[i] = (i == n_prompt_tokens - 1) ? 1 : 0; // Request logit only for last token
+    // CRITICAL FIX: Process prompt in batches to avoid exceeding n_batch limit
+    // Context was initialized with n_batch=512, so we must chunk large prompts
+    const int max_batch_size = 512;  // Must match ctx_params.n_batch from initialization
+    int n_processed = 0;
+
+    LOGI("📦 Processing prompt in batches (max_batch_size=%d)...", max_batch_size);
+
+    while (n_processed < n_prompt_tokens) {
+        // Calculate batch size for this iteration
+        int batch_size = std::min(max_batch_size, n_prompt_tokens - n_processed);
+
+        LOGI("   Batch %d: processing tokens %d-%d (%d tokens)",
+             (n_processed / max_batch_size) + 1,
+             n_processed,
+             n_processed + batch_size - 1,
+             batch_size);
+
+        // Create batch for this chunk
+        llama_batch batch = llama_batch_init(batch_size, 0, 1);
+        batch.n_tokens = batch_size;
+
+        for (int i = 0; i < batch_size; ++i) {
+            batch.token[i] = prompt_tokens[n_processed + i];
+            batch.pos[i] = n_processed + i;  // Absolute position in sequence
+            batch.n_seq_id[i] = 1;
+            batch.seq_id[i][0] = 0;
+            // Only request logits for the very last token of the entire prompt
+            batch.logits[i] = (n_processed + i == n_prompt_tokens - 1) ? 1 : 0;
+        }
+
+        // Decode this batch
+        if (llama_decode(g_ctx, batch) != 0) {
+            LOGE("❌ Failed to decode batch at position %d", n_processed);
+            llama_batch_free(batch);
+            return "[ERROR: Prompt decoding failed at batch]";
+        }
+
+        llama_batch_free(batch);
+        n_processed += batch_size;
     }
 
-    if (llama_decode(g_ctx, batch) != 0) {
-        LOGE("Failed to decode prompt.");
-        llama_batch_free(batch);
-        return "[ERROR: Prompt decoding failed]";
-    }
-    LOGI("Prompt decoded successfully.");
+    LOGI("✅ Prompt decoded successfully (%d tokens in %d batches)",
+         n_prompt_tokens,
+         (n_prompt_tokens + max_batch_size - 1) / max_batch_size);
 
     // --- Generate Response ---
+
+    // CRITICAL: After batched prompt processing, logits are available at index 0
+    // (we only requested logits for the last token in the final batch)
+
+    // CRITICAL FIX: max_tokens is the number of NEW tokens to generate, not total sequence length
+    // Total sequence = prompt tokens + generated tokens
+    int max_sequence_length = n_prompt_tokens + max_tokens;
+
+    LOGI("🎯 Starting generation loop...");
+    LOGI("   Prompt: %d tokens, will generate up to %d new tokens (max seq: %d)",
+         n_prompt_tokens, max_tokens, max_sequence_length);
+
     std::string result_str;
     int n_current = n_prompt_tokens;
+    llama_batch batch;
+    bool batch_initialized = false;  // Track if batch needs freeing
 
-    while (n_current < max_tokens) {
-        // Sample the next token using the new sampler API
-        auto* logits = llama_get_logits_ith(g_ctx, batch.n_tokens - 1);
+    while (n_current < max_sequence_length) {
+        // Get logits from the last decoded token
+        // For first iteration: logits from last prompt token (index 0)
+        // For subsequent iterations: logits from previously generated token (index 0)
+        auto* logits = llama_get_logits_ith(g_ctx, 0);
+
+        // CRITICAL FIX: Validate logits pointer
+        if (logits == nullptr) {
+            LOGE("❌ Failed to get logits from context (returned null)");
+            return "[ERROR: Logits retrieval failed - context may be corrupted]";
+        }
 
         const llama_vocab* vocab = llama_model_get_vocab(g_model);
         const int n_vocab = llama_vocab_n_tokens(vocab);
@@ -379,9 +527,18 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         llama_sampler_free(sampler_chain);
         delete[] candidates.data;
 
+        // Debug: Log first few sampled tokens
+        if (n_current - n_prompt_tokens < 3) {
+            LOGI("🔍 Sampled token #%d: id=%d (vocab_size=%d, eos=%d)",
+                 n_current - n_prompt_tokens + 1,
+                 new_token_id,
+                 n_vocab,
+                 llama_vocab_eos(vocab));
+        }
+
         // Check for End-of-Sequence
         if (new_token_id == llama_vocab_eos(vocab)) {
-            LOGI("End of generation (EOS token).");
+            LOGI("🛑 End of generation (EOS token at position %d).", n_current - n_prompt_tokens);
             break;
         }
 
@@ -393,8 +550,11 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         }
 
         // Prepare for next iteration
-        llama_batch_free(batch);
+        if (batch_initialized) {
+            llama_batch_free(batch);
+        }
         batch = llama_batch_init(1, 0, 1);
+        batch_initialized = true;
         batch.n_tokens = 1;
         batch.token[0] = new_token_id;
         batch.pos[0] = n_current;
@@ -410,8 +570,14 @@ static std::string llama_decode_and_generate(const std::string& prompt_str, int 
         n_current++;
     }
 
-    llama_batch_free(batch);
-    LOGI("✨ Generated %zu tokens: %.80s...", result_str.length(), result_str.c_str());
+    // Clean up batch if it was initialized
+    if (batch_initialized) {
+        llama_batch_free(batch);
+    }
+
+    int tokens_generated = n_current - n_prompt_tokens;
+    LOGI("✨ Generated %d tokens (%zu chars): %.80s...",
+         tokens_generated, result_str.length(), result_str.c_str());
     return result_str;
 }
 

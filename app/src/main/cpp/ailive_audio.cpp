@@ -8,6 +8,9 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <cstdio>
+#include <cerrno>
+#include <cstring>
 #include <android/log.h>
 #include "whisper.h"
 
@@ -55,8 +58,40 @@ Java_com_ailive_audio_WhisperProcessor_nativeInit(
         g_whisper_ctx = nullptr;
     }
 
+    // CRITICAL: Validate input
+    if (model_path == nullptr) {
+        LOGE_AUDIO("❌ Model path is null!");
+        return JNI_FALSE;
+    }
+
     const char* path = env->GetStringUTFChars(model_path, nullptr);
-    LOGI_AUDIO("Initializing Whisper model from: %s", path);
+    if (path == nullptr) {
+        LOGE_AUDIO("❌ Failed to get UTF chars from model path!");
+        return JNI_FALSE;
+    }
+
+    size_t path_len = strlen(path);
+    if (path_len == 0) {
+        LOGE_AUDIO("❌ Model path is empty!");
+        env->ReleaseStringUTFChars(model_path, path);
+        return JNI_FALSE;
+    }
+
+    LOGI_AUDIO("🎤 Initializing Whisper model...");
+    LOGI_AUDIO("   Path: %s", path);
+    LOGI_AUDIO("   Path length: %zu bytes", path_len);
+
+    // Check if file exists before attempting to load
+    FILE* test = fopen(path, "rb");
+    if (test == nullptr) {
+        LOGE_AUDIO("❌ Model file does not exist or cannot be opened!");
+        LOGE_AUDIO("   Path: %s", path);
+        LOGE_AUDIO("   errno: %d (%s)", errno, strerror(errno));
+        env->ReleaseStringUTFChars(model_path, path);
+        return JNI_FALSE;
+    }
+    fclose(test);
+    LOGI_AUDIO("   ✓ File exists and is readable");
 
     whisper_context_params params = whisper_context_default_params();
     g_whisper_ctx = whisper_init_from_file_with_params(path, params);
@@ -64,11 +99,15 @@ Java_com_ailive_audio_WhisperProcessor_nativeInit(
     env->ReleaseStringUTFChars(model_path, path);
 
     if (g_whisper_ctx == nullptr) {
-        LOGE_AUDIO("Failed to initialize whisper context.");
+        LOGE_AUDIO("❌ Failed to initialize whisper context.");
+        LOGE_AUDIO("   Possible causes:");
+        LOGE_AUDIO("   - Wrong model format (expected .bin for whisper)");
+        LOGE_AUDIO("   - Corrupted model file");
+        LOGE_AUDIO("   - Incompatible whisper.cpp version");
         return JNI_FALSE;
     }
 
-    LOGI_AUDIO("✅ Whisper context initialized successfully.");
+    LOGI_AUDIO("✅ Whisper context initialized successfully!");
     return JNI_TRUE;
 }
 

@@ -144,16 +144,49 @@ class LLMBridge {
 
     /**
      * Kotlin-friendly wrapper for embedding generation
+     *
+     * CRITICAL: This function is thread-safe (native code uses mutex)
+     * Safe to call concurrently with generate()
      */
     fun generateEmbedding(prompt: String): List<Float>? {
+        // CRITICAL: Check if native library is loaded first
+        if (!isLibraryLoaded) {
+            Log.e(TAG, "❌ Cannot generate embedding: Native library not loaded (${libraryLoadError})")
+            return null
+        }
+
         if (!nativeIsLoaded()) {
             Log.w(TAG, "⚠️ Model not loaded, cannot generate embedding")
             return null
         }
 
-        Log.d(TAG, "🧠 Generating embedding...")
-        val result = nativeGenerateEmbedding(prompt)
-        return result?.toList()
+        // CRITICAL: Validate prompt before calling native code
+        if (prompt.isBlank()) {
+            Log.w(TAG, "⚠️ Prompt is blank, cannot generate embedding")
+            return null
+        }
+
+        if (prompt.length > 10000) {
+            Log.w(TAG, "⚠️ Prompt very long (${prompt.length} chars), may cause issues")
+        }
+
+        Log.d(TAG, "🧠 Generating embedding for ${prompt.length} char prompt...")
+
+        return try {
+            val result = nativeGenerateEmbedding(prompt)
+            if (result != null) {
+                Log.d(TAG, "✅ Embedding generated (${result.size} dimensions)")
+                result.toList()
+            } else {
+                Log.w(TAG, "⚠️ Native embedding generation returned null")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Exception during embedding generation", e)
+            Log.e(TAG, "   Prompt length: ${prompt.length}")
+            Log.e(TAG, "   Error: ${e.message}")
+            null
+        }
     }
 
     /**
