@@ -29,6 +29,19 @@ static llama_context* g_ctx = nullptr;
 // Forward declaration
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens);
 
+// Fallback function declarations (implemented in ailive_llm_fallback.cpp)
+extern "C" {
+    jboolean fallback_load_model(JNIEnv* env, jobject thiz, jstring model_path, jint n_ctx);
+    jstring fallback_generate(JNIEnv* env, jobject thiz, jstring prompt, jint max_tokens);
+    jstring fallback_generate_with_image(JNIEnv* env, jobject thiz, jstring prompt, jbyteArray image_bytes, jint max_tokens);
+    jfloatArray fallback_generate_embedding(JNIEnv* env, jobject thiz, jstring prompt);
+    void fallback_free_model(JNIEnv* env, jobject thiz);
+    jboolean fallback_is_loaded(JNIEnv* env, jobject thiz);
+}
+
+// Global flag to track if we're using fallback mode
+static bool g_using_fallback = false;
+
 extern "C" {
 
 /**
@@ -73,7 +86,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
         if (g_model == nullptr) {
             LOGE("Failed to load model from %s", path);
             env->ReleaseStringUTFChars(model_path, path);
-            return JNI_FALSE;
+            
+            // FALLBACK: Try to use fallback implementation
+            LOGI("Attempting fallback implementation...");
+            g_using_fallback = true;
+            return fallback_load_model(env, thiz, model_path, n_ctx);
         }
 
         llama_context_params ctx_params = llama_context_default_params();
@@ -87,7 +104,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
             llama_model_free(g_model);
             g_model = nullptr;
             env->ReleaseStringUTFChars(model_path, path);
-            return JNI_FALSE;
+            
+            // FALLBACK: Try to use fallback implementation
+            LOGI("Attempting fallback implementation...");
+            g_using_fallback = true;
+            return fallback_load_model(env, thiz, model_path, n_ctx);
         }
 
         LOGI("✅ Model loaded successfully!");
@@ -99,7 +120,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
     } catch (const std::exception& e) {
         LOGE("Exception during model loading: %s", e.what());
         if (path != nullptr) env->ReleaseStringUTFChars(model_path, path);
-        return JNI_FALSE;
+        
+        // FALLBACK: Try to use fallback implementation
+        LOGI("Attempting fallback implementation...");
+        g_using_fallback = true;
+        return fallback_load_model(env, thiz, model_path, n_ctx);
     }
 }
 
@@ -119,6 +144,12 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
         jstring prompt,
         jint max_tokens) {
 
+    // Check if we should use fallback implementation
+    if (g_using_fallback) {
+        LOGI("Using fallback implementation for generation");
+        return fallback_generate(env, thiz, prompt, max_tokens);
+    }
+    
     if (g_model == nullptr || g_ctx == nullptr) {
         LOGE("Model not loaded, cannot generate.");
         return env->NewStringUTF("");
@@ -149,6 +180,12 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateWithImage(
         jbyteArray image_bytes,
         jint max_tokens) {
 
+    // Check if we should use fallback implementation
+    if (g_using_fallback) {
+        LOGI("Using fallback implementation for multimodal generation");
+        return fallback_generate_with_image(env, thiz, prompt, image_bytes, max_tokens);
+    }
+    
     if (g_model == nullptr || g_ctx == nullptr) {
         LOGE("Model not loaded, cannot generate with image.");
         return env->NewStringUTF("");
@@ -185,6 +222,12 @@ Java_com_ailive_ai_llm_LLMBridge_nativeGenerateEmbedding(
         jobject thiz,
         jstring prompt) {
 
+    // Check if we should use fallback implementation
+    if (g_using_fallback) {
+        LOGI("Using fallback implementation for embedding generation");
+        return fallback_generate_embedding(env, thiz, prompt);
+    }
+    
     if (g_model == nullptr || g_ctx == nullptr) {
         LOGE("Model not loaded, cannot generate embedding.");
         return nullptr;
@@ -275,7 +318,16 @@ Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(JNIEnv* env, jobject thiz) {
         g_model = nullptr;
     }
 
+    // Use fallback implementation if in fallback mode
+    if (g_using_fallback) {
+        LOGI("Using fallback implementation for model cleanup");
+        fallback_free_model(env, thiz);
+        g_using_fallback = false;
+        return;
+    }
+
     llama_backend_free();
+    g_using_fallback = false;
     LOGI("✅ Resources freed");
 }
 
@@ -284,6 +336,11 @@ Java_com_ailive_ai_llm_LLMBridge_nativeFreeModel(JNIEnv* env, jobject thiz) {
  */
 JNIEXPORT jboolean JNICALL
 Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
+    // Use fallback implementation if in fallback mode
+    if (g_using_fallback) {
+        return fallback_is_loaded(env, thiz);
+    }
+    
     return (g_model != nullptr && g_ctx != nullptr) ? JNI_TRUE : JNI_FALSE;
 }
 
