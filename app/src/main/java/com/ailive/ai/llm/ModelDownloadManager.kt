@@ -38,16 +38,8 @@ import kotlin.coroutines.resumeWithException
  * - ✅ Better state management and cleanup
  * - ✅ Updated BGE model URLs
  *
- * MULTIMODAL MVP STATUS:
- * ✅ SmolLM2-360M: Fast chat model (271MB)
- * ✅ BGE-small-en-v1.5: Embeddings (133MB) - FIXED URLs
- * ✅ TinyLlama-1.1B: Memory ops (700MB)
- * ✅ Qwen2-VL-2B: Vision model (986MB)
- * ✅ Whisper-Tiny: Voice input (39MB)
- *
  * @author AILive Team
- * @since Phase 7.2 (Refactored with Coroutines + SmolLM2)
- * @updated Phase 9.5 (Complete rewrite with bug fixes)
+ * @since Phase 9.5 (Complete rewrite with bug fixes)
  */
 class ModelDownloadManager(private val context: Context) {
 
@@ -56,22 +48,22 @@ class ModelDownloadManager(private val context: Context) {
     companion object {
         private const val TAG = "ModelDownloadManager"
 
-        // Qwen2-VL-2B-Instruct GGUF (Vision + Complex reasoning)
+        // Qwen2-VL-2B-Instruct GGUF
         private const val QWEN_VL_BASE_URL = "https://huggingface.co/bartowski/Qwen2-VL-2B-Instruct-GGUF/resolve/main"
         const val QWEN_VL_MODEL_GGUF = "Qwen2-VL-2B-Instruct-Q4_K_M.gguf"
         const val QWEN_VL_MODEL_URL = "$QWEN_VL_BASE_URL/$QWEN_VL_MODEL_GGUF"
 
-        // SmolLM2-360M-Instruct GGUF (Fast chat - always loaded)
+        // SmolLM2-360M-Instruct GGUF
         private const val SMOLLM2_BASE_URL = "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main"
         const val SMOLLM2_MODEL_GGUF = "SmolLM2-360M-Instruct-Q4_K_M.gguf"
         const val SMOLLM2_MODEL_URL = "$SMOLLM2_BASE_URL/$SMOLLM2_MODEL_GGUF"
 
-        // TinyLlama-1.1B (Memory operations)
+        // TinyLlama-1.1B
         private const val TINYLLAMA_BASE_URL = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main"
         const val MEMORY_MODEL_GGUF = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
         const val MEMORY_MODEL_URL = "$TINYLLAMA_BASE_URL/$MEMORY_MODEL_GGUF"
 
-        // BGE Embeddings - FIXED URLS (using onnx subdirectory correctly)
+        // BGE Embeddings - FIXED URLS
         private const val BGE_BASE_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main"
         const val BGE_MODEL_ONNX = "model_quantized.onnx"
         const val BGE_TOKENIZER_JSON = "tokenizer.json"
@@ -93,20 +85,17 @@ class ModelDownloadManager(private val context: Context) {
         const val DOWNLOAD_STATUS_EXISTS = "EXISTS"
         const val DOWNLOAD_STATUS_PAUSED = "PAUSED"
         
-        // Retry configuration
         private const val MAX_RETRY_ATTEMPTS = 3
         private const val RETRY_DELAY_MS = 2000L
         private const val RETRY_BACKOFF_MULTIPLIER = 2.0
         
-        // Download state persistence
         private const val PREF_NAME = "model_download_state"
         private const val KEY_PAUSED_DOWNLOADS = "paused_downloads"
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-    private val downloadMutex = Mutex() // Prevent concurrent downloads
+    private val downloadMutex = Mutex()
     
-    // Current download state
     private var downloadId: Long = -1
     private var downloadContinuation: Continuation<String>? = null
     private var downloadReceiver: BroadcastReceiver? = null
@@ -117,7 +106,7 @@ class ModelDownloadManager(private val context: Context) {
 
     private val handler = Handler(Looper.getMainLooper())
     private var statusCheckRunnable: Runnable? = null
-    private val POLL_INTERVAL_MS = 3000L // Reduced from 5s to 3s
+    private val POLL_INTERVAL_MS = 3000L
 
     private val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
@@ -130,8 +119,6 @@ class ModelDownloadManager(private val context: Context) {
             }
         }
     }
-
-    // ========== MODEL AVAILABILITY CHECKS ==========
 
     fun isQwenVLModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
@@ -154,31 +141,13 @@ class ModelDownloadManager(private val context: Context) {
     fun isSmolLM2ModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, SMOLLM2_MODEL_GGUF)
-
-        if (!modelFile.exists()) {
-            Log.i(TAG, "❌ SmolLM2 not found")
-            return false
-        }
-
-        if (modelFile.length() < MIN_MODEL_SIZE_BYTES) {
-            Log.e(TAG, "❌ SmolLM2 file too small")
-            return false
-        }
-
-        Log.i(TAG, "✅ SmolLM2 available (${modelFile.length() / 1024 / 1024}MB)")
-        return true
+        return modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES
     }
 
     fun isMemoryModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, MEMORY_MODEL_GGUF)
-
-        if (!modelFile.exists() || modelFile.length() < MIN_GGUF_SIZE_BYTES) {
-            return false
-        }
-
-        Log.i(TAG, "✅ Memory model available")
-        return true
+        return modelFile.exists() && modelFile.length() >= MIN_GGUF_SIZE_BYTES
     }
 
     fun isBGEModelAvailable(): Boolean {
@@ -186,17 +155,14 @@ class ModelDownloadManager(private val context: Context) {
         val modelFile = File(downloadsDir, BGE_MODEL_ONNX)
         val tokenizerFile = File(downloadsDir, BGE_TOKENIZER_JSON)
         val configFile = File(downloadsDir, BGE_CONFIG_JSON)
-
         val allExist = modelFile.exists() && tokenizerFile.exists() && configFile.exists()
         val validSize = modelFile.length() >= MIN_MODEL_SIZE_BYTES
-
         return allExist && validSize
     }
 
     fun isWhisperModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
         val modelFile = File(downloadsDir, WHISPER_MODEL_GGUF)
-
         return modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES
     }
 
@@ -216,7 +182,6 @@ class ModelDownloadManager(private val context: Context) {
         val downloadsDir = getModelsDir()
         val prefs = context.getSharedPreferences("ailive_model_prefs", Context.MODE_PRIVATE)
 
-        // 1. User-selected model
         prefs.getString("active_model_path", null)?.let { path ->
             val file = File(path)
             if (file.exists() && file.length() >= MIN_GGUF_SIZE_BYTES) {
@@ -225,13 +190,11 @@ class ModelDownloadManager(private val context: Context) {
             prefs.edit().remove("active_model_path").apply()
         }
 
-        // 2. Default Qwen model
         val defaultModel = File(downloadsDir, QWEN_VL_MODEL_GGUF)
         if (defaultModel.exists() && defaultModel.length() >= MIN_GGUF_SIZE_BYTES) {
             return defaultModel
         }
 
-        // 3. Largest GGUF model
         return getAvailableModelsInDownloads().maxByOrNull { it.length() }
             ?.takeIf { it.length() >= MIN_GGUF_SIZE_BYTES }
     }
@@ -247,26 +210,21 @@ class ModelDownloadManager(private val context: Context) {
         }?.sortedByDescending { it.lastModified() } ?: emptyList()
     }
 
-    // ========== DOWNLOAD METHODS (SUSPEND) WITH RETRY LOGIC ==========
-
     suspend fun downloadQwenVLModel(onProgress: (String, Int, Int) -> Unit) {
         Log.i(TAG, "📥 Downloading Qwen2-VL (986MB)...")
         onProgress(QWEN_VL_MODEL_GGUF, 1, 1)
-
         downloadWithRetry(QWEN_VL_MODEL_URL, QWEN_VL_MODEL_GGUF, "Qwen2-VL")
     }
 
     suspend fun downloadSmolLM2Model(onProgress: (String, Int, Int) -> Unit) {
         Log.i(TAG, "📥 Downloading SmolLM2-360M (271MB)...")
         onProgress(SMOLLM2_MODEL_GGUF, 1, 1)
-
         downloadWithRetry(SMOLLM2_MODEL_URL, SMOLLM2_MODEL_GGUF, "SmolLM2")
     }
 
     suspend fun downloadMemoryModel(onProgress: (String, Int, Int) -> Unit) {
         Log.i(TAG, "📥 Downloading TinyLlama (700MB)...")
         onProgress(MEMORY_MODEL_GGUF, 1, 1)
-
         downloadWithRetry(MEMORY_MODEL_URL, MEMORY_MODEL_GGUF, "Memory Model")
     }
 
@@ -274,19 +232,16 @@ class ModelDownloadManager(private val context: Context) {
         Log.i(TAG, "📥 Downloading BGE Embeddings (133MB)...")
         var filesAlreadyExisted = 0
 
-        // Model file
         onProgress(BGE_MODEL_ONNX, 1, 3)
         val modelStatus = downloadWithRetry(BGE_MODEL_URL, BGE_MODEL_ONNX, "BGE Model")
         if (modelStatus == DOWNLOAD_STATUS_EXISTS) filesAlreadyExisted++
         delay(1000)
 
-        // Tokenizer
         onProgress(BGE_TOKENIZER_JSON, 2, 3)
         val tokenizerStatus = downloadWithRetry(BGE_TOKENIZER_URL, BGE_TOKENIZER_JSON, "BGE Tokenizer")
         if (tokenizerStatus == DOWNLOAD_STATUS_EXISTS) filesAlreadyExisted++
         delay(1000)
 
-        // Config
         onProgress(BGE_CONFIG_JSON, 3, 3)
         val configStatus = downloadWithRetry(BGE_CONFIG_URL, BGE_CONFIG_JSON, "BGE Config")
         if (configStatus == DOWNLOAD_STATUS_EXISTS) filesAlreadyExisted++
@@ -303,21 +258,18 @@ class ModelDownloadManager(private val context: Context) {
     suspend fun downloadWhisperModel(onProgress: (String, Int, Int) -> Unit): String {
         Log.i(TAG, "📥 Downloading Whisper STT Model (39MB)...")
         onProgress(WHISPER_MODEL_GGUF, 1, 1)
-
         val result = downloadWithRetry(WHISPER_MODEL_URL, WHISPER_MODEL_GGUF, "Whisper")
         Log.i(TAG, if (result == DOWNLOAD_STATUS_EXISTS) "ℹ️ Whisper already exists" else "✅ Whisper downloaded!")
         return result
     }
 
-    suspend fun downloadAllModels(
-        onProgress: (String, Int, Int, Int) -> Unit
-    ): String = downloadMutex.withLock {
+    suspend fun downloadAllModels(onProgress: (String, Int, Int, Int) -> Unit): String = downloadMutex.withLock {
         Log.i(TAG, "📥 Starting sequential download of all models...")
         var modelsAlreadyExisted = 0
         val totalModels = 5
 
         try {
-            // 1. SmolLM2 (smallest, fastest)
+            // 1. SmolLM2
             onProgress("SmolLM2 Chat Model", 1, totalModels, 0)
             val smolStatus = try {
                 downloadSmolLM2Model { fileName, _, _ ->
@@ -333,7 +285,7 @@ class ModelDownloadManager(private val context: Context) {
             if (smolStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
-            // 2. BGE Embeddings
+            // 2. BGE
             onProgress("BGE Embeddings", 2, totalModels, 15)
             val bgeStatus = downloadBGEModel { fileName, fileNum, totalFiles ->
                 val percent = 15 + (10 * fileNum) / totalFiles
@@ -358,7 +310,7 @@ class ModelDownloadManager(private val context: Context) {
             if (memStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
-            // 4. Whisper STT
+            // 4. Whisper
             onProgress("Whisper STT Model", 4, totalModels, 60)
             val whisperStatus = downloadWhisperModel { fileName, _, _ ->
                 onProgress(fileName, 4, totalModels, 75)
@@ -366,7 +318,7 @@ class ModelDownloadManager(private val context: Context) {
             if (whisperStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
-            // 5. Qwen2-VL (largest)
+            // 5. Qwen
             onProgress("Qwen2-VL Model", 5, totalModels, 80)
             val qwenStatus = try {
                 downloadQwenVLModel { fileName, _, _ ->
@@ -395,13 +347,7 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
-    // ========== CORE DOWNLOAD LOGIC WITH RETRY ==========
-
-    private suspend fun downloadWithRetry(
-        modelUrl: String,
-        modelName: String,
-        displayName: String
-    ): String {
+    private suspend fun downloadWithRetry(modelUrl: String, modelName: String, displayName: String): String {
         currentRetryAttempt = 0
         var lastException: Exception? = null
 
@@ -415,7 +361,6 @@ class ModelDownloadManager(private val context: Context) {
             } catch (e: Exception) {
                 lastException = e
                 
-                // Don't retry if file already exists
                 if (e.message?.contains("already exists") == true) {
                     Log.i(TAG, "✓ $displayName already exists, skipping")
                     return DOWNLOAD_STATUS_EXISTS
@@ -434,10 +379,7 @@ class ModelDownloadManager(private val context: Context) {
         throw DownloadFailedException("$displayName download failed after $MAX_RETRY_ATTEMPTS attempts: ${lastException?.message}")
     }
 
-    private suspend fun downloadModel(
-        modelUrl: String,
-        modelName: String,
-    ): String = downloadMutex.withLock {
+    private suspend fun downloadModel(modelUrl: String, modelName: String): String = downloadMutex.withLock {
         withContext(Dispatchers.Main) {
             Log.i(TAG, "📥 Downloading: $modelName from $modelUrl")
 
@@ -445,7 +387,6 @@ class ModelDownloadManager(private val context: Context) {
             val existingFile = File(downloadsDir, modelName)
             val minSize = if (modelName.endsWith(".gguf")) MIN_GGUF_SIZE_BYTES else MIN_MODEL_SIZE_BYTES
 
-            // Check if file already exists and is valid
             if (existingFile.exists() && existingFile.length() >= minSize) {
                 Log.i(TAG, "✓ Already exists: $modelName (${existingFile.length() / 1024 / 1024}MB)")
                 return@withContext DOWNLOAD_STATUS_EXISTS
@@ -454,7 +395,6 @@ class ModelDownloadManager(private val context: Context) {
                 existingFile.delete()
             }
 
-            // Cleanup any previous receiver
             cleanupReceiver()
 
             return@withContext suspendCancellableCoroutine { continuation ->
@@ -474,98 +414,62 @@ class ModelDownloadManager(private val context: Context) {
                         }
                     }
                 }
+
+                try {
+                    context.registerReceiver(
+                        downloadReceiver,
+                        IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                        Context.RECEIVER_NOT_EXPORTED
+                    )
+
+                    val request = DownloadManager.Request(modelUrl.toUri())
+                        .setTitle("AILive - $modelName")
+                        .setDescription("Downloading AI model...")
+                        .setMimeType("application/octet-stream")
+                        .setAllowedNetworkTypes(
+                            DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
+                        )
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, modelName)
+                        .setAllowedOverMetered(true)
+                        .setAllowedOverRoaming(false)
+
+                    downloadId = downloadManager.enqueue(request)
+                    Log.i(TAG, "✅ Download queued: $downloadId for $modelName")
+
+                    startPollingDownloadStatus()
+
+                    continuation.invokeOnCancellation {
+                        Log.w(TAG, "⚠️ Download cancelled for $modelName")
+                        cancelDownload()
+                    }
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Failed to start download for $modelName", e)
+                    cleanupReceiver()
+                    continuation.resumeWithException(DownloadFailedException("Failed to start download: ${e.message}"))
+                }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error checking download status", e)
         }
     }
 
-    private fun cleanupReceiver() {
-        downloadReceiver?.let {
-            try {
-                context.unregisterReceiver(it)
-                Log.d(TAG, "🧹 Cleaned up broadcast receiver")
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠️ Error unregistering receiver: ${e.message}")
-            }
-            downloadReceiver = null
+    private fun handleDownloadComplete(modelName: String) {
+        if (isHandlingCompletion) {
+            Log.d(TAG, "⏭️ Already handling completion, skipping duplicate call")
+            return
         }
-    }
+        isHandlingCompletion = true
 
-    // ========== PAUSE/RESUME FUNCTIONALITY ==========
+        Log.i(TAG, "🎯 Handling completion for: $modelName")
+        
+        stopPollingDownloadStatus()
+        cleanupReceiver()
 
-    fun pauseDownload(): Boolean {
-        if (downloadId == -1L) {
-            Log.w(TAG, "⚠️ No active download to pause")
-            return false
-        }
+        val continuation = downloadContinuation
+        var exception: DownloadFailedException? = null
+        var result: String? = null
 
-        return try {
-            isPaused = true
-            // Save paused state
-            prefs.edit().putLong("paused_download_id", downloadId).apply()
-            currentModelName?.let { prefs.edit().putString("paused_model_name", it).apply() }
-            
-            Log.i(TAG, "⏸️ Download paused: $downloadId")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to pause download", e)
-            false
-        }
-    }
-
-    fun resumeDownload(): Boolean {
-        val pausedId = prefs.getLong("paused_download_id", -1)
-        if (pausedId == -1L) {
-            Log.w(TAG, "⚠️ No paused download found")
-            return false
-        }
-
-        return try {
-            isPaused = false
-            downloadId = pausedId
-            currentModelName = prefs.getString("paused_model_name", null)
-            
-            // Clear saved state
-            prefs.edit().remove("paused_download_id").remove("paused_model_name").apply()
-            
-            startPollingDownloadStatus()
-            Log.i(TAG, "▶️ Download resumed: $downloadId")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to resume download", e)
-            false
-        }
-    }
-
-    fun hasPausedDownload(): Boolean {
-        return prefs.getLong("paused_download_id", -1) != -1L
-    }
-
-    // ========== UTILITY METHODS ==========
-
-    fun getDownloadProgress(): Pair<Long, Long>? {
-        if (downloadId == -1L) return null
-
-        return try {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            downloadManager.query(query)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                    Pair(downloaded, total)
-                } else null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Error getting download progress", e)
-            null
-        }
-    }
-
-    fun getDownloadStatus(): String? {
-        if (downloadId == -1L) return null
-
-        return try {
+        try {
             val query = DownloadManager.Query().setFilterById(downloadId)
             downloadManager.query(query)?.use { cursor ->
                 if (cursor.moveToFirst()) {
@@ -685,67 +589,7 @@ class ModelDownloadManager(private val context: Context) {
         cleanupReceiver()
         stopPollingDownloadStatus()
     }
-}
-
-                try {
-                    context.registerReceiver(
-                        downloadReceiver,
-                        IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                        Context.RECEIVER_NOT_EXPORTED
-                    )
-
-                    val request = DownloadManager.Request(modelUrl.toUri())
-                        .setTitle("AILive - $modelName")
-                        .setDescription("Downloading AI model...")
-                        .setMimeType("application/octet-stream")
-                        .setAllowedNetworkTypes(
-                            DownloadManager.Request.NETWORK_WIFI or DownloadManager.Request.NETWORK_MOBILE
-                        )
-                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                        .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, modelName)
-                        .setAllowedOverMetered(true) // Allow mobile data
-                        .setAllowedOverRoaming(false) // Prevent roaming charges
-
-                    downloadId = downloadManager.enqueue(request)
-                    Log.i(TAG, "✅ Download queued: $downloadId for $modelName")
-
-                    startPollingDownloadStatus()
-
-                    continuation.invokeOnCancellation {
-                        Log.w(TAG, "⚠️ Download cancelled for $modelName")
-                        cancelDownload()
-                    }
-
-                } catch (e: Exception) {
-                    Log.e(TAG, "❌ Failed to start download for $modelName", e)
-                    cleanupReceiver()
-                    continuation.resumeWithException(DownloadFailedException("Failed to start download: ${e.message}"))
-                }
-            }
-        }
-    }
-
-    private fun handleDownloadComplete(modelName: String) {
-        if (isHandlingCompletion) {
-            Log.d(TAG, "⏭️ Already handling completion, skipping duplicate call")
-            return
-        }
-        isHandlingCompletion = true
-
-        Log.i(TAG, "🎯 Handling completion for: $modelName")
-        
-        stopPollingDownloadStatus()
-        cleanupReceiver()
-
-        val continuation = downloadContinuation
-        var exception: DownloadFailedException? = null
-        var result: String? = null
-
-        try {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            downloadManager.query(query)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+}    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
 
                     when (status) {
                         DownloadManager.STATUS_SUCCESSFUL -> {
@@ -784,13 +628,11 @@ class ModelDownloadManager(private val context: Context) {
             Log.e(TAG, "❌ Error in handleDownloadComplete", e)
             exception = DownloadFailedException("Error checking download status: ${e.message}")
         } finally {
-            // Reset state
             downloadId = -1
             currentModelName = null
             downloadContinuation = null
             isHandlingCompletion = false
 
-            // Resume continuation
             if (exception != null) {
                 continuation?.resumeWithException(exception)
             } else if (result != null) {
@@ -840,3 +682,89 @@ class ModelDownloadManager(private val context: Context) {
                         }
                     }
                 }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error checking download status", e)
+        }
+    }
+
+    private fun cleanupReceiver() {
+        downloadReceiver?.let {
+            try {
+                context.unregisterReceiver(it)
+                Log.d(TAG, "🧹 Cleaned up broadcast receiver")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Error unregistering receiver: ${e.message}")
+            }
+            downloadReceiver = null
+        }
+    }
+
+    fun pauseDownload(): Boolean {
+        if (downloadId == -1L) {
+            Log.w(TAG, "⚠️ No active download to pause")
+            return false
+        }
+
+        return try {
+            isPaused = true
+            prefs.edit().putLong("paused_download_id", downloadId).apply()
+            currentModelName?.let { prefs.edit().putString("paused_model_name", it).apply() }
+            Log.i(TAG, "⏸️ Download paused: $downloadId")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to pause download", e)
+            false
+        }
+    }
+
+    fun resumeDownload(): Boolean {
+        val pausedId = prefs.getLong("paused_download_id", -1)
+        if (pausedId == -1L) {
+            Log.w(TAG, "⚠️ No paused download found")
+            return false
+        }
+
+        return try {
+            isPaused = false
+            downloadId = pausedId
+            currentModelName = prefs.getString("paused_model_name", null)
+            prefs.edit().remove("paused_download_id").remove("paused_model_name").apply()
+            startPollingDownloadStatus()
+            Log.i(TAG, "▶️ Download resumed: $downloadId")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to resume download", e)
+            false
+        }
+    }
+
+    fun hasPausedDownload(): Boolean {
+        return prefs.getLong("paused_download_id", -1) != -1L
+    }
+
+    fun getDownloadProgress(): Pair<Long, Long>? {
+        if (downloadId == -1L) return null
+
+        return try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            downloadManager.query(query)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    Pair(downloaded, total)
+                } else null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error getting download progress", e)
+            null
+        }
+    }
+
+    fun getDownloadStatus(): String? {
+        if (downloadId == -1L) return null
+
+        return try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            downloadManager.query(query)?.use { cursor ->
+                if (cursor.moveToFirst()) {
