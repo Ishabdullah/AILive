@@ -61,8 +61,10 @@ add_library(ailive_llm SHARED
 
 # Include directories
 target_include_directories(ailive_llm PRIVATE
-    ${LLAMA_CPP_DIR}
+    ${LLAMA_CPP_DIR}/include
+    ${LLAMA_CPP_DIR}/src  # For llama.cpp internal includes
     ${WHISPER_CPP_DIR}/include
+    ${WHISPER_CPP_DIR}/src  # For whisper.cpp internal includes
     ${PIPER_DIR}/src
 )
 
