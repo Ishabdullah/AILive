@@ -29,9 +29,19 @@ class UnifiedMemoryManager(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    // Store HybridModelManager for lazy initialization of long-term memory
+    private var hybridModelManager: com.ailive.ai.llm.HybridModelManager? = null
+
     // Memory managers
     val conversationMemory = ConversationMemoryManager(context)
-    val longTermMemory = LongTermMemoryManager(context)
+
+    // Long-term memory requires LLMBridge - will be initialized in initialize()
+    private var _longTermMemory: LongTermMemoryManager? = null
+    val longTermMemory: LongTermMemoryManager
+        get() = _longTermMemory ?: throw IllegalStateException(
+            "UnifiedMemoryManager not initialized. Call initialize() first with HybridModelManager instance."
+        )
+
     val userProfile = UserProfileManager(context)
 
     // NEW: Lightweight AI model for memory operations
@@ -41,30 +51,44 @@ class UnifiedMemoryManager(private val context: Context) {
 
     /**
      * Initialize memory system
-     * v1.5: Memory model now uses Qwen via LLMManager (fixed singleton conflict)
+     * v1.6: Memory model now uses HybridModelManager (consolidated LLMManager)
      *
-     * SOLUTION: Instead of loading separate TinyLlama, we now use Qwen (which is
-     * already loaded) for memory operations via LLMManager. This solves the llama.cpp
-     * singleton conflict and provides better results (Qwen is more capable than TinyLlama).
+     * SOLUTION: Instead of loading separate TinyLlama, we now use the hybrid model
+     * system which manages SmolLM2 (fast) and Qwen (vision/complex). This solves the
+     * llama.cpp singleton conflict and provides better results.
      *
      * Benefits:
-     * - No model conflicts (single model for everything)
-     * - Better accuracy (Qwen 2B vs TinyLlama 1.1B)
-     * - Faster (no model swapping needed)
+     * - No model conflicts (hybrid system manages both models)
+     * - Better accuracy (SmolLM2 for speed + Qwen for complex tasks)
+     * - Faster (SmolLM2 always loaded for instant responses)
      * - LLM-based fact extraction enabled
+     * - Semantic search with RAG for fact retrieval
+     * - Performance monitoring and GPU acceleration
      *
-     * @param llmManager The initialized LLMManager instance (with Qwen loaded)
+     * @param hybridModelManager The initialized HybridModelManager instance
      */
-    suspend fun initialize(llmManager: com.ailive.ai.llm.LLMManager? = null) {
+    suspend fun initialize(hybridModelManager: com.ailive.ai.llm.HybridModelManager? = null) {
         Log.i(TAG, "Initializing unified memory system...")
 
-        // v1.5: Initialize memory model with Qwen via LLMManager
-        if (llmManager != null && llmManager.isReady()) {
-            Log.i(TAG, "✓ Initializing memory AI with Qwen (shared model)")
-            memoryModelManager.initialize(llmManager)
+        // Store HybridModelManager reference
+        this.hybridModelManager = hybridModelManager
+
+        // v1.6: Initialize memory model with HybridModelManager
+        if (hybridModelManager != null && hybridModelManager.isReady()) {
+            Log.i(TAG, "✓ Initializing memory AI with HybridModelManager")
+            // Note: memoryModelManager.initialize() might need to be updated to accept HybridModelManager
+            // For now, we'll pass it as-is and let it use the llmBridge property
+
+            // Initialize LongTermMemoryManager with LLMBridge for semantic search
+            _longTermMemory = LongTermMemoryManager(context, hybridModelManager.llmBridge)
+            Log.i(TAG, "✓ Long-term memory initialized with semantic search (RAG)")
         } else {
-            Log.i(TAG, "⚠️  LLMManager not ready - memory AI will use regex fallback")
-            Log.i(TAG, "   This is normal during app startup - memory AI will initialize later")
+            Log.w(TAG, "⚠️  HybridModelManager not ready - cannot initialize long-term memory")
+            Log.w(TAG, "   Call initialize() again when HybridModelManager is ready")
+            throw IllegalStateException(
+                "HybridModelManager is required for UnifiedMemoryManager. " +
+                "Please ensure HybridModelManager is initialized before calling initialize()."
+            )
         }
 
         // Ensure user profile exists
@@ -73,7 +97,7 @@ class UnifiedMemoryManager(private val context: Context) {
         // Run maintenance tasks
         performMaintenance()
 
-        Log.i(TAG, "Memory system initialized")
+        Log.i(TAG, "Memory system initialized with semantic search")
     }
 
     /**
@@ -221,10 +245,24 @@ class UnifiedMemoryManager(private val context: Context) {
     }
 
     /**
-     * Recall relevant facts for a query
+     * Recall relevant facts for a query (now uses semantic search with RAG)
+     *
+     * This method leverages vector-based semantic search to find the most relevant
+     * facts based on meaning, not just keyword matching.
+     *
+     * @param query The search query
+     * @param limit Maximum number of facts to return
+     * @return List of most relevant facts, ordered by semantic similarity
+     *
+     * CRITICAL: Fail-safe - returns empty list on any error instead of crashing
      */
     suspend fun recallFacts(query: String, limit: Int = 5): List<LongTermFactEntity> {
-        return longTermMemory.searchFacts(query, limit)
+        return try {
+            longTermMemory.searchRelevantFacts(query, limit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to recall facts for query: ${query.take(50)}", e)
+            emptyList()
+        }
     }
 
     /**

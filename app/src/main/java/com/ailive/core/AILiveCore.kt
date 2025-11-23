@@ -13,7 +13,7 @@ import com.ailive.meta.MetaAI
 import com.ailive.core.messaging.MessageBus
 import com.ailive.core.state.StateManager
 import com.ailive.audio.TTSManager
-import com.ailive.ai.llm.LLMManager
+import com.ailive.ai.llm.HybridModelManager
 import com.ailive.personality.PersonalityEngine
 import com.ailive.personality.tools.SentimentAnalysisTool
 import com.ailive.personality.tools.DeviceControlTool
@@ -40,7 +40,7 @@ class AILiveCore(
     lateinit var messageBus: MessageBus  // Public for CommandRouter access
     private lateinit var stateManager: StateManager
     lateinit var ttsManager: TTSManager  // Public for agents and CommandRouter
-    lateinit var llmManager: LLMManager   // Public for CommandRouter - Phase 2.6
+    lateinit var hybridModelManager: HybridModelManager   // Public for CommandRouter - Consolidated LLM system
 
     // NEW: PersonalityEngine for unified intelligence
     lateinit var personalityEngine: PersonalityEngine  // Public for CommandRouter
@@ -80,7 +80,7 @@ class AILiveCore(
             messageBus = MessageBus()
             stateManager = StateManager()
             ttsManager = TTSManager(context)
-            llmManager = LLMManager(context)
+            hybridModelManager = HybridModelManager(context)
 
             // Context managers
             locationManager = LocationManager(context)
@@ -89,18 +89,18 @@ class AILiveCore(
             Log.i(TAG, "✓ Context managers initialized (location + statistics + memory)")
 
             // Initialize LLM in background (takes ~5-10 seconds)
-            // v1.5: LLM must initialize BEFORE memory system (memory needs LLMManager)
+            // v1.6: LLM must initialize BEFORE memory system (memory needs HybridModelManager)
             Log.i(TAG, "⏱️  Starting LLM initialization (5-10 seconds)...")
             CoroutineScope(Dispatchers.IO).launch {
-                val success = llmManager.initialize()
+                val success = hybridModelManager.initialize()
                 if (success) {
                     Log.i(TAG, "✅ LLM ready for intelligent responses")
 
-                    // v1.5: Now initialize memory system with LLMManager
-                    // This enables LLM-based fact extraction using Qwen
+                    // v1.6: Now initialize memory system with HybridModelManager
+                    // This enables LLM-based fact extraction using hybrid models
                     try {
-                        memoryManager.initialize(llmManager)
-                        Log.i(TAG, "✅ Memory system initialized with Qwen-powered fact extraction")
+                        memoryManager.initialize(hybridModelManager)
+                        Log.i(TAG, "✅ Memory system initialized with hybrid model-powered fact extraction")
                     } catch (e: Exception) {
                         Log.e(TAG, "⚠️ Memory system initialization failed", e)
                     }
@@ -111,7 +111,7 @@ class AILiveCore(
                         priority = TTSManager.Priority.LOW
                     )
                 } else {
-                    val error = llmManager.getInitializationError()
+                    val error = hybridModelManager.getInitializationError()
                     Log.w(TAG, "⚠️ LLM not available: $error")
                     Log.w(TAG, "   Using fallback response system")
 
@@ -138,7 +138,7 @@ class AILiveCore(
                 context = context,
                 messageBus = messageBus,
                 stateManager = stateManager,
-                llmManager = llmManager,
+                hybridModelManager = hybridModelManager,
                 ttsManager = ttsManager,
                 memoryManager = memoryManager  // v1.3: Pass memory system
             )
@@ -246,7 +246,7 @@ class AILiveCore(
 
             // Shutdown core systems
             ttsManager.shutdown()
-            llmManager.close()
+            hybridModelManager.freeAll()
 
             isRunning = false
             Log.i(TAG, "✓ AILive stopped")

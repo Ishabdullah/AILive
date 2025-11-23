@@ -1,5 +1,6 @@
 package com.ailive.personality.prompts
 
+import android.util.Log
 import com.ailive.personality.ConversationTurn
 import com.ailive.personality.EmotionContext
 import com.ailive.personality.Role
@@ -19,75 +20,26 @@ object UnifiedPrompt {
 
     /**
      * Generate dynamic system instruction based on AI name
+     * CONDENSED VERSION: Fits within 512 token limit to avoid batch chunking
      */
     private fun getCorePersonality(aiName: String): String {
-        return """You are $aiName, an advanced on-device AI assistant with access to powerful tools and capabilities.
+        return """You are $aiName, an on-device AI assistant with tool access.
 
-===== YOUR CAPABILITIES =====
+TOOLS:
+- get_location: GPS coordinates, city, state
+- web_search: Current info, news, weather
+- retrieve_memory: User preferences, past conversations
+- analyze_sentiment: Detect user emotions
+- control_device: Phone functions
+- record_correction: Learn from user feedback
 
-1. **LOCATION & GPS (get_location tool)**
-   - Get current GPS coordinates, city, state, country
-   - When user asks "where am I?" or "what town/city/state am I in?" → USE get_location tool
-   - NEVER say "I don't have access to location" - you DO have GPS via get_location tool
-   - Example: User: "What town am I in?" → You: Call get_location → "You're in Weathersfield, Connecticut"
+RULES:
+1. Use tools - don't say "I can't"
+2. Location questions → get_location
+3. Current events → web_search
+4. Be helpful and conversational
 
-2. **WEB SEARCH (web_search tool)**
-   - Search the internet for current information, news, weather, facts
-   - When user asks about recent events, current info, or things you don't know → USE web_search tool
-   - Auto-detects when searches are needed (temporal keywords: "today", "now", "recent", "latest", "2025")
-   - Example: User: "What's the weather?" → You: Call web_search with weather query
-
-3. **PERSISTENT MEMORY (retrieve_memory tool)**
-   - Remember user preferences, facts, past conversations
-   - Store important information for future reference
-   - Recall user's name, interests, personal details
-
-4. **SENTIMENT ANALYSIS (analyze_sentiment tool)**
-   - Detect user's emotional state (happy, sad, urgent, calm)
-   - Adjust responses based on user's mood
-
-5. **DEVICE CONTROL (control_device tool)**
-   - Control phone functions and settings
-   - Perform device-level operations
-
-6. **PATTERN ANALYSIS (analyze_patterns tool)**
-   - Detect patterns in user behavior
-   - Make predictions based on usage patterns
-
-7. **FEEDBACK TRACKING (track_feedback tool)**
-   - Track user satisfaction
-   - Learn from user reactions
-
-8. **USER CORRECTIONS (record_correction tool)**
-   - Learn from user corrections and mistakes
-   - When user says "that's wrong" or "you should use [tool]" → USE record_correction tool
-   - Store corrections in memory to avoid repeating mistakes
-
-===== CRITICAL RULES =====
-
-1. **ALWAYS USE TOOLS** - You have powerful capabilities through tools
-   - Location question? → Use get_location tool
-   - Need current info? → Use web_search tool
-   - User corrects you? → Use record_correction tool
-
-2. **NEVER SAY "I can't" or "I don't have access"** - You CAN through tools
-   - WRONG: "I'm sorry, but I'm not able to assist with that"
-   - RIGHT: Use the appropriate tool and provide the answer
-
-3. **READ CURRENT CONTEXT** - Real-time info is provided below
-   - DATE/TIME line has current time
-   - LOCATION line has current location (if available)
-   - But ALWAYS prefer tools (get_location) for most accurate info
-
-4. **LEARN FROM MISTAKES** - User corrections make you better
-   - User says "that's wrong"? → Acknowledge, use record_correction tool, fix behavior
-
-5. **BE CONVERSATIONAL & HELPFUL** - You're an assistant, not a robot
-   - Give complete, accurate answers
-   - Use natural language
-   - Be concise but thorough
-
-Your name is "$aiName". Be helpful, accurate, and always use your tools."""
+Your name is $aiName."""
     }
 
     /**
@@ -187,53 +139,91 @@ END OF UNIFIED DIRECTIVE"""
         emotionContext: EmotionContext = EmotionContext(),
         locationContext: String? = null
     ): String {
+        // CRITICAL FIX: Sanitize AI name to prevent injection or malformed prompts
+        val sanitizedName = sanitizeAiName(aiName)
+
         // Build prompt with system instruction and user input
         val promptBuilder = StringBuilder()
 
-        // Add dynamic system instruction with AI name
-        promptBuilder.append(getCorePersonality(aiName))
+        // Add dynamic system instruction with sanitized AI name
+        promptBuilder.append(getCorePersonality(sanitizedName))
         promptBuilder.append("\n\n")
 
-        // Add temporal and location awareness
-        promptBuilder.append("===== CURRENT CONTEXT (REAL-TIME INFORMATION) =====\n")
-        promptBuilder.append("DATE/TIME: ")
+        // Add temporal and location awareness (simplified)
         promptBuilder.append(getCurrentTemporalContext())
-        promptBuilder.append("\n")
-        if (locationContext != null) {
-            promptBuilder.append("LOCATION: ")
-            promptBuilder.append(locationContext)
-            promptBuilder.append("\n")
+        if (locationContext != null && locationContext.isNotBlank()) {
+            promptBuilder.append(" | ")
+            promptBuilder.append(locationContext.take(50))
         }
-        promptBuilder.append("===== END CURRENT CONTEXT =====\n\n")
+        promptBuilder.append("\n\n")
 
-        // Add conversation history if available
+        // Add conversation history (max 2 recent turns to save tokens)
         if (conversationHistory.isNotEmpty()) {
-            promptBuilder.append("CONVERSATION HISTORY:\n")
-            conversationHistory.takeLast(5).forEach { turn ->
+            conversationHistory.takeLast(2).forEach { turn ->
                 when (turn.role) {
-                    Role.USER -> promptBuilder.append("User: ${turn.content}\n")
-                    Role.ASSISTANT -> promptBuilder.append("$aiName: ${turn.content}\n")
+                    Role.USER -> {
+                        promptBuilder.append("User: ${turn.content.take(150)}\n")
+                    }
+                    Role.ASSISTANT -> {
+                        promptBuilder.append("$sanitizedName: ${turn.content.take(150)}\n")
+                    }
                     else -> {}
                 }
             }
             promptBuilder.append("\n")
         }
 
-        // Add tool context if available
+        // Add tool context if available (very limited)
         if (toolContext.isNotEmpty()) {
             val contextStr = formatToolContext(toolContext)
             if (contextStr.isNotBlank()) {
-                promptBuilder.append("ADDITIONAL CONTEXT:\n")
-                promptBuilder.append(contextStr)
+                promptBuilder.append(contextStr.take(200))
                 promptBuilder.append("\n\n")
             }
         }
 
-        // Add user input
-        promptBuilder.append("User: $userInput\n")
-        promptBuilder.append("$aiName: ")
+        // Add user input (reduced limit)
+        val sanitizedInput = userInput.take(500)
+        promptBuilder.append("User: $sanitizedInput\n")
+        promptBuilder.append("$sanitizedName: ")
 
-        return promptBuilder.toString()
+        val finalPrompt = promptBuilder.toString()
+
+        // CRITICAL: Keep prompt under 512 tokens (~1500 chars to be safe)
+        if (finalPrompt.length > 1500) {
+            Log.w("UnifiedPrompt", "⚠️ Prompt too long (${finalPrompt.length} chars), truncating to 1500")
+            return finalPrompt.take(1500)
+        }
+
+        return finalPrompt
+    }
+
+    /**
+     * Sanitize AI name to prevent injection or malformed prompts
+     * - Remove control characters and special tokens
+     * - Limit length to reasonable size
+     * - Fallback to "AILive" if invalid
+     */
+    private fun sanitizeAiName(name: String): String {
+        if (name.isBlank()) return "AILive"
+
+        // Remove any control characters, newlines, or special tokens
+        val cleaned = name
+            .replace(Regex("[\\p{C}]"), "") // Remove control characters
+            .replace("\n", " ")
+            .replace("\r", " ")
+            .replace("\t", " ")
+            .replace("<|", "")  // Remove potential special tokens
+            .replace("|>", "")
+            .replace("<", "")
+            .replace(">", "")
+            .trim()
+
+        // Limit length
+        val limited = cleaned.take(50)
+
+        // Return sanitized name or fallback
+        return limited.ifBlank { "AILive" }
     }
 
     /**
