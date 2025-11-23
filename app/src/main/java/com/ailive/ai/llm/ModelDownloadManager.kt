@@ -1,9 +1,9 @@
 package com.ailive.ai.llm
 
 import android.content.Context
+import android.net.Uri  // Added missing import for Uri in importModelFromStorage
 import android.os.Environment
 import android.util.Log
-import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -111,8 +111,6 @@ class ModelDownloadManager(private val context: Context) {
             }
         }
     }
-
-    // ... (All isModelAvailable, getModelPath, getActiveModelFile, getModelsDirectory, getAvailableModelsInDownloads methods remain unchanged - copy from previous version)
 
     fun isQwenVLModelAvailable(): Boolean {
         val downloadsDir = getModelsDir()
@@ -402,16 +400,21 @@ class ModelDownloadManager(private val context: Context) {
 
         // HEAD request for content length (for progress)
         val headRequest = Request.Builder().url(url).head().build()
-        val contentLength = okHttpClient.newCall(headRequest).execute().use { it.body?.contentLength() ?: -1 }
+        val headResponse = okHttpClient.newCall(headRequest).execute()
+        val contentLength = try {
+            headResponse.use { it.body?.contentLength() ?: -1 }
+        } finally {
+            headResponse.close()
+        }
 
         val request = Request.Builder().url(url).build()
-        okHttpClient.newCall(request).execute().use { response ->
+        val response = okHttpClient.newCall(request).execute()
+        try {
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code}: ${response.message} for $url")
             }
 
-            val body: ResponseBody? = response.body
-                ?: throw DownloadFailedException("Empty response body for $fileName")
+            val body = response.body ?: throw DownloadFailedException("Empty response body for $fileName")
 
             body.byteStream().use { input ->
                 FileOutputStream(destFile).use { output ->
@@ -438,10 +441,10 @@ class ModelDownloadManager(private val context: Context) {
 
             Log.i(TAG, "✅ Downloaded: $fileName (${destFile.length() / 1024 / 1024}MB)")
             DOWNLOAD_STATUS_OK
+        } finally {
+            response.close()
         }
     }
-
-    // ... (importModelFromStorage, deleteModel, cleanup methods remain unchanged - copy from previous version)
 
     suspend fun importModelFromStorage(uri: Uri, onComplete: (Boolean, String) -> Unit) = withContext(Dispatchers.IO) {
         var fileName: String? = null
@@ -484,6 +487,13 @@ class ModelDownloadManager(private val context: Context) {
             Log.e(TAG, "❌ Import failed", e)
             withContext(Dispatchers.Main) { onComplete(false, "Failed: ${e.message}") }
         }
+    }
+
+    fun cancelDownload() {
+        isPaused = true  // Triggers pause in ongoing streams
+        currentDownloadUrl = null
+        currentFileName = null
+        Log.i(TAG, "🛑 Download cancelled")
     }
 
     fun deleteModel(modelName: String): Boolean {
@@ -536,18 +546,21 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     fun getDownloadProgress(): Pair<Long, Long>? {
-        // Simplified: Returns 0/0 if no active download (no native progress in OkHttp without custom interceptor)
         currentFileName?.let { fileName ->
             val file = File(getModelsDir(), fileName)
-            return if (file.exists()) Pair(file.length(), 0) else null  // Partial size if interrupted
+            return if (file.exists()) Pair(file.length(), 0L) else null  // Partial size if interrupted; total unknown without HEAD
         }
         return null
     }
 
+    fun getDownloadStatus(): String? {
+        if (currentDownloadUrl == null) return null
+        return if (isPaused) DOWNLOAD_STATUS_PAUSED else "Downloading"  // Simplified; no advanced polling
+    }
+
     fun cleanup() {
         Log.i(TAG, "🧹 Cleaning up ModelDownloadManager")
-        isPaused = false
-        currentDownloadUrl = null
-        currentFileName = null
+        cancelDownload()
+        prefs.edit().remove("paused_url").remove("paused_filename").apply()
     }
 }
