@@ -116,6 +116,7 @@ class ModelSetupDialog(
                 "• Download necessary models (~1.9GB total)\n" +
                 "  - BGE Model (133MB) - For semantic embeddings\n" +
                 "  - Memory Model (TinyLlama-1.1B, 700MB) - For intelligent memory\n" +
+                "  - Whisper STT Model (39MB) - For voice input\n" +
                 "  - Main AI (Qwen2-VL-2B, 986MB) - For conversation & vision\n" +
                 "• Import GGUF models from your device\n\n" +
                 "All models run 100% on your device - no internet needed after download."
@@ -144,8 +145,9 @@ class ModelSetupDialog(
         val models = arrayOf(
             "1. BGE Embedding Model - 133MB",
             "2. Memory Model (TinyLlama-1.1B) - 700MB",
-            "3. Main AI (Qwen2-VL-2B) - 986MB",
-            "4. All Models - Download all (~1.9GB) ⭐ Recommended"
+            "3. Whisper STT Model - 39MB",
+            "4. Main AI (Qwen2-VL-2B) - 986MB",
+            "5. All Models - Download all (~1.9GB) ⭐ Recommended"
         )
 
         val builder = AlertDialog.Builder(activity)
@@ -155,8 +157,9 @@ class ModelSetupDialog(
             when (which) {
                 0 -> downloadBGEModelOnly(onComplete)  // BGE embedding model only
                 1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
-                2 -> downloadQwenVLModel(onComplete)  // Qwen only
-                3 -> downloadAllModels(onComplete)  // All models (recommended)
+                2 -> downloadWhisperModelOnly(onComplete)  // Whisper STT model only
+                3 -> downloadQwenVLModel(onComplete)  // Qwen only
+                4 -> downloadAllModels(onComplete)  // All models (recommended)
             }
         }
         builder.setNegativeButton("Cancel") { _, _ ->
@@ -323,6 +326,58 @@ class ModelSetupDialog(
                     onComplete()
                 } else {
                     Log.e(TAG, "Memory Model download failed: ${e.message}")
+                    Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    showFirstRunDialog(onComplete)
+                }
+            }
+        }
+    }
+
+    /**
+     * Download Whisper STT Model only
+     */
+    private fun downloadWhisperModelOnly(onComplete: () -> Unit) {
+        Log.i(TAG, "Starting Whisper STT Model download")
+        Toast.makeText(activity, "Downloading Whisper STT Model...", Toast.LENGTH_SHORT).show()
+
+        isProcessingDownload = false  // Reset state
+
+        // Show progress dialog
+        showBatchDownloadProgressDialog("Whisper STT Model")
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val result = modelDownloadManager.downloadWhisperModel { fileName, fileNum, total ->
+                    updateBatchDownloadProgress(fileName, fileNum, total, "Whisper STT Model")
+                }
+
+                downloadDialog?.dismiss()
+                progressHandler?.removeCallbacksAndMessages(null)
+                isProcessingDownload = false
+
+                if (result == "EXISTS") {
+                    Log.i(TAG, "Whisper STT Model already downloaded")
+                    Toast.makeText(activity, "Whisper STT Model already downloaded!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Log.i(TAG, "Whisper STT Model download complete")
+                    Toast.makeText(activity, "Whisper STT Model downloaded successfully!", Toast.LENGTH_SHORT).show()
+                }
+                markSetupComplete()
+                onComplete()
+
+            } catch (e: Exception) {
+                downloadDialog?.dismiss()
+                progressHandler?.removeCallbacksAndMessages(null)
+                isProcessingDownload = false
+
+                // Check if already exists
+                if (e.message?.contains("EXISTS") == true) {
+                    Log.i(TAG, "Whisper STT Model already downloaded")
+                    Toast.makeText(activity, "Whisper STT Model already downloaded!", Toast.LENGTH_SHORT).show()
+                    markSetupComplete()
+                    onComplete()
+                } else {
+                    Log.e(TAG, "Whisper STT Model download failed: ${e.message}")
                     Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
                     showFirstRunDialog(onComplete)
                 }

@@ -77,6 +77,11 @@ class ModelDownloadManager(private val context: Context) {
         const val BGE_TOKENIZER_URL = "$BGE_ROOT_URL/$BGE_TOKENIZER_JSON"
         const val BGE_CONFIG_URL = "$BGE_ROOT_URL/$BGE_CONFIG_JSON"
 
+        // Whisper Speech-to-Text
+        private const val WHISPER_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
+        const val WHISPER_MODEL_GGUF = "ggml-tiny.en.bin"
+        const val WHISPER_MODEL_URL = "$WHISPER_BASE_URL/$WHISPER_MODEL_GGUF"
+
         private const val MODELS_DIR = "models"
         private const val MIN_MODEL_SIZE_BYTES = 10 * 1024 * 1024L
         private const val MIN_GGUF_SIZE_BYTES = 100 * 1024 * 1024L
@@ -166,6 +171,13 @@ class ModelDownloadManager(private val context: Context) {
         val validSize = modelFile.length() >= MIN_MODEL_SIZE_BYTES
 
         return allExist && validSize
+    }
+
+    fun isWhisperModelAvailable(): Boolean {
+        val downloadsDir = getModelsDir()
+        val modelFile = File(downloadsDir, WHISPER_MODEL_GGUF)
+
+        return modelFile.exists() && modelFile.length() >= MIN_MODEL_SIZE_BYTES
     }
 
     fun isModelAvailable(modelName: String? = null): Boolean {
@@ -302,7 +314,7 @@ class ModelDownloadManager(private val context: Context) {
 
         try {
             // 1. SmolLM2 (smallest, fastest) - Priority for hybrid system
-            onProgress("SmolLM2 Chat Model", 1, 4, 0)
+            onProgress("SmolLM2 Chat Model", 1, 5, 0)
             val smolStatus = try {
                 downloadSmolLM2Model { fileName, _, _ ->
                     onProgress(fileName, 1, 4, 5)
@@ -315,16 +327,20 @@ class ModelDownloadManager(private val context: Context) {
             delay(1500)
 
             // 2. BGE (small, useful)
-            onProgress("BGE Embeddings", 2, 4, 15)
-            val bgeStatus = downloadBGEModel { fileName, fileNum, totalFiles ->
-                val percent = 15 + (10 * fileNum) / totalFiles
-                onProgress(fileName, 2, 4, percent)
+            onProgress("BGE Embeddings", 2, 5, 15)
+            val bgeStatus = try {
+                downloadBGEModel { fileName, fileNum, totalFiles ->
+                    val percent = 15 + (10 * fileNum) / totalFiles
+                    onProgress(fileName, 2, 4, percent)
+                }
+            } catch (e: DownloadFailedException) {
+                if (e.message?.contains(DOWNLOAD_STATUS_EXISTS) == true) DOWNLOAD_STATUS_EXISTS else throw e
             }
             if (bgeStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
             // 3. Memory model
-            onProgress("Memory Model", 3, 4, 30)
+            onProgress("Memory Model", 3, 5, 30)
             val memStatus = try {
                 downloadMemoryModel { fileName, _, _ ->
                     onProgress(fileName, 3, 4, 50)
@@ -336,8 +352,21 @@ class ModelDownloadManager(private val context: Context) {
             if (memStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
-            // 4. Qwen (largest)
-            onProgress("Qwen2-VL Model", 4, 4, 60)
+            // 4. Whisper STT Model
+            onProgress("Whisper STT Model", 4, 5, 60)
+            val whisperStatus = try {
+                downloadWhisperModel { fileName, _, _ ->
+                    onProgress(fileName, 4, 5, 75)
+                }
+                DOWNLOAD_STATUS_OK
+            } catch (e: DownloadFailedException) {
+                if (e.message?.contains(DOWNLOAD_STATUS_EXISTS) == true) DOWNLOAD_STATUS_EXISTS else throw e
+            }
+            if (whisperStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
+            delay(1500)
+
+            // 5. Qwen (largest)
+            onProgress("Qwen2-VL Model", 5, 5, 80)
             val qwenStatus = try {
                 downloadQwenVLModel { fileName, _, _ ->
                     onProgress(fileName, 4, 4, 85)
@@ -348,7 +377,7 @@ class ModelDownloadManager(private val context: Context) {
             }
             if (qwenStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
 
-            return if (modelsAlreadyExisted == 4) {
+            return if (modelsAlreadyExisted == 5) {
                 Log.i(TAG, "ℹ️ All models already exist")
                 DOWNLOAD_STATUS_EXISTS
             } else {
@@ -630,5 +659,23 @@ class ModelDownloadManager(private val context: Context) {
         DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "Too many redirects"
         DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "Server error"
         else -> "Unknown error (code: $reason)"
+    }
+
+    suspend fun downloadWhisperModel(onProgress: (String, Int, Int) -> Unit): String {
+        Log.i(TAG, "\ud83d\udce5 Downloading Whisper STT Model (39MB)...")
+        onProgress(WHISPER_MODEL_GGUF, 1, 1)
+
+        try {
+            downloadModel(WHISPER_MODEL_URL, WHISPER_MODEL_GGUF)
+            Log.i(TAG, "\u2705 Whisper downloaded!")
+            return DOWNLOAD_STATUS_OK
+        } catch (e: Exception) {
+            if (e.message?.contains(DOWNLOAD_STATUS_EXISTS) == true) {
+                Log.i(TAG, "\u2139\ufe0f Whisper already exists")
+                return DOWNLOAD_STATUS_EXISTS
+            }
+            Log.e(TAG, "\u274c Whisper download failed: ${e.message}")
+            throw DownloadFailedException("Whisper download failed: ${e.message}")
+        }
     }
 }

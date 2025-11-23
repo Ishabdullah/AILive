@@ -502,8 +502,8 @@ class MainActivity : AppCompatActivity() {
 
             // 1. Initialize WhisperProcessor
             whisperProcessor = WhisperProcessor(applicationContext)
-            val whisperModel = modelDownloadManager.getModelPath("whisper") // Assuming "whisper" is the key for the model
-            if (whisperModel.isEmpty()) {
+            val whisperModel = modelDownloadManager.getModelPath(ModelDownloadManager.WHISPER_MODEL_GGUF) // Assuming "whisper" is the key for the model
+            if (whisperModel.isEmpty() || !File(whisperModel).exists()) {
                 Log.e(TAG, "❌ Whisper model not found! STT will not work.")
                 showError("Whisper model not found!")
                 return
