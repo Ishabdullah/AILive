@@ -53,6 +53,7 @@ message(STATUS "Piper library: Using stub (TTS disabled, will use Android TTS fa
 # --- Our JNI Library ---
 add_library(ailive_llm SHARED
     ailive_llm.cpp
+    ailive_llm_fallback.cpp  # Fallback implementation when llama.cpp fails
     ailive_audio.cpp  # Source file for audio JNI functions
 )
 
