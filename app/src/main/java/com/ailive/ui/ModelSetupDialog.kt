@@ -144,8 +144,7 @@ class ModelSetupDialog(
         val models = arrayOf(
             "1. Memory Model (TinyLlama-1.1B) - 700MB",
             "2. Main AI (Qwen2-VL-2B) - 986MB",
-            "3. All Models - Download all (~1.7GB) 2b50 Recommended",
-            "4. All Models - Download all (~1.9GB) ⭐ Recommended"
+            "3. All Models - Download all (~1.7GB) ⭐ Recommended"
         )
 
         val builder = AlertDialog.Builder(activity)
