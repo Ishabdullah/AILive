@@ -20,6 +20,7 @@ import com.ailive.personality.tools.DeviceControlTool
 import com.ailive.personality.tools.MemoryRetrievalTool
 import com.ailive.stats.StatisticsManager
 import com.ailive.memory.managers.UnifiedMemoryManager
+import com.ailive.ai.embeddings.BGEInitializer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -49,6 +50,7 @@ class AILiveCore(
     lateinit var locationManager: LocationManager  // GPS and geocoding
     lateinit var statisticsManager: StatisticsManager  // Usage statistics
     lateinit var memoryManager: UnifiedMemoryManager  // Persistent memory system (v1.3)
+    lateinit var bgeInitializer: BGEInitializer  // Built-in BGE embedding model
 
     // Legacy agents (kept for backward compatibility during transition)
     private lateinit var motorAI: MotorAI
@@ -86,6 +88,7 @@ class AILiveCore(
             locationManager = LocationManager(context)
             statisticsManager = StatisticsManager(context)
             memoryManager = UnifiedMemoryManager(context)
+            bgeInitializer = BGEInitializer(context)
             Log.i(TAG, "✓ Context managers initialized (location + statistics + memory)")
 
             // Initialize LLM in background (takes ~5-10 seconds)

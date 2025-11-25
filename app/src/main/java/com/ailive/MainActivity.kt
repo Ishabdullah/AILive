@@ -135,7 +135,10 @@ class MainActivity : AppCompatActivity() {
                     Log.i(TAG, "📥 Download request from settings: $modelType")
                     // Trigger download via ModelSetupDialog public API
                     when (modelType) {
-                        "BGE" -> modelSetupDialog.triggerBGEDownload()
+                        "BGE" -> {
+                            Log.i(TAG, "BGE model is built-in - no download needed")
+                            Toast.makeText(this, "BGE Embedding Model is built-in and ready!", Toast.LENGTH_SHORT).show()
+                        }
                         "Memory" -> modelSetupDialog.triggerMemoryDownload()
                         "Qwen" -> modelSetupDialog.triggerQwenDownload()
                         "All" -> modelSetupDialog.triggerAllModelsDownload()

@@ -465,20 +465,18 @@ class ModelSettingsActivity : AppCompatActivity() {
      */
     private fun openDownloadModelsDialog() {
         val options = arrayOf(
-            "1. BGE Embedding Model (~133MB)",
-            "2. Memory Model / TinyLlama (~700MB)",
-            "3. Qwen Main Model (~986MB)",
-            "4. Download All Models (~1.9GB)"
+            "1. Memory Model / TinyLlama (~700MB)",
+            "2. Qwen Main Model (~986MB)",
+            "3. Download All Models (~1.7GB)"
         )
 
         android.app.AlertDialog.Builder(this)
             .setTitle("Download Models")
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> startDownload("BGE")
-                    1 -> startDownload("Memory")
-                    2 -> startDownload("Qwen")
-                    3 -> startDownload("All")
+                    0 -> startDownload("Memory")
+                    1 -> startDownload("Qwen")
+                    2 -> startDownload("All")
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -489,6 +487,11 @@ class ModelSettingsActivity : AppCompatActivity() {
      * Start downloading a specific model
      */
     private fun startDownload(modelType: String) {
+        if (modelType == "BGE") {
+            Toast.makeText(this, "BGE Embedding Model is built-in and ready!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
         Toast.makeText(this, "Starting $modelType model download...", Toast.LENGTH_SHORT).show()
 
         // Return to MainActivity and trigger download there

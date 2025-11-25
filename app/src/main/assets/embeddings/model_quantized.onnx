@@ -1,0 +1,8 @@
+# This is a placeholder for the BGE-small-en-v1.5 quantized ONNX model
+# In production, this would be a 133MB binary ONNX file
+# BGE-small-en-v1.5 model: https://huggingface.co/BAAI/bge-small-en-v1.5
+# License: MIT - Fully commercial safe
+# Dimensions: 384
+# Size: ~133MB (when quantized)
+
+BGE_SMALL_EN_V1_5_QUANTIZED_MODEL_PLACEHOLDER

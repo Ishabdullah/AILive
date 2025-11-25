@@ -67,15 +67,14 @@ class ModelDownloadManager(private val context: Context) {
         const val MEMORY_MODEL_GGUF = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
         const val MEMORY_MODEL_URL = "$TINYLLAMA_BASE_URL/$MEMORY_MODEL_GGUF"
 
-        // BGE Embeddings
-        private const val BGE_ROOT_URL = "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/main"
-        private const val BGE_ONNX_URL = "$BGE_ROOT_URL/onnx"
+        // BGE Embeddings - NOW BUILT-IN TO APK
+        // These constants are kept for backward compatibility but no longer used for downloads
+        @Deprecated("BGE model is now built-in to APK")
         const val BGE_MODEL_ONNX = "model_quantized.onnx"
+        @Deprecated("BGE model is now built-in to APK")
         const val BGE_TOKENIZER_JSON = "tokenizer.json"
+        @Deprecated("BGE model is now built-in to APK")
         const val BGE_CONFIG_JSON = "config.json"
-        const val BGE_MODEL_URL = "$BGE_ONNX_URL/$BGE_MODEL_ONNX"
-        const val BGE_TOKENIZER_URL = "$BGE_ROOT_URL/$BGE_TOKENIZER_JSON"
-        const val BGE_CONFIG_URL = "$BGE_ROOT_URL/$BGE_CONFIG_JSON"
 
         private const val MODELS_DIR = "models"
         private const val MIN_MODEL_SIZE_BYTES = 10 * 1024 * 1024L
@@ -157,15 +156,10 @@ class ModelDownloadManager(private val context: Context) {
     }
 
     fun isBGEModelAvailable(): Boolean {
-        val downloadsDir = getModelsDir()
-        val modelFile = File(downloadsDir, BGE_MODEL_ONNX)
-        val tokenizerFile = File(downloadsDir, BGE_TOKENIZER_JSON)
-        val configFile = File(downloadsDir, BGE_CONFIG_JSON)
-
-        val allExist = modelFile.exists() && tokenizerFile.exists() && configFile.exists()
-        val validSize = modelFile.length() >= MIN_MODEL_SIZE_BYTES
-
-        return allExist && validSize
+        // BGE model is now built-in to APK and always available
+        // The AssetExtractor handles copying assets to internal storage on first launch
+        Log.d(TAG, "✅ BGE embedding model is built-in to APK - always available")
+        return true
     }
 
     fun isModelAvailable(modelName: String? = null): Boolean {
@@ -256,6 +250,7 @@ class ModelDownloadManager(private val context: Context) {
         }
     }
 
+    @Deprecated("BGE model is now built-in to APK - download not needed")
     suspend fun downloadBGEModel(onProgress: (String, Int, Int) -> Unit): String {
         Log.i(TAG, "📥 Downloading BGE Embeddings (133MB)...")
         var filesAlreadyExisted = 0
@@ -298,14 +293,15 @@ class ModelDownloadManager(private val context: Context) {
         onProgress: (String, Int, Int, Int) -> Unit
     ): String {
         Log.i(TAG, "📥 Downloading all models (SmolLM2, BGE, Memory, Qwen)...")
+        Log.i(TAG, "   BGE Embeddings: \u2705 Built-in to APK - skip download")
         var modelsAlreadyExisted = 0
 
         try {
             // 1. SmolLM2 (smallest, fastest) - Priority for hybrid system
-            onProgress("SmolLM2 Chat Model", 1, 4, 0)
+            onProgress("SmolLM2 Chat Model", 1, 3, 0)
             val smolStatus = try {
                 downloadSmolLM2Model { fileName, _, _ ->
-                    onProgress(fileName, 1, 4, 5)
+                    onProgress(fileName, 1, 3, 5)
                 }
                 DOWNLOAD_STATUS_OK
             } catch (e: DownloadFailedException) {
@@ -314,20 +310,12 @@ class ModelDownloadManager(private val context: Context) {
             if (smolStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
-            // 2. BGE (small, useful)
-            onProgress("BGE Embeddings", 2, 4, 15)
-            val bgeStatus = downloadBGEModel { fileName, fileNum, totalFiles ->
-                val percent = 15 + (10 * fileNum) / totalFiles
-                onProgress(fileName, 2, 4, percent)
-            }
-            if (bgeStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
-            delay(1500)
 
-            // 3. Memory model
-            onProgress("Memory Model", 3, 4, 30)
+            // 2. Memory model
+            onProgress("Memory Model", 2, 3, 30)
             val memStatus = try {
                 downloadMemoryModel { fileName, _, _ ->
-                    onProgress(fileName, 3, 4, 50)
+                    onProgress(fileName, 2, 3, 50)
                 }
                 DOWNLOAD_STATUS_OK
             } catch (e: DownloadFailedException) {
@@ -336,11 +324,11 @@ class ModelDownloadManager(private val context: Context) {
             if (memStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
             delay(1500)
 
-            // 4. Qwen (largest)
-            onProgress("Qwen2-VL Model", 4, 4, 60)
+            // 3. Qwen (largest)
+            onProgress("Qwen2-VL Model", 3, 3, 60)
             val qwenStatus = try {
                 downloadQwenVLModel { fileName, _, _ ->
-                    onProgress(fileName, 4, 4, 85)
+                    onProgress(fileName, 3, 3, 85)
                 }
                 DOWNLOAD_STATUS_OK
             } catch (e: DownloadFailedException) {
@@ -348,7 +336,7 @@ class ModelDownloadManager(private val context: Context) {
             }
             if (qwenStatus == DOWNLOAD_STATUS_EXISTS) modelsAlreadyExisted++
 
-            return if (modelsAlreadyExisted == 4) {
+            return if (modelsAlreadyExisted == 3) {
                 Log.i(TAG, "ℹ️ All models already exist")
                 DOWNLOAD_STATUS_EXISTS
             } else {
