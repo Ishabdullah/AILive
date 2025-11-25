@@ -114,7 +114,7 @@ class ModelSetupDialog(
                 "To get started, AILive needs AI models for on-device intelligence.\n\n" +
                 "You can:\n" +
                 "• Download necessary models (~1.9GB total)\n" +
-                "  - BGE Model (133MB) - For semantic embeddings\n" +
+                "  - BGE Embedding Model - Built-in (ready to use)\n" +
                 "  - Memory Model (TinyLlama-1.1B, 700MB) - For intelligent memory\n" +
                 "  - Main AI (Qwen2-VL-2B, 986MB) - For conversation & vision\n" +
                 "• Import GGUF models from your device\n\n" +
@@ -142,9 +142,9 @@ class ModelSetupDialog(
      */
     private fun showModelSelectionDialog(onComplete: () -> Unit) {
         val models = arrayOf(
-            "1. BGE Embedding Model - 133MB",
-            "2. Memory Model (TinyLlama-1.1B) - 700MB",
-            "3. Main AI (Qwen2-VL-2B) - 986MB",
+            "1. Memory Model (TinyLlama-1.1B) - 700MB",
+            "2. Main AI (Qwen2-VL-2B) - 986MB",
+            "3. All Models - Download all (~1.7GB) 2b50 Recommended",
             "4. All Models - Download all (~1.9GB) ⭐ Recommended"
         )
 
@@ -153,10 +153,9 @@ class ModelSetupDialog(
         // REMOVED: .setMessage() - conflicts with .setItems() and hides the list
         builder.setItems(models) { _, which ->
             when (which) {
-                0 -> downloadBGEModelOnly(onComplete)  // BGE embedding model only
-                1 -> downloadMemoryModelOnly(onComplete)  // Memory model only
-                2 -> downloadQwenVLModel(onComplete)  // Qwen only
-                3 -> downloadAllModels(onComplete)  // All models (recommended)
+                0 -> downloadMemoryModelOnly(onComplete)  // Memory model only
+                1 -> downloadQwenVLModel(onComplete)  // Qwen only
+                2 -> downloadAllModels(onComplete)  // All models (recommended)
             }
         }
         builder.setNegativeButton("Cancel") { _, _ ->
@@ -240,45 +239,6 @@ class ModelSetupDialog(
     }
 
     /**
-     * Download BGE Embedding Model only (BGE-small-en-v1.5)
-     */
-    private fun downloadBGEModelOnly(onComplete: () -> Unit) {
-        Log.i(TAG, "Starting BGE Embedding Model download")
-        Toast.makeText(activity, "Downloading BGE Embedding Model...", Toast.LENGTH_SHORT).show()
-
-        isProcessingDownload = false  // Reset state
-
-        // Show progress dialog
-        showBatchDownloadProgressDialog("BGE Embedding Model (BGE-small-en-v1.5)")
-
-        CoroutineScope(Dispatchers.Main).launch {
-            try {
-                val result = modelDownloadManager.downloadBGEModel { fileName, fileNum, total ->
-                    updateBatchDownloadProgress(fileName, fileNum, total, "BGE Embedding Model")
-                }
-
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                if (result == "EXISTS") {
-                    Log.i(TAG, "BGE Embedding Model already downloaded")
-                    Toast.makeText(activity, "BGE Embedding Model already downloaded!", Toast.LENGTH_SHORT).show()
-                } else {
-                    Log.i(TAG, "BGE Embedding Model download complete")
-                    Toast.makeText(activity, "BGE Embedding Model downloaded successfully!", Toast.LENGTH_SHORT).show()
-                }
-                markSetupComplete()
-                onComplete()
-
-            } catch (e: Exception) {
-                downloadDialog?.dismiss()
-                progressHandler?.removeCallbacksAndMessages(null)
-                isProcessingDownload = false
-
-                Log.e(TAG, "BGE Embedding Model download failed: ${e.message}")
-                Toast.makeText(activity, "Download failed: ${e.message}", Toast.LENGTH_LONG).show()
-                showFirstRunDialog(onComplete)
             }
         }
     }
@@ -793,7 +753,9 @@ class ModelSetupDialog(
      * Public method to download BGE model (called from MainActivity)
      */
     fun triggerBGEDownload() {
-        downloadBGEModelOnly {}
+        Log.i(TAG, "BGE model is built-in to APK - no download needed")
+        Toast.makeText(activity, "BGE Embedding Model is built-in and ready to use!", Toast.LENGTH_SHORT).show()
+        Log.i(TAG, "BGE model is built-in - showing info")
     }
 
     /**

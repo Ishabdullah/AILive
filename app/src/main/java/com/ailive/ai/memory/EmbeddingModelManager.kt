@@ -5,7 +5,7 @@ import android.util.Log
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
-import com.ailive.ai.llm.ModelDownloadManager
+import com.ailive.ai.embeddings.AssetExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -39,7 +39,7 @@ class EmbeddingModelManager(private val context: Context) {
         private const val PAD_TOKEN_ID = 0L    // [PAD] token
     }
 
-    private val modelDownloadManager = ModelDownloadManager(context)
+    private val assetExtractor = AssetExtractor(context)
 
     // ONNX Runtime components
     private var ortEnvironment: OrtEnvironment? = null
@@ -80,22 +80,27 @@ class EmbeddingModelManager(private val context: Context) {
             Log.i(TAG, "🔢 Initializing Embedding Model (BGE-small-en-v1.5)...")
             Log.i(TAG, "   Purpose: Semantic embeddings for memory retrieval")
 
-            // Check if BGE model is available
-            if (!modelDownloadManager.isBGEModelAvailable()) {
-                val error = "BGE model not found. Using fallback random embeddings."
-                Log.w(TAG, "⚠️  $error")
-                Log.i(TAG, "   Required files: model_quantized.onnx, tokenizer.json, config.json")
-                Log.i(TAG, "   Download from model selection dialog")
-                Log.i(TAG, "   App will continue with deterministic random embeddings")
-                initializationError = error
-                isInitializing = false
-                return@withContext false  // Non-critical - app can run without it
+            // Extract BGE assets if needed (built-in model)
+            if (!assetExtractor.areBGEAssetsAvailable()) {
+                Log.i(TAG, "📦 Extracting BGE assets from APK...")
+                val extractionSuccess = assetExtractor.extractBGEAssets { fileName, current, total ->
+                    Log.d(TAG, "📤 Extracting: $fileName ($current/$total)")
+                }
+                
+                if (!extractionSuccess) {
+                    val error = "Failed to extract built-in BGE model. Using fallback random embeddings."
+                    Log.w(TAG, "⚠️  $error")
+                    Log.i(TAG, "   App will continue with deterministic random embeddings")
+                    initializationError = error
+                    isInitializing = false
+                    return@withContext false  // Non-critical - app can run without it
+                }
             }
 
-            // Get model paths
-            val modelPath = modelDownloadManager.getModelPath(ModelDownloadManager.BGE_MODEL_ONNX)
-            val tokenizerPath = modelDownloadManager.getModelPath(ModelDownloadManager.BGE_TOKENIZER_JSON)
-            val configPath = modelDownloadManager.getModelPath(ModelDownloadManager.BGE_CONFIG_JSON)
+            // Get model paths from extracted assets
+            val modelPath = assetExtractor.getBGEModelPath()
+            val tokenizerPath = assetExtractor.getBGETokenizerPath()
+            val configPath = assetExtractor.getBGEConfigPath()
 
             Log.i(TAG, "📂 Loading BGE model files:")
             Log.i(TAG, "   Model: ${File(modelPath).name} (${File(modelPath).length() / 1024 / 1024}MB)")
