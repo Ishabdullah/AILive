@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 
 /**
@@ -19,13 +18,9 @@ import kotlinx.coroutines.withContext
  * - Instant chat responses (SmolLM2 is always ready)
  * - Memory efficient (only load Qwen when needed)
  * - Smart routing (auto-select model based on query)
- * - Performance monitoring (consolidated from LLMManager)
- * - GPU acceleration tracking
- * - PersonalityEngine prompt handling
  *
  * @author AILive Team
  * @since Multimodal MVP - testing-123 branch
- * @updated Consolidated with LLMManager features
  */
 class HybridModelManager(private val context: Context) {
 
@@ -47,45 +42,17 @@ class HybridModelManager(private val context: Context) {
     // Model settings
     private var settings: ModelSettings = ModelSettings.load(context)
 
-    // Performance monitoring (from LLMManager)
-    private var gpuInfo: GPUInfo? = null
-    private val performanceMonitor = PerformanceMonitor()
-
-    // Initialization error tracking
-    private var initializationError: String? = null
-
-    // LLMBridge for backward compatibility (delegates to fastModel)
-    val llmBridge: LLMBridge
-        get() = fastModel
-
     /**
      * Initialize the hybrid system
      * Loads SmolLM2 immediately, Qwen on first vision request
-     * Includes GPU detection and performance tracking
      */
     suspend fun initialize(): Boolean = withContext(Dispatchers.IO) {
         Log.i(TAG, "🚀 Initializing Hybrid Model System...")
         Log.i(TAG, "   Fast Model: SmolLM2-360M (always loaded)")
         Log.i(TAG, "   Vision Model: Qwen2-VL-2B (on-demand)")
 
-        // Detect GPU acceleration
-        Log.i(TAG, "🔍 Detecting GPU acceleration...")
-        gpuInfo = detectGPUSupport()
-        Log.i(TAG, "   Backend: ${gpuInfo}")
-
-        if (gpuInfo?.isUsingGPU() == true) {
-            Log.i(TAG, "✅ GPU acceleration enabled!")
-            Log.i(TAG, "   Device: ${gpuInfo!!.deviceName}")
-            Log.i(TAG, "   Expected performance: 20-30 tokens/second")
-        } else {
-            Log.i(TAG, "ℹ️  Using CPU inference")
-            Log.i(TAG, "   ${gpuInfo?.fallbackReason ?: "GPU not available"}")
-            Log.i(TAG, "   Expected performance: 7-8 tokens/second")
-        }
-
         // Check if SmolLM2 is available
         if (!modelDownloadManager.isSmolLM2ModelAvailable()) {
-            initializationError = "SmolLM2 model not available"
             Log.w(TAG, "⚠️ SmolLM2 not available - hybrid mode unavailable")
             Log.i(TAG, "   Falling back to single-model mode")
             return@withContext false
@@ -97,14 +64,11 @@ class HybridModelManager(private val context: Context) {
 
         if (fastModel.loadModel(fastModelPath, 2048)) {
             isFastModelLoaded = true
-            initializationError = null
             Log.i(TAG, "✅ Fast model loaded successfully!")
             Log.i(TAG, "   RAM: ~350MB")
             Log.i(TAG, "   Ready for instant chat")
-            Log.i(TAG, "   Backend: ${gpuInfo?.backend ?: "CPU"}")
             true
         } else {
-            initializationError = "Failed to load SmolLM2 model"
             Log.e(TAG, "❌ Failed to load fast model")
             false
         }
@@ -181,6 +145,27 @@ class HybridModelManager(private val context: Context) {
 
     /**
      * Generate response with smart model routing
+     * 
+     * ===== HYBRID LLM RESPONSE GENERATION =====
+     * This function intelligently routes user queries to the optimal model
+     * for the best balance of speed and capability in AI responses.
+     * 
+     * RESPONSE ROUTING STRATEGY:
+     * - Fast Model (SmolLM2): Quick chat responses, minimal latency
+     * - Vision Model (Qwen2-VL): Complex reasoning, image analysis, detailed explanations
+     * - Smart decision based on query complexity and content type
+     * 
+     * USER EXPERIENCE BENEFITS:
+     * - Instant responses for simple chat questions (no loading delay)
+     * - Powerful analysis for complex requests (when needed)
+     * - Automatic model selection - user gets optimal response without manual choice
+     * - Memory efficient - only loads heavy model when necessary
+     * 
+     * RESPONSE FLOW:
+     * 1. Analyze query characteristics and complexity
+     * 2. Route to appropriate model (fast or vision)
+     * 3. Generate response using selected model
+     * 4. Return streaming response to UI for real-time display
      */
     suspend fun generateStreaming(
         prompt: String,
@@ -206,96 +191,13 @@ class HybridModelManager(private val context: Context) {
     }
 
     /**
-     * Generate response (non-streaming version)
-     * Required for backward compatibility with code that used LLMManager.generate()
-     */
-    suspend fun generate(
-        prompt: String,
-        agentName: String = "AILive"
-    ): String = withContext(Dispatchers.IO) {
-        if (!isReady()) {
-            throw IllegalStateException("HybridModelManager not initialized. Call initialize() first.")
-        }
-
-        // Reload settings
-        settings = ModelSettings.load(context)
-
-        val useFastModel = shouldUseFastModel(prompt, hasImage = false)
-        val startTime = System.currentTimeMillis()
-        val backend = gpuInfo?.backend ?: "CPU"
-
-        val result = if (useFastModel) {
-            Log.i(TAG, "⚡ Using fast model (SmolLM2) - non-streaming")
-            fastModel.generate(prompt, settings.maxTokens)
-        } else {
-            Log.i(TAG, "🎨 Using vision model (Qwen2-VL) - non-streaming")
-            ensureVisionModelLoaded()
-            visionModel.generate(prompt, settings.maxTokens)
-        }
-
-        // Performance tracking
-        val totalTime = System.currentTimeMillis() - startTime
-        val tokenCount = result.length / 4  // Rough approximation
-        performanceMonitor.recordInference(tokenCount, totalTime, backend)
-
-        Log.i(TAG, "✅ Generation complete: ~$tokenCount tokens in ${totalTime}ms")
-
-        result
-    }
-
-    /**
-     * Get initialization error message (if any)
-     * Required for backward compatibility with LLMManager
-     */
-    fun getInitializationError(): String? = initializationError
-
-    /**
      * Generate with fast model (SmolLM2)
-     * Includes PersonalityEngine prompt handling and performance monitoring
      */
     private suspend fun generateWithFastModel(prompt: String): Flow<String> {
-        return flow {
-            val startTime = System.currentTimeMillis()
-            val backend = gpuInfo?.backend ?: "CPU"
-
+        return kotlinx.coroutines.flow.flow {
             try {
-                // PersonalityEngine prompt handling (from LLMManager)
-                // Detect if this is a complex, pre-formatted PersonalityEngine prompt
-                val isPersonalityPrompt = prompt.contains("===== YOUR CAPABILITIES =====") ||
-                                          prompt.contains("===== CURRENT CONTEXT =====")
-
-                if (isPersonalityPrompt) {
-                    // PersonalityEngine formatted prompt - already contains full context in natural format
-                    Log.d(TAG, "✓ PersonalityEngine prompt detected (fast model)")
-                    Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
-                    Log.d(TAG, "   Contains: system instructions, capabilities, context, history, user input")
-                    Log.d(TAG, "   Passing prompt AS-IS to preserve natural language format")
-                } else {
-                    // Simple prompt - llama.cpp will auto-format
-                    Log.d(TAG, "✓ Simple prompt - llama.cpp will handle formatting")
-                }
-
-                Log.d(TAG, "🚀 Fast model generating: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
-
-                // Generate with fast model
                 val result = fastModel.generate(prompt, settings.maxTokens)
                 emit(result)
-
-                // Performance tracking
-                val totalTime = System.currentTimeMillis() - startTime
-                val tokenCount = result.length / 4  // Rough approximation
-                performanceMonitor.recordInference(tokenCount, totalTime, backend)
-
-                val tokensPerSec = if (totalTime > 0) {
-                    (tokenCount.toFloat() / totalTime) * 1000
-                } else {
-                    0f
-                }
-
-                Log.i(TAG, "✅ Fast model complete: ~$tokenCount tokens in ${totalTime}ms")
-                Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tok/s")
-                Log.i(TAG, "   Average (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
-
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Fast model error", e)
                 emit("[Error: ${e.message}]")
@@ -305,56 +207,17 @@ class HybridModelManager(private val context: Context) {
 
     /**
      * Generate with vision model (Qwen2-VL)
-     * Includes PersonalityEngine prompt handling and performance monitoring
      */
     private suspend fun generateWithVisionModel(prompt: String, image: Bitmap?): Flow<String> {
-        return flow {
-            val startTime = System.currentTimeMillis()
-            val backend = gpuInfo?.backend ?: "CPU"
-
+        return kotlinx.coroutines.flow.flow {
             try {
-                // PersonalityEngine prompt handling (from LLMManager)
-                // Detect if this is a complex, pre-formatted PersonalityEngine prompt
-                val isPersonalityPrompt = prompt.contains("===== YOUR CAPABILITIES =====") ||
-                                          prompt.contains("===== CURRENT CONTEXT =====")
-
-                if (isPersonalityPrompt) {
-                    // PersonalityEngine formatted prompt - already contains full context in natural format
-                    Log.d(TAG, "✓ PersonalityEngine prompt detected (vision model)")
-                    Log.d(TAG, "   Full prompt length: ${prompt.length} chars")
-                    Log.d(TAG, "   Contains: system instructions, capabilities, context, history, user input")
-                    Log.d(TAG, "   Passing prompt AS-IS to preserve natural language format")
-                } else {
-                    // Simple prompt - llama.cpp will auto-format
-                    Log.d(TAG, "✓ Simple prompt - llama.cpp will handle formatting")
-                }
-
                 if (image != null) {
                     Log.w(TAG, "⚠️ Vision input not yet fully supported")
                     Log.i(TAG, "   Generating text-only response...")
                 }
 
-                Log.d(TAG, "🚀 Vision model generating: \"${prompt.take(50)}${if (prompt.length > 50) "..." else ""}\"")
-
-                // Generate with vision model
                 val result = visionModel.generate(prompt, settings.maxTokens)
                 emit(result)
-
-                // Performance tracking
-                val totalTime = System.currentTimeMillis() - startTime
-                val tokenCount = result.length / 4  // Rough approximation
-                performanceMonitor.recordInference(tokenCount, totalTime, backend)
-
-                val tokensPerSec = if (totalTime > 0) {
-                    (tokenCount.toFloat() / totalTime) * 1000
-                } else {
-                    0f
-                }
-
-                Log.i(TAG, "✅ Vision model complete: ~$tokenCount tokens in ${totalTime}ms")
-                Log.i(TAG, "   Performance: ${String.format("%.2f", tokensPerSec)} tok/s")
-                Log.i(TAG, "   Average (last 10): ${String.format("%.2f", performanceMonitor.getRecentSpeed())} tok/s")
-
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Vision model error", e)
                 emit("[Error: ${e.message}]")
@@ -392,14 +255,8 @@ class HybridModelManager(private val context: Context) {
 
     /**
      * Free all models
-     * Includes performance summary logging
      */
     fun freeAll() {
-        // Log final performance summary before cleanup
-        if ((isFastModelLoaded || isVisionModelLoaded) && performanceMonitor.getTotalInferences() > 0) {
-            Log.i(TAG, "\n${getPerformanceSummary()}")
-        }
-
         Log.i(TAG, "🗑️ Freeing all models...")
 
         if (isFastModelLoaded) {
@@ -429,162 +286,5 @@ class HybridModelManager(private val context: Context) {
      */
     fun isVisionReady(): Boolean {
         return isVisionModelLoaded
-    }
-
-    // ===== Performance Monitoring Methods (from LLMManager) =====
-
-    /**
-     * Detect GPU acceleration support
-     * Calls native JNI function to query OpenCL availability
-     */
-    private fun detectGPUSupport(): GPUInfo {
-        return try {
-            // GPU detection not supported in current implementation
-            val backend = "CPU"
-            val deviceName = "CPU"
-
-            when (backend) {
-                "OpenCL" -> {
-                    Log.d(TAG, "GPU detected: $deviceName")
-                    GPUInfo(
-                        isAvailable = true,
-                        backend = "OpenCL",
-                        deviceName = deviceName
-                    )
-                }
-                "CPU" -> {
-                    val reason = when (deviceName) {
-                        "None" -> "No OpenCL GPU found on device"
-                        "OpenCL_Not_Compiled" -> "OpenCL support not compiled in build"
-                        else -> "GPU unavailable: $deviceName"
-                    }
-                    Log.d(TAG, "GPU fallback: $reason")
-                    GPUInfo(
-                        isAvailable = false,
-                        backend = "CPU",
-                        deviceName = "CPU",
-                        fallbackReason = reason
-                    )
-                }
-                else -> {
-                    Log.w(TAG, "Unknown backend: $backend")
-                    GPUInfo(
-                        isAvailable = false,
-                        backend = "CPU",
-                        deviceName = "CPU",
-                        fallbackReason = "Unknown backend type"
-                    )
-                }
-            }
-        } catch (e: UnsatisfiedLinkError) {
-            // Native function not available (old build or GPU code not compiled)
-            Log.w(TAG, "GPU detection function not available, using CPU fallback")
-            GPUInfo(
-                isAvailable = false,
-                backend = "CPU",
-                deviceName = "CPU",
-                fallbackReason = "Native GPU detection not available (old build)"
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "GPU detection failed, falling back to CPU", e)
-            GPUInfo(
-                isAvailable = false,
-                backend = "CPU",
-                deviceName = "CPU",
-                fallbackReason = "GPU detection error: ${e.message}"
-            )
-        }
-    }
-
-    /**
-     * Get GPU information
-     */
-    fun getGPUInfo(): GPUInfo? = gpuInfo
-
-    /**
-     * Check if GPU acceleration is active
-     */
-    fun isUsingGPU(): Boolean = gpuInfo?.isUsingGPU() ?: false
-
-    /**
-     * Get performance statistics
-     */
-    fun getPerformanceStats(): PerformanceMonitor = performanceMonitor
-
-    /**
-     * Get current average performance
-     */
-    fun getAveragePerformance(): String {
-        return if (performanceMonitor.getTotalInferences() > 0) {
-            val avgSpeed = performanceMonitor.getAverageSpeed()
-            val recentSpeed = performanceMonitor.getRecentSpeed()
-            buildString {
-                append("Average: ${String.format("%.2f", avgSpeed)} tok/s\n")
-                append("Recent (last 10): ${String.format("%.2f", recentSpeed)} tok/s\n")
-                append("Total inferences: ${performanceMonitor.getTotalInferences()}\n")
-                append("Backend: ${gpuInfo?.backend ?: "CPU"}")
-            }
-        } else {
-            "No performance data yet"
-        }
-    }
-
-    /**
-     * Get detailed performance summary for logging/debugging
-     */
-    fun getPerformanceSummary(): String {
-        return performanceMonitor.getPerformanceSummary(gpuInfo)
-    }
-
-    /**
-     * Reload settings from SharedPreferences
-     * Call this after user changes settings
-     */
-    fun reloadSettings() {
-        settings = ModelSettings.load(context)
-        Log.i(TAG, "⚙️ Settings reloaded: max_tokens=${settings.maxTokens}, temp=${settings.temperature}")
-    }
-
-    /**
-     * Get the ModelDownloadManager for access from UI
-     */
-    fun getDownloadManager(): ModelDownloadManager = modelDownloadManager
-
-    /**
-     * Check if a model is available
-     */
-    fun isModelAvailable(): Boolean =
-        modelDownloadManager.isSmolLM2ModelAvailable() || modelDownloadManager.isQwenVLModelAvailable()
-
-    /**
-     * Get current model info
-     */
-    fun getModelInfo(): String {
-        return buildString {
-            append("=== Hybrid Model System ===\n")
-            if (isFastModelLoaded) {
-                append("Fast Model: SmolLM2-360M ✅\n")
-                append("  RAM: ~350MB\n")
-                append("  Status: Always loaded\n")
-            } else {
-                append("Fast Model: Not loaded ❌\n")
-            }
-            append("\n")
-            if (isVisionModelLoaded) {
-                append("Vision Model: Qwen2-VL-2B ✅\n")
-                append("  RAM: ~1.2GB\n")
-                append("  Status: Loaded on-demand\n")
-            } else {
-                append("Vision Model: Standby ⏸️\n")
-                append("  Status: Will load when needed\n")
-            }
-            append("\n")
-            append("Backend: ${gpuInfo?.backend ?: "CPU"}\n")
-            if (gpuInfo?.isUsingGPU() == true) {
-                append("GPU: ${gpuInfo?.deviceName} ✅\n")
-            } else {
-                gpuInfo?.fallbackReason?.let { append("GPU: $it\n") }
-            }
-        }
     }
 }

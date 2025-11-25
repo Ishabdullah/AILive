@@ -63,6 +63,28 @@ class ConversationMemoryManager(context: Context) {
 
     /**
      * Add a message turn to current conversation
+     * 
+     * ===== LLM RESPONSE MEMORY STORAGE =====
+     * This function stores AI responses and user messages for conversation context.
+     * It's crucial for maintaining coherent multi-turn conversations with the AI.
+     * 
+     * RESPONSE MEMORY MANAGEMENT:
+     * - Stores both user inputs and AI responses in chronological order
+     * - Captures metadata for response quality analysis (timing, tokens)
+     * - Maintains conversation context for future AI responses
+     * - Enables conversation history and search functionality
+     * 
+     * USER EXPERIENCE IMPACT:
+     * - AI remembers previous responses for context-aware answers
+     * - Users can review conversation history
+     * - Conversations can be resumed and continued later
+     * - Search functionality helps find specific AI responses
+     * 
+     * DATA STORED FOR EACH RESPONSE:
+     * - Role: User or Assistant (who spoke)
+     * - Content: The actual AI response or user message
+     * - Timestamp: When the response was generated
+     * - Metadata: Response time, token count, context info
      */
     suspend fun addTurn(
         role: String,  // "USER" or "ASSISTANT"

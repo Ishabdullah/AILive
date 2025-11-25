@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import java.io.File
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -436,7 +437,7 @@ class MainActivity : AppCompatActivity() {
             cameraManager.startCamera(cameraPreview)
 
             // Initialize VisionManager
-            visionManager = VisionManager(aiLiveCore.hybridModelManager.llmBridge) // LLMBridge is accessible via HybridModelManager
+            visionManager = VisionManager(aiLiveCore.llmManager.llmBridge) // Assuming LLMBridge is accessible via AILiveCore
             Log.i(TAG, "✓ VisionManager initialized")
 
             val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
@@ -502,44 +503,18 @@ class MainActivity : AppCompatActivity() {
 
             // 1. Initialize WhisperProcessor
             whisperProcessor = WhisperProcessor(applicationContext)
-            val whisperModel = modelDownloadManager.getModelPath("whisper")
-
-            Log.i(TAG, "🎤 Attempting to initialize Whisper...")
-            Log.d(TAG, "   Model path from ModelDownloadManager: '$whisperModel'")
-
-            if (whisperModel.isEmpty()) {
-                Log.e(TAG, "❌ Whisper model path is empty! STT will not work.")
-                Log.e(TAG, "   Whisper model needs to be downloaded first")
-                showError("Whisper model not downloaded. Please download models in settings.")
+            val whisperModel = modelDownloadManager.getModelPath(ModelDownloadManager.WHISPER_MODEL_GGUF) // Assuming "whisper" is the key for the model
+            if (whisperModel.isEmpty() || !File(whisperModel).exists()) {
+                Log.e(TAG, "❌ Whisper model not found! STT will not work.")
+                showError("Whisper model not found!")
                 return
             }
-
-            // Check if file exists before attempting to initialize
-            val modelFile = java.io.File(whisperModel)
-            if (!modelFile.exists()) {
-                Log.e(TAG, "❌ Whisper model file does not exist!")
-                Log.e(TAG, "   Path: $whisperModel")
-                Log.e(TAG, "   Parent directory exists: ${modelFile.parentFile?.exists()}")
-                showError("Whisper model file not found at: $whisperModel")
-                return
-            }
-
-            if (!modelFile.isFile) {
-                Log.e(TAG, "❌ Whisper model path is not a file (might be a directory)!")
-                Log.e(TAG, "   Path: $whisperModel")
-                showError("Invalid Whisper model path")
-                return
-            }
-
-            Log.i(TAG, "   ✓ Model file exists (${modelFile.length()} bytes)")
 
             if (!whisperProcessor.initialize(whisperModel)) {
                 Log.e(TAG, "❌ Whisper processor failed to initialize")
-                Log.e(TAG, "   Check native logs above for detailed error")
-                showError("Failed to initialize Whisper. Check logs for details.")
                 return
             }
-            Log.i(TAG, "✅ Whisper processor ready!")
+            Log.i(TAG, "✓ Whisper processor ready")
 
 
             // 2. Initialize other audio components
@@ -801,7 +776,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Reload settings when returning from settings activity
         if (::aiLiveCore.isInitialized) {
-            aiLiveCore.hybridModelManager.reloadSettings()
+            aiLiveCore.llmManager.reloadSettings()
             Log.i(TAG, "⚙️ Settings reloaded on resume")
         }
     }
@@ -809,7 +784,11 @@ class MainActivity : AppCompatActivity() {
     private fun processTextCommand(command: String) {
         Log.i(TAG, "📝 Processing command: '$command'")
 
-        // Check if AILive core is initialized
+        // ===== LLM RESPONSE PROCESSING ENTRY POINT =====
+        // This is the main function that handles user text commands and generates AI responses.
+        // It coordinates the entire flow from user input to AI response delivery.
+        
+        // SYSTEM VALIDATION: Ensure all components are ready before processing user request
         if (!::aiLiveCore.isInitialized) {
             Log.w(TAG, "⚠️ System not initialized yet - still starting up")
             runOnUiThread {
@@ -862,14 +841,18 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
+                    // ===== LLM STREAMING RESPONSE GENERATION =====
                     // Use PersonalityEngine for proper context (name, time, location)
+                    // This generates AI responses token by token for real-time display
                     aiLiveCore.personalityEngine.generateStreamingResponse(command)
                         .collect { token ->
                             tokenCount++
                             responseBuilder.append(token)
                             sentenceBuffer.append(token)
 
-                            // Update UI with streaming text
+                            // ===== REAL-TIME UI UPDATES FOR STREAMING RESPONSE =====
+                            // Each token is immediately displayed to the user as it's generated
+                            // This provides instant feedback and natural conversation flow
                             withContext(Dispatchers.Main) {
                                 classificationResult.text = responseBuilder.toString()
 
