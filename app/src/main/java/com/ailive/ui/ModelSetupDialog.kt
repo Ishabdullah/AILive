@@ -238,11 +238,6 @@ class ModelSetupDialog(
     }
 
     /**
-            }
-        }
-    }
-
-    /**
      * Download Memory Model only (TinyLlama-1.1B)
      */
     private fun downloadMemoryModelOnly(onComplete: () -> Unit) {
