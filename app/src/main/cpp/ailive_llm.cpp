@@ -130,12 +130,31 @@ Java_com_ailive_ai_llm_LLMBridge_nativeLoadModel(
 
 /**
  * Generate text completion
+ * 
+ * ===== NATIVE LLM RESPONSE GENERATION ENTRY POINT =====
+ * This is the core JNI function that generates AI responses to user queries.
+ * It bridges the Java/Kotlin layer to the native llama.cpp implementation.
+ * 
+ * RESPONSE GENERATION PROCESS:
+ * 1. Validates model state and falls back if needed
+ * 2. Calls llama_decode_and_generate for actual text generation
+ * 3. Returns generated text to Java layer for user display
+ * 
+ * ERROR HANDLING FOR USER EXPERIENCE:
+ * - Falls back to alternative implementation if llama.cpp fails
+ * - Returns empty string if no model is loaded (graceful degradation)
+ * - Ensures user never sees crashes, only responses or error messages
+ * 
+ * PERFORMANCE CONSIDERATIONS:
+ * - All heavy lifting done in native code for efficiency
+ * - Token generation optimized for mobile devices
+ * - Memory management handled at native level
  *
  * @param env JNI environment
  * @param thiz Java object reference
- * @param prompt Input text prompt
- * @param max_tokens Maximum tokens to generate
- * @return Generated text
+ * @param prompt Input text prompt from user
+ * @param max_tokens Maximum tokens to generate (controls response length)
+ * @return Generated text response for display to user
  */
 JNIEXPORT jstring JNICALL
 Java_com_ailive_ai_llm_LLMBridge_nativeGenerate(
@@ -349,6 +368,29 @@ Java_com_ailive_ai_llm_LLMBridge_nativeIsLoaded(JNIEnv* env, jobject thiz) {
 
 /**
  * Main generation function using the corrected llama.cpp workflow.
+ * 
+ * ===== CORE LLM RESPONSE GENERATION ENGINE =====
+ * This function is the heart of AI response generation in AILive.
+ * It processes user prompts and generates coherent text responses using llama.cpp.
+ * 
+ * RESPONSE GENERATION PIPELINE:
+ * 1. Tokenizes user prompt into model-compatible tokens
+ * 2. Decodes prompt through neural network for context understanding
+ * 3. Generates response tokens one by one using sampling
+ * 4. Converts tokens back to human-readable text
+ * 5. Returns complete response to user via JNI bridge
+ * 
+ * USER EXPERIENCE IMPACT:
+ * - Quality of generated responses depends on this function
+ * - Response time directly affected by generation efficiency
+ * - Coherence and relevance determined by sampling parameters
+ * - Error messages returned if generation fails
+ * 
+ * TECHNICAL IMPLEMENTATION:
+ * - Uses llama.cpp state-of-the-art sampling techniques
+ * - Handles edge-of-sequence detection for complete responses
+ * - Manages memory and GPU resources efficiently
+ * - Optimized for mobile device constraints
  */
 static std::string llama_decode_and_generate(const std::string& prompt_str, int max_tokens) {
     LOGI("🔍 Generating response for: %.80s...", prompt_str.c_str());

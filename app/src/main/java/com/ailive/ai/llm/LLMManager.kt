@@ -286,11 +286,31 @@ class LLMManager(private val context: Context) {
 
     /**
      * Generate text response using Qwen2-VL (text-only for now)
+     * 
+     * ===== LLM RESPONSE PROCESSING =====
+     * This function is the main entry point for generating AI responses to user queries.
+     * It handles the complete pipeline from user input to AI response delivery.
+     * 
+     * RESPONSE FLOW:
+     * 1. Validates LLM initialization state
+     * 2. Processes user prompt and determines formatting requirements
+     * 3. Calls native llama.cpp for text generation
+     * 4. Returns formatted response to UI for display
+     * 
+     * ERROR HANDLING:
+     * - Throws IllegalStateException if LLM not ready
+     * - Catches and propagates generation failures
+     * - Returns fallback message for empty responses
+     * 
+     * USER EXPERIENCE:
+     * - Response appears immediately in chat UI after generation
+     * - Performance metrics logged for debugging
+     * - Automatic fallback to error message if generation fails
      *
-     * @param prompt The input text prompt
+     * @param prompt The input text prompt from user
      * @param image Optional image for vision understanding (not yet supported - requires mmproj)
      * @param agentName Name of the agent for personality context
-     * @return Generated text response
+     * @return Generated text response for display to user
      */
     suspend fun generate(prompt: String, image: Bitmap? = null, agentName: String = "AILive"): String = withContext(Dispatchers.IO) {
         // Check initialization status
@@ -360,12 +380,32 @@ class LLMManager(private val context: Context) {
 
     /**
      * Generate text with streaming tokens (for UI display)
-     * Returns a Flow that emits tokens as they're generated
+     * 
+     * ===== STREAMING LLM RESPONSE DELIVERY =====
+     * This function provides real-time token streaming for responsive user experience.
+     * Instead of waiting for complete response, UI updates as each token is generated.
+     * 
+     * STREAMING BENEFITS FOR USER:
+     * - Immediate visual feedback that AI is working
+     * - Tokens appear progressively in chat interface
+     * - Better perceived performance vs waiting for complete response
+     * - More natural conversation flow
+     * 
+     * IMPLEMENTATION NOTES:
+     * - Returns Kotlin Flow for reactive programming
+     * - Non-blocking: UI can collect tokens safely on main thread
+     * - Handles errors gracefully with proper exception propagation
+     * - Currently simulates streaming (emits complete result at once)
+     * 
+     * ERROR HANDLING FOR USER EXPERIENCE:
+     * - Validates LLM state before generation
+     * - Provides clear error messages for initialization issues
+     * - Falls back gracefully if generation fails
      *
-     * @param prompt The user's prompt
+     * @param prompt The user's prompt for AI response
      * @param image Optional image (not yet supported)
      * @param agentName Agent personality name
-     * @return Flow<String> that emits each generated token
+     * @return Flow<String> that emits each generated token for real-time UI updates
      */
     fun generateStreaming(prompt: String, image: Bitmap? = null, agentName: String = "AILive"): Flow<String> = flow {
         // Check initialization status

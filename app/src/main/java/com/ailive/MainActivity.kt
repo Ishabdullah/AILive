@@ -784,7 +784,11 @@ class MainActivity : AppCompatActivity() {
     private fun processTextCommand(command: String) {
         Log.i(TAG, "📝 Processing command: '$command'")
 
-        // Check if AILive core is initialized
+        // ===== LLM RESPONSE PROCESSING ENTRY POINT =====
+        // This is the main function that handles user text commands and generates AI responses.
+        // It coordinates the entire flow from user input to AI response delivery.
+        
+        // SYSTEM VALIDATION: Ensure all components are ready before processing user request
         if (!::aiLiveCore.isInitialized) {
             Log.w(TAG, "⚠️ System not initialized yet - still starting up")
             runOnUiThread {
@@ -837,14 +841,18 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
+                    // ===== LLM STREAMING RESPONSE GENERATION =====
                     // Use PersonalityEngine for proper context (name, time, location)
+                    // This generates AI responses token by token for real-time display
                     aiLiveCore.personalityEngine.generateStreamingResponse(command)
                         .collect { token ->
                             tokenCount++
                             responseBuilder.append(token)
                             sentenceBuffer.append(token)
 
-                            // Update UI with streaming text
+                            // ===== REAL-TIME UI UPDATES FOR STREAMING RESPONSE =====
+                            // Each token is immediately displayed to the user as it's generated
+                            // This provides instant feedback and natural conversation flow
                             withContext(Dispatchers.Main) {
                                 classificationResult.text = responseBuilder.toString()
 

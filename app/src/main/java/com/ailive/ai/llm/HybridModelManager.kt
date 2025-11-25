@@ -145,6 +145,27 @@ class HybridModelManager(private val context: Context) {
 
     /**
      * Generate response with smart model routing
+     * 
+     * ===== HYBRID LLM RESPONSE GENERATION =====
+     * This function intelligently routes user queries to the optimal model
+     * for the best balance of speed and capability in AI responses.
+     * 
+     * RESPONSE ROUTING STRATEGY:
+     * - Fast Model (SmolLM2): Quick chat responses, minimal latency
+     * - Vision Model (Qwen2-VL): Complex reasoning, image analysis, detailed explanations
+     * - Smart decision based on query complexity and content type
+     * 
+     * USER EXPERIENCE BENEFITS:
+     * - Instant responses for simple chat questions (no loading delay)
+     * - Powerful analysis for complex requests (when needed)
+     * - Automatic model selection - user gets optimal response without manual choice
+     * - Memory efficient - only loads heavy model when necessary
+     * 
+     * RESPONSE FLOW:
+     * 1. Analyze query characteristics and complexity
+     * 2. Route to appropriate model (fast or vision)
+     * 3. Generate response using selected model
+     * 4. Return streaming response to UI for real-time display
      */
     suspend fun generateStreaming(
         prompt: String,

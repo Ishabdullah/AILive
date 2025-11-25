@@ -59,12 +59,30 @@ class LLMBridge {
 
     /**
      * Generate text completion
+     * 
+     * ===== NATIVE LLM RESPONSE GENERATION =====
+     * This is the core JNI function that calls llama.cpp to generate AI responses.
+     * It bridges Kotlin code to the native C++ implementation for actual text generation.
+     * 
+     * RESPONSE PROCESSING:
+     * - Takes user prompt and converts to AI response via native code
+     * - Uses llama.cpp library for efficient on-device inference
+     * - Returns raw generated text that will be displayed to user
+     * 
+     * ERROR HANDLING:
+     * - Native code handles generation failures gracefully
+     * - Empty string returned if generation fails
+     * - Exceptions handled by Kotlin wrapper layer
+     * 
+     * USER IMPACT:
+     * - This function directly determines what response user sees
+     * - Performance affects response time experienced by user
+     * - Quality of response depends on model and parameters
      *
-     * @param prompt Input text
-     * @param maxTokens Maximum tokens to generate (default 80)
-     * @return Generated text
+     * @param prompt Input text from user (formatted for chat template)
+     * @param maxTokens Maximum tokens to generate (default 80) - controls response length
+     * @return Generated text response for display to user
      */
-    external fun nativeGenerate(prompt: String, maxTokens: Int = 80): String
 
     /**
      * Generate text completion with image input (multimodal)
@@ -121,6 +139,25 @@ class LLMBridge {
 
     /**
      * Kotlin-friendly wrapper for text generation
+     * 
+     * ===== LLM RESPONSE GENERATION WRAPPER =====
+     * This function provides a safe Kotlin interface to the native generation function.
+     * It handles validation, error checking, and ensures reliable response delivery.
+     * 
+     * RESPONSE SAFETY CHECKS:
+     * - Validates native library is loaded before generation
+     * - Checks model state to prevent crashes
+     * - Provides clear error messages for debugging
+     * 
+     * USER EXPERIENCE PROTECTION:
+     * - Prevents app crashes with proper validation
+     * - Returns empty string if model not ready (graceful degradation)
+     * - Logs generation progress for monitoring
+     * 
+     * RESPONSE DELIVERY:
+     * - Calls native function for actual AI response generation
+     * - Returns final response to LLMManager for user display
+     * - Handles any native-level errors transparently
      */
     fun generate(prompt: String, maxTokens: Int = 80): String {
         // CRITICAL: Check if native library is loaded first

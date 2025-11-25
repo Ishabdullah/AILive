@@ -2,7 +2,7 @@ package com.ailive.ai.memory
 
 import android.content.Context
 import android.util.Log
-import com.ailive.ai.llm.LLMManager
+import com.ailive.ai.llm.HybridModelManager
 import com.ailive.memory.database.entities.FactCategory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,7 +12,7 @@ import org.json.JSONException
 /**
  * MemoryModelManager - AI-powered memory operations
  *
- * v1.5: Now uses Qwen (via LLMManager) for memory operations instead of TinyLlama
+ * v1.5: Now uses Qwen (via HybridModelManager) for memory operations instead of TinyLlama
  *
  * Reason: llama.cpp can only load ONE GGUF model at a time (singleton).
  * Since Qwen is already loaded for conversations and is MORE capable than TinyLlama,
@@ -40,9 +40,9 @@ class MemoryModelManager(private val context: Context) {
         private const val MAX_RESPONSE_TOKENS = 512  // Limit response length
     }
 
-    // Use LLMManager (which has Qwen loaded) instead of separate llama.cpp instance
+    // Use HybridModelManager (which has Qwen loaded) instead of separate llama.cpp instance
     // This avoids the llama.cpp singleton conflict
-    private var llmManager: LLMManager? = null
+    private var hybridModelManager: HybridModelManager? = null
 
     @Volatile
     private var isInitialized = false
@@ -54,12 +54,12 @@ class MemoryModelManager(private val context: Context) {
 
     /**
      * Initialize memory model
-     * v1.5: Now uses Qwen via LLMManager instead of loading TinyLlama
+     * v1.5: Now uses Qwen via HybridModelManager instead of loading TinyLlama
      *
-     * @param llmManager The initialized LLMManager instance (with Qwen loaded)
+     * @param hybridModelManager The initialized HybridModelManager instance (with Qwen loaded)
      * @return true if initialization successful, false otherwise
      */
-    suspend fun initialize(llmManager: LLMManager? = null): Boolean = withContext(Dispatchers.IO) {
+    suspend fun initialize(hybridModelManager: HybridModelManager? = null): Boolean = withContext(Dispatchers.IO) {
         if (isInitialized) {
             Log.i(TAG, "Memory model already initialized")
             return@withContext true
@@ -79,12 +79,12 @@ class MemoryModelManager(private val context: Context) {
             Log.i(TAG, "   Strategy: Using Qwen (main model) instead of separate TinyLlama")
             Log.i(TAG, "   Reason: llama.cpp singleton - only one model at a time")
 
-            // Store reference to LLMManager
-            this@MemoryModelManager.llmManager = llmManager
+            // Store reference to HybridModelManager
+            this@MemoryModelManager.hybridModelManager = hybridModelManager
 
             // Check if Qwen is ready
-            if (llmManager == null || !llmManager.isReady()) {
-                val error = "LLMManager not ready. Using fallback regex extraction."
+            if (hybridModelManager == null || !hybridModelManager.isReady()) {
+                val error = "HybridModelManager not ready. Using fallback regex extraction."
                 Log.w(TAG, "⚠️  $error")
                 Log.i(TAG, "   App will continue with limited memory capabilities")
                 initializationError = error
@@ -116,7 +116,7 @@ class MemoryModelManager(private val context: Context) {
     /**
      * Extract facts from a conversation turn
      *
-     * v1.5: Uses Qwen (via LLMManager) to analyze a user-AI conversation exchange
+     * v1.5: Uses Qwen (via HybridModelManager) to analyze a user-AI conversation exchange
      * and extract structured facts about the user.
      *
      * @param userMessage User's message
@@ -127,7 +127,7 @@ class MemoryModelManager(private val context: Context) {
         userMessage: String,
         assistantResponse: String
     ): List<ExtractedFact> = withContext(Dispatchers.IO) {
-        if (!isInitialized || llmManager == null) {
+        if (!isInitialized || hybridModelManager == null) {
             Log.w(TAG, "Memory model not initialized - skipping fact extraction")
             return@withContext emptyList()
         }
@@ -141,8 +141,8 @@ class MemoryModelManager(private val context: Context) {
             val prompt = buildFactExtractionPrompt(userMessage, assistantResponse)
             Log.d(TAG, "Extracting facts from conversation using Qwen...")
 
-            // Use Qwen via LLMManager instead of TinyLlama
-            val response = llmManager!!.generate(prompt, agentName = "FactExtractor")
+            // Use Qwen via HybridModelManager instead of TinyLlama
+            val response = hybridModelManager!!.generate(prompt, agentName = "FactExtractor")
 
             val facts = parseFacts(response)
             Log.i(TAG, "✅ Extracted ${facts.size} facts from conversation (using Qwen)")
@@ -171,7 +171,7 @@ class MemoryModelManager(private val context: Context) {
         conversationId: String,
         turns: List<Pair<String, String>>  // (user, assistant) pairs
     ): String = withContext(Dispatchers.IO) {
-        if (!isInitialized || llmManager == null) {
+        if (!isInitialized || hybridModelManager == null) {
             Log.w(TAG, "Memory model not initialized - using simple summarization")
             return@withContext "Conversation with ${turns.size} turns"
         }
@@ -184,8 +184,8 @@ class MemoryModelManager(private val context: Context) {
             val prompt = buildSummarizationPrompt(turns)
             Log.d(TAG, "Summarizing conversation $conversationId with ${turns.size} turns using Qwen...")
 
-            // Use Qwen via LLMManager
-            val summary = llmManager!!.generate(prompt, agentName = "Summarizer").trim()
+            // Use Qwen via HybridModelManager
+            val summary = hybridModelManager!!.generate(prompt, agentName = "Summarizer").trim()
 
             Log.i(TAG, "✅ Generated summary (using Qwen): ${summary.take(100)}...")
             summary
@@ -208,7 +208,7 @@ class MemoryModelManager(private val context: Context) {
         userQuery: String,
         existingContext: String
     ): String = withContext(Dispatchers.IO) {
-        if (!isInitialized || llmManager == null || existingContext.isBlank()) {
+        if (!isInitialized || hybridModelManager == null || existingContext.isBlank()) {
             return@withContext existingContext
         }
 
@@ -216,8 +216,8 @@ class MemoryModelManager(private val context: Context) {
             val prompt = buildContextEnhancementPrompt(userQuery, existingContext)
             Log.d(TAG, "Enhancing memory context for query using Qwen: ${userQuery.take(50)}...")
 
-            // Use Qwen via LLMManager
-            val enhanced = llmManager!!.generate(prompt, agentName = "ContextEnhancer").trim()
+            // Use Qwen via HybridModelManager
+            val enhanced = hybridModelManager!!.generate(prompt, agentName = "ContextEnhancer").trim()
             enhanced
         } catch (e: Exception) {
             Log.e(TAG, "Context enhancement failed: ${e.message}", e)

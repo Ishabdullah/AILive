@@ -32,10 +32,31 @@ Java_com_ailive_ai_llm_LLMBridge_fallbackGenerate(
         jstring prompt,
         jint max_tokens) {
     
-    const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
+    const char* prompt_cstr = env->GetStringUTFChar(prompt, nullptr);
     LOGI("Fallback: Generating mock response for: %.50s...", prompt_cstr);
     
     // Simple mock responses based on input
+    // ===== FALLBACK LLM RESPONSE GENERATION =====
+    // This function provides basic AI responses when the main llama.cpp library
+    // is not available or fails to initialize. It ensures users always get responses.
+    //
+    // USER EXPERIENCE GUARANTEE:
+    // - Prevents app crashes when native library fails
+    // - Provides meaningful responses to common queries
+    // - Maintains conversational flow during fallback mode
+    // - Transparent about fallback status in responses
+    //
+    // RESPONSE STRATEGY:
+    // - Pattern matching for common query types
+    // - Contextual responses based on input keywords
+    // - Fallback explanation for complex queries
+    // - Maintains AI assistant persona throughout
+    
+    const char* prompt_cstr = env->GetStringUTFChars(prompt, nullptr);
+    LOGI("Fallback: Generating mock response for: %.50s...", prompt_cstr);
+    
+    // Simple mock responses based on input patterns
+    // These ensure users get helpful responses even without full AI capabilities
     std::string response;
     std::string input(prompt_cstr);
     

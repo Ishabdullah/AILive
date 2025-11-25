@@ -200,8 +200,31 @@ class PersonalityEngine(
     /**
      * Generate streaming response with full context awareness
      *
-     * This method creates a proper UnifiedPrompt with AI name, temporal context,
-     * location context, conversation history, and persistent memory before streaming to the LLM.
+     * ===== UNIFIED AI RESPONSE GENERATION ENGINE =====
+     * This is the primary method for generating AI responses with complete contextual awareness.
+     * It orchestrates the entire response pipeline from user input to AI output.
+     *
+     * COMPREHENSIVE RESPONSE PIPELINE:
+     * 1. Gathers temporal context (time, date) for time-aware responses
+     * 2. Retrieves location context for spatial awareness (if enabled)
+     * 3. Loads conversation history for multi-turn context
+     * 4. Incorporates persistent memory (user profile, facts, preferences)
+     * 5. Creates unified prompt with AI personality and name
+     * 6. Streams response generation for real-time user feedback
+     * 7. Handles errors gracefully with meaningful user messages
+     *
+     * USER EXPERIENCE BENEFITS:
+     * - AI remembers previous conversations and context
+     * - Responses are personalized with user's name and preferences
+     * - Time and location-aware responses when enabled
+     * - Real-time streaming shows AI thinking process
+     * - Graceful error handling prevents user frustration
+     *
+     * RESPONSE QUALITY FACTORS:
+     * - Context length optimization prevents truncation
+     * - Memory integration enables personalized responses
+     * - Tool execution results incorporated for accuracy
+     * - Error-specific messages for different failure modes
      *
      * Use this instead of calling llmManager.generateStreaming() directly!
      */
