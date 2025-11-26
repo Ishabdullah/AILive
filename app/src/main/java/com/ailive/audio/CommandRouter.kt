@@ -166,42 +166,60 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleVisionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MotorAI (Vision)")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "MotorAI")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "MotorAI").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MotorAI", response)
     }
 
     private suspend fun handleEmotionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to EmotionAI")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "EmotionAI")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "EmotionAI").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("EmotionAI", response)
     }
 
     private suspend fun handleMemoryCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MemoryAI")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "MemoryAI")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "MemoryAI").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MemoryAI", response)
     }
 
     private suspend fun handlePredictionCommand(cmd: String) {
         Log.i(TAG, "→ Routing to PredictiveAI")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "PredictiveAI")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "PredictiveAI").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("PredictiveAI", response)
     }
 
     private suspend fun handleRewardCommand(cmd: String) {
         Log.i(TAG, "→ Routing to RewardAI")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "RewardAI")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "RewardAI").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("RewardAI", response)
     }
 
     private suspend fun handleMetaCommand(cmd: String) {
         Log.i(TAG, "→ Routing to MetaAI")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "MetaAI")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "MetaAI").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speakAsAgent("MetaAI", response)
     }
@@ -217,7 +235,10 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     private suspend fun handleUnknownCommand(cmd: String) {
         Log.w(TAG, "⚠️ Unknown command: '$cmd'")
-        val response = aiCore.hybridModelManager.generate(cmd, agentName = "AILive")
+        var response = ""
+        aiCore.hybridModelManager.generateStreaming(cmd, agentName = "AILive").collect { chunk ->
+            response += chunk
+        }
         onResponse?.invoke(response)
         aiCore.ttsManager.speak(response, TTSManager.Priority.HIGH)
     }

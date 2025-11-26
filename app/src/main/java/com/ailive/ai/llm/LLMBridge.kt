@@ -85,6 +85,15 @@ class LLMBridge {
      */
 
     /**
+     * Generate text completion
+     *
+     * @param prompt Input text
+     * @param maxTokens Maximum tokens to generate
+     * @return Generated text
+     */
+    external fun nativeGenerate(prompt: String, maxTokens: Int = 80): String
+
+    /**
      * Generate text completion with image input (multimodal)
      *
      * @param prompt Input text

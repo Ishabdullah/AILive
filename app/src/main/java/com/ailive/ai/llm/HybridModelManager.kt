@@ -35,6 +35,10 @@ class HybridModelManager(private val context: Context) {
     // Heavy model - load on demand
     private val visionModel = LLMBridge()
     private var isVisionModelLoaded = false
+    
+    // Expose LLMBridge for compatibility with legacy code
+    val llmBridge: LLMBridge
+        get() = if (isVisionModelLoaded) visionModel else fastModel
 
     // Model download manager
     private val modelDownloadManager = ModelDownloadManager(context)
@@ -286,5 +290,24 @@ class HybridModelManager(private val context: Context) {
      */
     fun isVisionReady(): Boolean {
         return isVisionModelLoaded
+    }
+    
+    /**
+     * Get initialization error message (for compatibility)
+     */
+    fun getInitializationError(): String? {
+        return if (!isFastModelLoaded) {
+            "Fast model (SmolLM2) failed to load"
+        } else {
+            null
+        }
+    }
+    
+    /**
+     * Reload settings from SharedPreferences
+     */
+    fun reloadSettings() {
+        settings = ModelSettings.load(context)
+        Log.i(TAG, "⚙️ Settings reloaded")
     }
 }

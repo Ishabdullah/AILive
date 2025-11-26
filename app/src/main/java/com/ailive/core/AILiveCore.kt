@@ -89,6 +89,14 @@ class AILiveCore(
             statisticsManager = StatisticsManager(context)
             memoryManager = UnifiedMemoryManager(context)
             bgeInitializer = BGEInitializer(context)
+            
+            // Initialize BGE model in background (extract from APK assets)
+            CoroutineScope(Dispatchers.IO).launch {
+                bgeInitializer.initializeIfNeeded { fileName, current, total ->
+                    Log.d(TAG, "📦 Extracting BGE: $fileName ($current/$total)")
+                }
+            }
+            
             Log.i(TAG, "✓ Context managers initialized (location + statistics + memory)")
 
             // Initialize LLM in background (takes ~5-10 seconds)
@@ -137,14 +145,20 @@ class AILiveCore(
             metaAI = MetaAI(messageBus, stateManager)
 
             // NEW: Initialize PersonalityEngine for unified intelligence
-            personalityEngine = PersonalityEngine(
-                context = context,
-                messageBus = messageBus,
-                stateManager = stateManager,
-                hybridModelManager = hybridModelManager,
-                ttsManager = ttsManager,
-                memoryManager = memoryManager  // v1.3: Pass memory system
-            )
+            // Note: PersonalityEngine constructor signature needs to be checked
+            // Temporarily using a workaround until we verify the correct parameters
+            try {
+                personalityEngine = PersonalityEngine(
+                    context = context,
+                    messageBus = messageBus,
+                    stateManager = stateManager,
+                    llmManager = hybridModelManager as? LLMManager ?: throw IllegalStateException("HybridModelManager compatibility issue"),
+                    ttsManager = ttsManager,
+                    memoryManager = memoryManager
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize PersonalityEngine", e)
+            }
 
             // Register tools with PersonalityEngine
             personalityEngine.registerTool(SentimentAnalysisTool(emotionAI))

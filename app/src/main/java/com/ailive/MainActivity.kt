@@ -15,6 +15,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -440,7 +441,7 @@ class MainActivity : AppCompatActivity() {
             cameraManager.startCamera(cameraPreview)
 
             // Initialize VisionManager
-            visionManager = VisionManager(aiLiveCore.llmManager.llmBridge) // Assuming LLMBridge is accessible via AILiveCore
+            visionManager = VisionManager(aiLiveCore.hybridModelManager.llmBridge)
             Log.i(TAG, "✓ VisionManager initialized")
 
             val visionTool = com.ailive.personality.tools.VisionAnalysisTool(
@@ -506,7 +507,7 @@ class MainActivity : AppCompatActivity() {
 
             // 1. Initialize WhisperProcessor
             whisperProcessor = WhisperProcessor(applicationContext)
-            val whisperModel = modelDownloadManager.getModelPath(ModelDownloadManager.WHISPER_MODEL_GGUF) // Assuming "whisper" is the key for the model
+            val whisperModel = modelDownloadManager.getModelPath("whisper-tiny.gguf")
             if (whisperModel.isEmpty() || !File(whisperModel).exists()) {
                 Log.e(TAG, "❌ Whisper model not found! STT will not work.")
                 showError("Whisper model not found!")
@@ -779,7 +780,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Reload settings when returning from settings activity
         if (::aiLiveCore.isInitialized) {
-            aiLiveCore.llmManager.reloadSettings()
+            aiLiveCore.hybridModelManager.reloadSettings()
             Log.i(TAG, "⚙️ Settings reloaded on resume")
         }
     }
