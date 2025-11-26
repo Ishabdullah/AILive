@@ -96,7 +96,7 @@ class BGEInitializer(private val context: Context) {
     /**
      * Force re-initialization (useful for testing or recovery)
      */
-    fun forceReinitialize(onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }): Boolean {
+    suspend fun forceReinitialize(onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }): Boolean {
         Log.i(TAG, "🔄 Forcing BGE re-initialization...")
         
         // Clear the flag

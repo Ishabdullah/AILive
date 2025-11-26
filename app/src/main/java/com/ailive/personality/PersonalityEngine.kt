@@ -2,7 +2,7 @@ package com.ailive.personality
 
 import android.content.Context
 import android.util.Log
-import com.ailive.ai.llm.LLMManager
+import com.ailive.ai.llm.HybridModelManager
 import com.ailive.audio.TTSManager
 import com.ailive.core.messaging.*
 import com.ailive.core.state.StateManager
