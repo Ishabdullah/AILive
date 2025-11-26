@@ -142,7 +142,10 @@ class MemoryModelManager(private val context: Context) {
             Log.d(TAG, "Extracting facts from conversation using Qwen...")
 
             // Use Qwen via HybridModelManager instead of TinyLlama
-            val response = hybridModelManager!!.generate(prompt, agentName = "FactExtractor")
+            var response = ""
+            hybridModelManager!!.generateStreaming(prompt, agentName = "FactExtractor").collect { chunk ->
+                response += chunk
+            }
 
             val facts = parseFacts(response)
             Log.i(TAG, "✅ Extracted ${facts.size} facts from conversation (using Qwen)")
@@ -185,7 +188,11 @@ class MemoryModelManager(private val context: Context) {
             Log.d(TAG, "Summarizing conversation $conversationId with ${turns.size} turns using Qwen...")
 
             // Use Qwen via HybridModelManager
-            val summary = hybridModelManager!!.generate(prompt, agentName = "Summarizer").trim()
+            var summary = ""
+            hybridModelManager!!.generateStreaming(prompt, agentName = "Summarizer").collect { chunk ->
+                summary += chunk
+            }
+            summary = summary.trim()
 
             Log.i(TAG, "✅ Generated summary (using Qwen): ${summary.take(100)}...")
             summary
@@ -217,8 +224,11 @@ class MemoryModelManager(private val context: Context) {
             Log.d(TAG, "Enhancing memory context for query using Qwen: ${userQuery.take(50)}...")
 
             // Use Qwen via HybridModelManager
-            val enhanced = hybridModelManager!!.generate(prompt, agentName = "ContextEnhancer").trim()
-            enhanced
+            var enhanced = ""
+            hybridModelManager!!.generateStreaming(prompt, agentName = "ContextEnhancer").collect { chunk ->
+                enhanced += chunk
+            }
+            enhanced.trim()
         } catch (e: Exception) {
             Log.e(TAG, "Context enhancement failed: ${e.message}", e)
             existingContext  // Fallback to original context
