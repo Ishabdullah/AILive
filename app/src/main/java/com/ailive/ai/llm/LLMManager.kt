@@ -14,7 +14,6 @@ import kotlinx.coroutines.withContext
 
 // Note: GPUInfo, InferenceStats, and PerformanceMonitor are now defined in PerformanceMetrics.kt
 // to avoid redeclaration errors. Import them from there if needed.
-}
 
 /**
  * LLMManager - On-device LLM inference using official llama.cpp Android
