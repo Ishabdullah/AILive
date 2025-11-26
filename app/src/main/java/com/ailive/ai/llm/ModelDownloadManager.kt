@@ -262,15 +262,20 @@ class ModelDownloadManager(private val context: Context) {
             
             // Return success message
             return "BGE model is built-in to APK"
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in downloadBGEModel", e)
+            return "Error: ${e.message}"
         }
+    }
         
-        @Deprecated("Legacy BGE download code - no longer used")
-        private suspend fun downloadBGEModelLegacy(onProgress: (String, Int, Int) -> Unit): String {
-            var filesAlreadyExisted = 0
-            val BGE_MODEL_URL = "https://deprecated-url.com/model.onnx"
-            val BGE_TOKENIZER_URL = "https://deprecated-url.com/tokenizer.json"
-            val BGE_CONFIG_URL = "https://deprecated-url.com/config.json"
-            
+    @Deprecated("Legacy BGE download code - no longer used")
+    private suspend fun downloadBGEModelLegacy(onProgress: (String, Int, Int) -> Unit): String {
+        var filesAlreadyExisted = 0
+        val BGE_MODEL_URL = "https://deprecated-url.com/model.onnx"
+        val BGE_TOKENIZER_URL = "https://deprecated-url.com/tokenizer.json"
+        val BGE_CONFIG_URL = "https://deprecated-url.com/config.json"
+        
+        try {
             // Model file
             onProgress(BGE_MODEL_ONNX, 1, 3)
             if (downloadModel(BGE_MODEL_URL, BGE_MODEL_ONNX) == DOWNLOAD_STATUS_EXISTS) {
