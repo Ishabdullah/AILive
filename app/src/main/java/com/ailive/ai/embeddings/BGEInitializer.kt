@@ -42,7 +42,7 @@ class BGEInitializer(private val context: Context) {
      * @param onProgress Progress callback (fileName, current, total)
      * @return true if initialization successful or already completed, false on error
      */
-    fun initializeIfNeeded(
+    suspend fun initializeIfNeeded(
         onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }
     ): Boolean {
         // Check if BGE is already initialized

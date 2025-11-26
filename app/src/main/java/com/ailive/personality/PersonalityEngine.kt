@@ -45,7 +45,7 @@ class PersonalityEngine(
     private val context: Context,
     private val messageBus: MessageBus,
     private val stateManager: StateManager,
-    private val llmManager: LLMManager,
+    private val hybridModelManager: HybridModelManager,
     private val ttsManager: TTSManager,
     private val memoryManager: UnifiedMemoryManager? = null  // v1.3: Persistent memory
 ) {
@@ -226,7 +226,7 @@ class PersonalityEngine(
      * - Tool execution results incorporated for accuracy
      * - Error-specific messages for different failure modes
      *
-     * Use this instead of calling llmManager.generateStreaming() directly!
+     * Use this instead of calling hybridModelManager.generateStreaming() directly!
      */
     suspend fun generateStreamingResponse(input: String): Flow<String> {
         Log.d(TAG, "Generating streaming response with full context for: ${input.take(50)}...")
@@ -304,8 +304,8 @@ class PersonalityEngine(
             }
 
             // Stream with the FULL PROMPT (not just raw input!)
-            Log.d(TAG, "Calling llmManager.generateStreaming()...")
-            return llmManager.generateStreaming(prompt, agentName = aiSettings.aiName)
+            Log.d(TAG, "Calling hybridModelManager.generateStreaming()...")
+            return hybridModelManager.generateStreaming(prompt, agentName = aiSettings.aiName)
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error in generateStreamingResponse", e)
@@ -523,7 +523,10 @@ class PersonalityEngine(
         // Generate response with LLM (with fallback)
         val responseText = try {
             val startTime = System.currentTimeMillis()
-            val llmResponse = llmManager.generate(prompt, agentName = aiSettings.aiName)
+            var llmResponse = ""
+            hybridModelManager.generateStreaming(prompt, agentName = aiSettings.aiName).collect { chunk ->
+                llmResponse += chunk
+            }
             val duration = System.currentTimeMillis() - startTime
 
             // Track statistics
@@ -548,7 +551,7 @@ class PersonalityEngine(
                 }
                 "not initialized" in message.lowercase() -> {
                     Log.w(TAG, "⚠️ LLM not available: $message")
-                    val error = llmManager.getInitializationError()
+                    val error = hybridModelManager.getInitializationError()
                     if (error != null) {
                         "I'm having trouble with my language model: $error"
                     } else {

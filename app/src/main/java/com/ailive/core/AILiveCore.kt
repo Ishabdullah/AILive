@@ -145,20 +145,14 @@ class AILiveCore(
             metaAI = MetaAI(messageBus, stateManager)
 
             // NEW: Initialize PersonalityEngine for unified intelligence
-            // Note: PersonalityEngine constructor signature needs to be checked
-            // Temporarily using a workaround until we verify the correct parameters
-            try {
-                personalityEngine = PersonalityEngine(
-                    context = context,
-                    messageBus = messageBus,
-                    stateManager = stateManager,
-                    llmManager = hybridModelManager as? LLMManager ?: throw IllegalStateException("HybridModelManager compatibility issue"),
-                    ttsManager = ttsManager,
-                    memoryManager = memoryManager
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize PersonalityEngine", e)
-            }
+            personalityEngine = PersonalityEngine(
+                context = context,
+                messageBus = messageBus,
+                stateManager = stateManager,
+                hybridModelManager = hybridModelManager,
+                ttsManager = ttsManager,
+                memoryManager = memoryManager
+            )
 
             // Register tools with PersonalityEngine
             personalityEngine.registerTool(SentimentAnalysisTool(emotionAI))
