@@ -621,7 +621,7 @@ class MainActivity : AppCompatActivity() {
                         // CRITICAL SAFETY CHECK 1: Guard against null/empty text
                         if (text.isNullOrBlank()) {
                             Log.w(TAG, "⚠️ Empty transcription received, ignoring")
-                            if (isListeningForWakeWord &amp;&amp; isMicEnabled) {
+                            if (isListeningForWakeWord && isMicEnabled) {
                                 restartWakeWordListening()
                             }
                             return@runOnUiThread
