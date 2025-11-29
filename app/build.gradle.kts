@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.ailive"
     compileSdk = 35
-    ndkVersion = "26.3.11579264"
+    // ndkVersion = "26.3.11579264" // Temporarily disabled for syntax testing
 
     defaultConfig {
         applicationId = "com.ailive"
@@ -18,52 +18,27 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // NDK configuration for native C++ libraries (llama.cpp, whisper.cpp)
-        // Piper TTS is disabled (see CMakeLists.txt), but llama.cpp and whisper.cpp work fine
-        ndk {
-            abiFilters += "arm64-v8a"
-        }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared"
-                )
-            }
-        }
+        
+        // NDK and native build temporarily disabled for syntax testing
+        // ndk { abiFilters += "arm64-v8a" }
+        // externalNativeBuild { cmake { ... } }
     }
 
-    // ✨ GPU/CPU Build Variants (v1.1)
-    // Allows installing both GPU and CPU versions side-by-side
+    // Temporarily simplified build flavors for testing
     flavorDimensions += "acceleration"
     productFlavors {
         create("gpu") {
             dimension = "acceleration"
             applicationIdSuffix = ".gpu"
             versionNameSuffix = "-GPU"
-
             buildConfigField("boolean", "GPU_ENABLED", "true")
-            buildConfigField("String", "BUILD_VARIANT", "\"GPU (OpenCL + NNAPI)\"")
-
-            // GPU-specific CMake flags for llama.cpp OpenCL
-            externalNativeBuild {
-                cmake {
-                    arguments += listOf(
-                        "-DGGML_OPENCL=ON"
-                    )
-                }
-            }
+            buildConfigField("String", "BUILD_VARIANT", "&quot;GPU (Testing)&quot;")
         }
-
         create("cpu") {
             dimension = "acceleration"
-            applicationIdSuffix = ".cpu"
             versionNameSuffix = "-CPU"
-
             buildConfigField("boolean", "GPU_ENABLED", "false")
-            buildConfigField("String", "BUILD_VARIANT", "\"CPU Only\"")
+            buildConfigField("String", "BUILD_VARIANT", "&quot;CPU (Testing)&quot;")
         }
     }
 
@@ -77,50 +52,23 @@ android {
         }
     }
 
-    // Enable BuildConfig generation
-    buildFeatures {
-        buildConfig = true
-        compose = true
-        viewBinding = true
-    }
-
-    // External native build configuration
-    // Builds llama.cpp and whisper.cpp for LLM and STT
-    // Piper TTS is disabled (stub library) - see CMakeLists.txt for details
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
-    // CRITICAL: Allow large ONNX model files (348MB) in assets
-    // Without this, files >100MB are excluded from APK
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-
-    // Don't compress ONNX files (they're already compressed)
-    androidResources {
-        noCompress += "onnx"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    
+
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
+    // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
@@ -143,18 +91,12 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 
     // TensorFlow Lite - For Whisper (STT) and MobileNetV3 (Vision)
-    // Multimodal MVP: testing-123 branch
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")  // Optional GPU acceleration
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
 
-    // ONNX Runtime for BGE embeddings (v1.4 - Memory enhancement)
-    // Used ONLY for embedding models (no ArgMax op issues with sentence transformers)
-    // BGE-small-en-v1.5 requires only basic ONNX ops (MatMul, Add, Softmax)
+    // ONNX Runtime for BGE embeddings
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
-
-    // DEPRECATED: Hugging Face Tokenizers (llama.cpp has built-in tokenizer)
-    // implementation("ai.djl.huggingface:tokenizers:0.29.0")
 
     // CameraX for camera functionality
     implementation("androidx.camera:camera-core:1.3.1")
@@ -162,13 +104,13 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
 
-    // Google Play Services Location for GPS and location awareness (v1.2)
+    // Google Play Services Location
     implementation("com.google.android.gms:play-services-location:21.0.1")
 
-    // Phase 6.2: Data Visualization
+    // Data Visualization
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
 
-    // Room Database for persistent memory (v1.3)
+    // Room Database for persistent memory
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
@@ -195,36 +137,23 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    // Web Search Integration (v1.4)
-    // OkHttp - HTTP client with connection pooling, interceptors, TLS
+    // Web Search Integration
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // Retrofit - Type-safe REST client
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
-
-    // Moshi - JSON parsing (Kotlin-friendly with codegen)
     implementation("com.squareup.moshi:moshi:1.15.1")
     implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
     ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
 
-    // Caffeine - High-performance in-memory cache
+    // Additional utilities
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
-
-    // SnakeYAML - YAML configuration parsing
     implementation("org.yaml:snakeyaml:2.2")
 
-    // MockWebServer - Testing HTTP clients
+    // Test utilities
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-
-    // Kotlin Test - Coroutine testing
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-
-    // Mockito - Mocking framework
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
-
-    // Truth - Fluent assertions
     testImplementation("com.google.truth:truth:1.4.2")
 }

@@ -562,7 +562,7 @@ class MainActivity : AppCompatActivity() {
             val maxAttempts = 60 // Wait up to 60 seconds
             
             while (attempts < maxAttempts) {
-                if (aiLiveCore.hybridModelManager.isReady) {
+                if (aiLiveCore.hybridModelManager.isReady()) {
                     Log.i(TAG, "✅ PHASE 2 COMPLETE: LLM is ready")
                     
                     withContext(Dispatchers.Main) {
@@ -642,7 +642,7 @@ class MainActivity : AppCompatActivity() {
                             Log.d(TAG, "   Mode: Command processing")
                             
                             // CRITICAL SAFETY CHECK 2: Verify LLM is ready before processing
-                            if (!aiLiveCore.hybridModelManager.isReady) {
+                            if (!aiLiveCore.hybridModelManager.isReady()) {
                                 Log.e(TAG, "❌ LLM not ready, cannot process command")
                                 classificationResult.text = "AI is still initializing. Please wait..."
                                 statusIndicator.text = "⚠️ NOT READY"
@@ -828,7 +828,7 @@ class MainActivity : AppCompatActivity() {
             }
             
             // CRITICAL SAFETY CHECK 2: Verify LLM is ready
-            if (!aiLiveCore.hybridModelManager.isReady) {
+            if (!aiLiveCore.hybridModelManager.isReady()) {
                 Log.e(TAG, "❌ LLM not ready, cannot process command")
                 statusIndicator.text = "⚠️ NOT READY"
                 classificationResult.text = "AI is still initializing. Please wait..."

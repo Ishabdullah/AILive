@@ -38,7 +38,7 @@ class CommandRouter(private val aiCore: AILiveCore) {
             }
             
             // CRITICAL SAFETY CHECK 2: Verify LLM is ready
-            if (!aiCore.hybridModelManager.isReady) {
+            if (!aiCore.hybridModelManager.isReady()) {
                 val error = "AI is still initializing. Please wait a moment..."
                 Log.e(TAG, "❌ LLM not ready, cannot process command")
                 onResponse?.invoke(error)
@@ -91,7 +91,7 @@ class CommandRouter(private val aiCore: AILiveCore) {
             }
 
             // SAFETY CHECK: Verify LLM is ready before calling PersonalityEngine
-            if (!aiCore.hybridModelManager.isReady) {
+            if (!aiCore.hybridModelManager.isReady()) {
                 Log.e(TAG, "❌ LLM not ready in handleWithPersonalityEngine")
                 onResponse?.invoke("AI is still initializing. Please wait...")
                 return
