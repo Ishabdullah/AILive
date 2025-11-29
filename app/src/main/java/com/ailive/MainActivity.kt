@@ -504,84 +504,226 @@ class MainActivity : AppCompatActivity() {
     private fun initializeAudio() {
         try {
             Log.i(TAG, "=== Initializing Offline Audio Pipeline ===")
+            Log.i(TAG, "⏱️  Sequential initialization: Whisper → LLM → TTS")
 
-            // 1. Initialize WhisperProcessor
+            // PHASE 1: Initialize WhisperProcessor FIRST
+            Log.i(TAG, "📍 PHASE 1: Initializing Whisper ASR...")
             whisperProcessor = WhisperProcessor(applicationContext)
-            val whisperModel = modelDownloadManager.getModelPath("whisper-tiny.gguf")
-            if (whisperModel.isEmpty() || !File(whisperModel).exists()) {
-                Log.e(TAG, "❌ Whisper model not found! STT will not work.")
-                showError("Whisper model not found!")
-                return
+            
+            // Initialize Whisper in background (may take 5-10 seconds)
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    val whisperSuccess = whisperProcessor.initialize()
+                    
+                    withContext(Dispatchers.Main) {
+                        if (!whisperSuccess) {
+                            Log.e(TAG, "❌ Whisper processor failed to initialize")
+                            statusIndicator.text = "⚠️ ASR UNAVAILABLE"
+                            classificationResult.text = "Whisper model not ready. Voice input disabled."
+                            return@withContext
+                        }
+                        
+                        Log.i(TAG, "✅ PHASE 1 COMPLETE: Whisper processor ready")
+                        
+                        // PHASE 2: Wait for LLM to be ready (initialized in AILiveCore)
+                        Log.i(TAG, "📍 PHASE 2: Waiting for LLM initialization...")
+                        waitForLLMReady()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Whisper initialization exception", e)
+                    e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        statusIndicator.text = "⚠️ ASR ERROR"
+                        classificationResult.text = "Whisper initialization failed: ${e.message}"
+                    }
+                }
             }
-
-            if (!whisperProcessor.initialize(whisperModel)) {
-                Log.e(TAG, "❌ Whisper processor failed to initialize")
-                return
+            
+            // Continue with other audio component setup (non-blocking)
+            setupAudioComponents()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Audio init failed", e)
+            e.printStackTrace()
+            runOnUiThread { 
+                statusIndicator.text = "⚠️ ERROR"
+                classificationResult.text = "Audio initialization failed: ${e.message}"
             }
-            Log.i(TAG, "✓ Whisper processor ready")
-
-
+        }
+    }
+    
+    /**
+     * Wait for LLM to be ready before enabling voice commands
+     * This prevents crashes from sending null/empty text to uninitialized LLM
+     */
+    private fun waitForLLMReady() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            var attempts = 0
+            val maxAttempts = 60 // Wait up to 60 seconds
+            
+            while (attempts < maxAttempts) {
+                if (aiLiveCore.hybridModelManager.isReady()) {
+                    Log.i(TAG, "✅ PHASE 2 COMPLETE: LLM is ready")
+                    
+                    withContext(Dispatchers.Main) {
+                        // PHASE 3: TTS is already initialized in AILiveCore
+                        Log.i(TAG, "✅ PHASE 3 COMPLETE: TTS ready")
+                        Log.i(TAG, "🎉 ALL PHASES COMPLETE: Audio pipeline fully operational")
+                        
+                        // Enable UI controls now that all models are ready
+                        enableAudioControls()
+                    }
+                    return@launch
+                }
+                
+                delay(1000) // Check every second
+                attempts++
+                
+                if (attempts % 5 == 0) {
+                    Log.d(TAG, "   Still waiting for LLM... ($attempts/$maxAttempts)")
+                }
+            }
+            
+            // Timeout - LLM not ready
+            Log.w(TAG, "⚠️ LLM initialization timeout after ${maxAttempts}s")
+            withContext(Dispatchers.Main) {
+                statusIndicator.text = "⚠️ LLM TIMEOUT"
+                classificationResult.text = "LLM not ready. Voice commands may not work."
+            }
+        }
+    }
+    
+    /**
+     * Setup audio components (non-blocking initialization)
+     */
+    private fun setupAudioComponents() {
+        try {
+            Log.i(TAG, "🔧 Setting up audio components...")
+            
             // 2. Initialize other audio components
             wakeWordDetector = WakeWordDetector(settings.wakePhrase, aiLiveCore.ttsManager)
             commandRouter = CommandRouter(aiLiveCore)
 
 
-            // 3. Setup Callbacks
+            // 3. Setup Callbacks with SAFETY CHECKS
             wakeWordDetector.onWakeWordDetected = {
                 runOnUiThread {
+                    Log.i(TAG, "🎯 Wake word detected!")
                     onWakeWordDetected()
                 }
             }
 
             whisperProcessor.onFinalResult = { text ->
                 runOnUiThread {
-                    editTextCommand.setText(text)
-                    Log.i(TAG, "Final transcription: '$text'")
+                    try {
+                        Log.i(TAG, "📝 ASR transcription received: '$text'")
+                        
+                        // CRITICAL SAFETY CHECK 1: Guard against null/empty text
+                        if (text.isNullOrBlank()) {
+                            Log.w(TAG, "⚠️ Empty transcription received, ignoring")
+                            if (isListeningForWakeWord && isMicEnabled) {
+                                restartWakeWordListening()
+                            }
+                            return@runOnUiThread
+                        }
+                        
+                        editTextCommand.setText(text)
+                        Log.i(TAG, "Final transcription: '$text'")
 
-                    // The new processor is not continuous in the same way.
-                    // We decide whether to process as a command or listen for wake word.
-                    if (isListeningForWakeWord) {
-                        if (!wakeWordDetector.processText(text)) {
+                        // The new processor is not continuous in the same way.
+                        // We decide whether to process as a command or listen for wake word.
+                        if (isListeningForWakeWord) {
+                            Log.d(TAG, "   Mode: Wake word detection")
+                            if (!wakeWordDetector.processText(text)) {
+                                Log.d(TAG, "   No wake word detected, restarting listening")
+                                restartWakeWordListening()
+                            }
+                        } else {
+                            Log.d(TAG, "   Mode: Command processing")
+                            
+                            // CRITICAL SAFETY CHECK 2: Verify LLM is ready before processing
+                            if (!aiLiveCore.hybridModelManager.isReady()) {
+                                Log.e(TAG, "❌ LLM not ready, cannot process command")
+                                classificationResult.text = "AI is still initializing. Please wait..."
+                                statusIndicator.text = "⚠️ NOT READY"
+                                
+                                // Restart wake word listening
+                                if (isMicEnabled) {
+                                    isListeningForWakeWord = true
+                                    restartWakeWordListening()
+                                }
+                                return@runOnUiThread
+                            }
+                            
+                            processVoiceCommand(text)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Error in ASR callback", e)
+                        e.printStackTrace()
+                        classificationResult.text = "Error processing voice input: ${e.message}"
+                        
+                        // Restart wake word listening on error
+                        if (isMicEnabled) {
+                            isListeningForWakeWord = true
                             restartWakeWordListening()
                         }
-                    } else {
-                        processVoiceCommand(text)
                     }
                 }
             }
 
             whisperProcessor.onReadyForSpeech = {
                 runOnUiThread {
-                    statusIndicator.text = if (isListeningForWakeWord) "● LISTENING" else "● COMMAND"
+                    try {
+                        Log.d(TAG, "🎤 Ready for speech")
+                        statusIndicator.text = if (isListeningForWakeWord) "● LISTENING" else "● COMMAND"
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Error in onReadyForSpeech callback", e)
+                        e.printStackTrace()
+                    }
                 }
             }
 
             whisperProcessor.onError = { error ->
                 runOnUiThread {
-                    Log.w(TAG, "Whisper error: $error")
-                    if (isMicEnabled) {
-                        isListeningForWakeWord = true
-                        restartWakeWordListening()
+                    try {
+                        Log.w(TAG, "⚠️ Whisper error: $error")
+                        statusIndicator.text = "⚠️ ASR ERROR"
+                        classificationResult.text = "Speech recognition error: $error"
+                        
+                        if (isMicEnabled) {
+                            isListeningForWakeWord = true
+                            restartWakeWordListening()
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Error in onError callback", e)
+                        e.printStackTrace()
                     }
                 }
             }
 
             commandRouter.onResponse = { response ->
                 runOnUiThread {
-                    classificationResult.text = response
-                    confidenceText.text = "Voice Command Response"
-                    // wait for TTS to finish
-                    lifecycleScope.launch {
-                        aiLiveCore.ttsManager.state.collect { ttsState ->
-                            if (ttsState == com.ailive.audio.TTSManager.TTSState.READY) {
-                                delay(500)
-                                if (isMicEnabled) {
-                                    isListeningForWakeWord = true
-                                    restartWakeWordListening()
+                    try {
+                        Log.i(TAG, "📤 Command response received: ${response.take(50)}...")
+                        classificationResult.text = response
+                        confidenceText.text = "Voice Command Response"
+                        
+                        // wait for TTS to finish
+                        lifecycleScope.launch {
+                            aiLiveCore.ttsManager.state.collect { ttsState ->
+                                if (ttsState == com.ailive.audio.TTSManager.TTSState.READY) {
+                                    delay(500)
+                                    if (isMicEnabled) {
+                                        isListeningForWakeWord = true
+                                        restartWakeWordListening()
+                                    }
+                                    return@collect
                                 }
-                                return@collect
                             }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Error in onResponse callback", e)
+                        e.printStackTrace()
                     }
                 }
             }
@@ -593,6 +735,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 btnToggleMic.text = "🎤 MIC OFF"
                 btnToggleMic.setBackgroundResource(R.drawable.button_toggle_off)
+                btnToggleMic.isEnabled = false // Disable until models are ready
             }
 
             lifecycleScope.launch {
@@ -608,11 +751,37 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            Log.i(TAG, "✓ Audio components setup complete")
+            Log.i(TAG, "⏱️  Waiting for model initialization to complete...")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Audio component setup failed", e)
+            e.printStackTrace()
+            runOnUiThread { 
+                statusIndicator.text = "⚠️ ERROR"
+                classificationResult.text = "Audio setup failed: ${e.message}"
+            }
+        }
+    }
+    
+    /**
+     * Enable audio controls after all models are ready
+     * Called after sequential initialization completes
+     */
+    private fun enableAudioControls() {
+        try {
+            Log.i(TAG, "🎉 Enabling audio controls - all models ready!")
+            
+            btnToggleMic.isEnabled = true
+            statusIndicator.text = "● READY"
+            classificationResult.text = "All systems ready! Enable microphone to start voice interaction."
+            
             Log.i(TAG, "✓ Phase 2.3: Offline Audio pipeline operational")
             Log.i(TAG, "✓ Phase 2.4: TTS ready")
+            Log.i(TAG, "✓ Sequential initialization complete: Whisper ✓ → LLM ✓ → TTS ✓")
+            
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Audio init failed", e)
-            runOnUiThread { statusIndicator.text = "● ERROR" }
+            Log.e(TAG, "❌ Error enabling audio controls", e)
+            e.printStackTrace()
         }
     }
 
@@ -645,10 +814,60 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processVoiceCommand(command: String) {
-        Log.i(TAG, "Processing command: '$command'")
-        statusIndicator.text = "● PROCESSING"
-        lifecycleScope.launch(Dispatchers.Default) {
-            commandRouter.processCommand(command)
+        try {
+            Log.i(TAG, "🎯 Processing voice command: '$command'")
+            
+            // CRITICAL SAFETY CHECK 1: Validate command is not empty
+            if (command.isBlank()) {
+                Log.w(TAG, "⚠️ Empty command received, ignoring")
+                if (isMicEnabled) {
+                    isListeningForWakeWord = true
+                    restartWakeWordListening()
+                }
+                return
+            }
+            
+            // CRITICAL SAFETY CHECK 2: Verify LLM is ready
+            if (!aiLiveCore.hybridModelManager.isReady()) {
+                Log.e(TAG, "❌ LLM not ready, cannot process command")
+                statusIndicator.text = "⚠️ NOT READY"
+                classificationResult.text = "AI is still initializing. Please wait..."
+                
+                if (isMicEnabled) {
+                    isListeningForWakeWord = true
+                    restartWakeWordListening()
+                }
+                return
+            }
+            
+            statusIndicator.text = "● PROCESSING"
+            
+            lifecycleScope.launch(Dispatchers.Default) {
+                try {
+                    Log.d(TAG, "   Routing command to CommandRouter...")
+                    commandRouter.processCommand(command)
+                    Log.d(TAG, "   ✓ Command processing complete")
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Error processing command", e)
+                    e.printStackTrace()
+                    
+                    withContext(Dispatchers.Main) {
+                        statusIndicator.text = "⚠️ ERROR"
+                        classificationResult.text = "Error processing command: ${e.message}"
+                        
+                        // Restart wake word listening on error
+                        if (isMicEnabled) {
+                            isListeningForWakeWord = true
+                            restartWakeWordListening()
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Exception in processVoiceCommand", e)
+            e.printStackTrace()
+            statusIndicator.text = "⚠️ ERROR"
+            classificationResult.text = "Command processing failed: ${e.message}"
         }
     }
 

@@ -46,6 +46,13 @@ jobs:
       with:
         cache-disabled: true
 
+    - name: Download Whisper small model
+      run: |
+        mkdir -p app/src/main/assets/models/whisper
+        wget -O app/src/main/assets/models/whisper/ggml-small.en.bin \
+          https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin
+        ls -lh app/src/main/assets/models/whisper
+
     - name: Build CPU Debug APK
       run: ./gradlew assembleCpuDebug
 

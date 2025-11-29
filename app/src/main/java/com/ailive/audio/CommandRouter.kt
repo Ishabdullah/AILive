@@ -20,46 +20,108 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
     /**
      * Process user command and route to appropriate agent or PersonalityEngine
+     * 
+     * CRITICAL SAFETY CHECKS:
+     * 1. Validates command is not null or empty
+     * 2. Verifies LLM is ready before processing
+     * 3. Comprehensive error handling to prevent crashes
      */
     suspend fun processCommand(command: String) {
-        val normalized = command.lowercase().trim()
-        Log.i(TAG, "🧠 Processing command: '$command'")
-
-        // NEW: Route through PersonalityEngine if enabled
-        if (aiCore.usePersonalityEngine) {
-            try {
-                handleWithPersonalityEngine(command)
+        try {
+            Log.i(TAG, "🧠 Processing command: '$command'")
+            
+            // CRITICAL SAFETY CHECK 1: Validate command is not empty
+            if (command.isBlank()) {
+                Log.w(TAG, "⚠️ Empty command received, sending fallback response")
+                onResponse?.invoke("I didn't hear you clearly. Could you try again?")
                 return
-            } catch (e: UninitializedPropertyAccessException) {
-                Log.e(TAG, "PersonalityEngine not initialized, falling back to legacy mode", e)
-                // Fall through to legacy mode
             }
-        }
+            
+            // CRITICAL SAFETY CHECK 2: Verify LLM is ready
+            if (!aiCore.hybridModelManager.isReady()) {
+                val error = "AI is still initializing. Please wait a moment..."
+                Log.e(TAG, "❌ LLM not ready, cannot process command")
+                onResponse?.invoke(error)
+                return
+            }
+            
+            val normalized = command.lowercase().trim()
+            Log.d(TAG, "   Normalized: '$normalized'")
 
-        // Legacy routing (old agent-based system)
-        processCommandLegacy(normalized, command)
+            // NEW: Route through PersonalityEngine if enabled
+            if (aiCore.usePersonalityEngine) {
+                try {
+                    handleWithPersonalityEngine(command)
+                    return
+                } catch (e: UninitializedPropertyAccessException) {
+                    Log.e(TAG, "PersonalityEngine not initialized, falling back to legacy mode", e)
+                    // Fall through to legacy mode
+                }
+            }
+
+            // Legacy routing (old agent-based system)
+            processCommandLegacy(normalized, command)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Exception in processCommand", e)
+            e.printStackTrace()
+            onResponse?.invoke("I encountered an error processing your request. Please try again.")
+        }
     }
 
     /**
      * NEW: Handle command with PersonalityEngine (unified intelligence)
+     * 
+     * CRITICAL SAFETY CHECKS:
+     * 1. Validates input before processing
+     * 2. Wraps LLM call in try-catch
+     * 3. Guards against null/empty responses
+     * 4. Provides detailed error logging
      */
     private suspend fun handleWithPersonalityEngine(command: String) {
         try {
             Log.i(TAG, "🧠 Routing to PersonalityEngine (unified mode)")
-            Log.d(TAG, "Input command: '$command'")
+            Log.d(TAG, "Input command: '\$command'")
+            
+            // SAFETY CHECK: Validate command again
+            if (command.isBlank()) {
+                Log.w(TAG, "⚠️ Empty command in handleWithPersonalityEngine")
+                onResponse?.invoke("I didn't catch that. Could you repeat?")
+                return
+            }
 
-            // Process through PersonalityEngine
-            val response = aiCore.personalityEngine.processInput(
-                input = command,
-                inputType = InputType.VOICE
-            )
+            // SAFETY CHECK: Verify LLM is ready before calling PersonalityEngine
+            if (!aiCore.hybridModelManager.isReady()) {
+                Log.e(TAG, "❌ LLM not ready in handleWithPersonalityEngine")
+                onResponse?.invoke("AI is still initializing. Please wait...")
+                return
+            }
 
-            // CRITICAL: Send response to user
+            // Process through PersonalityEngine with error handling
+            val response = try {
+                aiCore.personalityEngine.processInput(
+                    input = command,
+                    inputType = InputType.VOICE
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ PersonalityEngine.processInput failed", e)
+                e.printStackTrace()
+                onResponse?.invoke("I encountered an error. Please try again.")
+                return
+            }
+
+            // CRITICAL: Validate response before sending to user
             val responseText = response.text
-            Log.i(TAG, "✅ PersonalityEngine generated response: '$responseText'")
-            Log.d(TAG, "Response length: ${responseText.length} chars")
-            Log.d(TAG, "Tools used: ${response.usedTools.joinToString()}")
-            Log.d(TAG, "Confidence: ${response.confidence}")
+            if (responseText.isBlank()) {
+                Log.w(TAG, "⚠️ PersonalityEngine returned empty response")
+                onResponse?.invoke("I'm not sure how to respond to that.")
+                return
+            }
+            
+            Log.i(TAG, "✅ PersonalityEngine generated response: '\${responseText.take(100)}...'")
+            Log.d(TAG, "Response length: \${responseText.length} chars")
+            Log.d(TAG, "Tools used: \${response.usedTools.joinToString()}")
+            Log.d(TAG, "Confidence: \${response.confidence}")
 
             // Invoke callback to send to user
             onResponse?.invoke(responseText)
@@ -67,8 +129,9 @@ class CommandRouter(private val aiCore: AILiveCore) {
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ PersonalityEngine error - DETAILED", e)
-            Log.e(TAG, "Exception: ${e.javaClass.simpleName}")
-            Log.e(TAG, "Message: ${e.message}")
+            Log.e(TAG, "Exception: \${e.javaClass.simpleName}")
+            Log.e(TAG, "Message: \${e.message}")
+            Log.e(TAG, "Stack trace:")
             e.printStackTrace()
 
             val errorResponse = "I'm having trouble processing that. Could you try again?"
