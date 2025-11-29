@@ -32,13 +32,13 @@ android {
             applicationIdSuffix = ".gpu"
             versionNameSuffix = "-GPU"
             buildConfigField("boolean", "GPU_ENABLED", "true")
-            buildConfigField("String", "BUILD_VARIANT", "&quot;GPU (Testing)&quot;")
+            buildConfigField("String", "BUILD_VARIANT", "GPU (Testing)")
         }
         create("cpu") {
             dimension = "acceleration"
             versionNameSuffix = "-CPU"
             buildConfigField("boolean", "GPU_ENABLED", "false")
-            buildConfigField("String", "BUILD_VARIANT", "&quot;CPU (Testing)&quot;")
+            buildConfigField("String", "BUILD_VARIANT", "CPU (Testing)")
         }
     }
 
