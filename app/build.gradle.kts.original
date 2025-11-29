@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.ailive"
     compileSdk = 35
-    ndkVersion = "26.3.11579264"
+    // ndkVersion = "26.3.11579264" // Temporarily disabled for compilation testing
 
     defaultConfig {
         applicationId = "com.ailive"
@@ -25,14 +25,14 @@ android {
             abiFilters += "arm64-v8a"
         }
 
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-                arguments += listOf(
-                    "-DANDROID_STL=c++_shared"
-                )
-            }
-        }
+        // externalNativeBuild {
+        //     cmake {
+        //         cppFlags += "-std=c++17"
+        //         arguments += listOf(
+        //             "-DANDROID_STL=c++_shared"
+        //         )
+        //     }
+        // }
     }
 
     // ✨ GPU/CPU Build Variants (v1.1)
